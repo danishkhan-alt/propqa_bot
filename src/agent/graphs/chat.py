@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext, RouterModels
 from agent.graphs.nodes import (
     answer,
@@ -52,7 +52,7 @@ def build_chat_graph(checkpointer=None) -> CompiledStateGraph:
 def get_chat_graph() -> CompiledStateGraph:
     global _graph
     if _graph is None:
-        _graph = build_chat_graph(InMemorySaver())
+        _graph = build_chat_graph(get_checkpointer())
     return _graph
 
 
@@ -63,7 +63,7 @@ def run_turn(
     user_id: str,
     models: RouterModels | None = None,
 ) -> dict:
-    """Run one user turn. `thread_id` keeps last_need_db for follow-ups."""
+    """Run one user turn. `thread_id` reloads and updates that chat."""
     result = get_chat_graph().invoke(
         {"messages": [HumanMessage(content=message)]},
         config={

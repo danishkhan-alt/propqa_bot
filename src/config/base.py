@@ -74,6 +74,17 @@ class Config:
     AUDIT_DB_SCHEMA = os.getenv("AUDIT_DB_SCHEMA", "public")
     DB_SEARCH_PATH = os.getenv("DB_SEARCH_PATH", "public")
 
+    # Chatbot database on this machine's Postgres. The socket uses peer auth, so
+    # the role matches the OS user and there is no password. Not the warehouse.
+    CHAT_DB_HOST = os.getenv("CHAT_DB_HOST","localhost")
+    CHAT_DB_PORT = _int("CHAT_DB_PORT", 5432)
+    CHAT_DB_NAME = os.getenv("CHAT_DB_NAME", "propqa_chatbot")
+    CHAT_DB_USER = os.getenv("CHAT_DB_USER", "" if ENVIRONMENT.is_deployed else os.getenv("USER", ""))
+    CHAT_DB_PASSWORD = os.getenv("CHAT_DB_PASSWORD", "")
+    CHAT_DB_SSLMODE = os.getenv("CHAT_DB_SSLMODE", "require" if ENVIRONMENT.is_deployed else "disable")
+    CHAT_DB_POOL_MIN = _int("CHAT_DB_POOL_MIN", 1)
+    CHAT_DB_POOL_MAX = _int("CHAT_DB_POOL_MAX", 10)
+
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     CACHE_TTL_SECONDS = _int("CACHE_TTL_SECONDS", 300)
     CACHE_KEY_PREFIX = os.getenv("CACHE_KEY_PREFIX", f"propqa:{ENVIRONMENT.value}")
