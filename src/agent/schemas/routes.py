@@ -94,11 +94,12 @@ class DomainRoute(BaseModel):
 
 
 class Assumptions(BaseModel):
-    """Purpose, limit, and order taken from the query router. Null means unset."""
+    """Purpose and order come from the query router. A list also carries a page window."""
 
     purpose: str | None = None
     limit: int | None = None
     order: str | None = None
+    page: int | None = None
 
 
 class LastNeedDb(BaseModel):

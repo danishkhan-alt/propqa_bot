@@ -40,6 +40,14 @@ class RouterModels(Protocol):
         config: RunnableConfig | None = None,
     ) -> str: ...
 
+    def answer_unavailable(
+        self,
+        *,
+        message: str,
+        history: str,
+        config: RunnableConfig | None = None,
+    ) -> str: ...
+
 
 @dataclass
 class AgentContext:

@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import TurnKind
-from agent.prompts.answer import DIRECT_ANSWER_SYSTEM
+from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
@@ -162,10 +162,34 @@ class AnthropicRouterModels:
             ],
             config=config,
         )
-        content = result.content
-        if isinstance(content, str):
-            return content.strip()
-        return str(content).strip()
+        return _message_text(result)
+
+    def answer_unavailable(
+        self,
+        *,
+        message: str,
+        history: str,
+        config: RunnableConfig | None = None,
+    ) -> str:
+        result = self._answer.invoke(
+            [
+                SystemMessage(content=UNAVAILABLE_SYSTEM),
+                HumanMessage(
+                    content=json.dumps(
+                        {"history": history, "message": message}, ensure_ascii=False
+                    )
+                ),
+            ],
+            config=config,
+        )
+        return _message_text(result)
+
+
+def _message_text(result) -> str:
+    content = result.content
+    if isinstance(content, str):
+        return content.strip()
+    return str(content).strip()
 
 
 _models: AnthropicRouterModels | None = None

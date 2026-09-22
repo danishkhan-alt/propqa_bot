@@ -5,7 +5,7 @@ Routes, only these two:
 - need_db: the answer depends on warehouse data. Prefer need_db whenever a number or a stored name might be required. Never guess a market fact. If details are missing, still choose need_db. Do not refuse the lookup because an area, budget, or purpose was not named.
 
 intent is the shape of the result:
-- list: rows (properties, schools, stations, projects), including things near a place.
+- list: rows (properties, agents, schools, stations, projects), including things near a place.
 - lookup: one entity or one stored attribute, such as which community, the service charge, or who built it.
 - aggregate: one number — a price, count, average, total, or index level.
 - trend: how something moved over time, or a series.
@@ -21,7 +21,7 @@ turn_kind, compared with last_need_db:
 
 purpose, limit, and order are yours to set from this message and from last_need_db. There is no fixed default.
 - purpose: sale, rent, or whatever the user stated. On a follow-up, keep the previous purpose unless this message changes it. Null when neither this message nor the previous lookup says.
-- limit: the row count they asked for. On a refine, keep the previous limit unless this message changes it. Null when no count was given.
+- limit: the row count they asked for, such as "top 25". On a refine, keep the previous count unless this message changes it. Leave null when they did not ask for a count. Do not fill in a page size; list results are paged separately.
 - order: how they want rows ordered. Null when they did not say.
 
 Do not invent a purpose or a row count. If it was not said and the previous lookup does not carry it, leave that field null.

@@ -7,11 +7,10 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
-from agent.enums.routing import Route, TurnKind
+from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.chat import build_chat_graph
 from agent.graphs.nodes import catalog_load, finalize
 from agent.schemas.routes import (
-    Assumptions,
     DomainRoute,
     QueryRoute,
     as_assumptions,
@@ -51,10 +50,11 @@ class ScriptedModels:
                 confidence=0.9,
                 rationale="Same lookup, tighter price.",
             )
-        if "show me properties" in message:
+        if "show me properties" in message or "show me agents" in message:
             return QueryRoute(
                 route=Route.NEED_DB,
                 turn_kind=TurnKind.NEW,
+                intent=Intent.LIST,
                 confidence=0.9,
                 rationale="A list with no purpose and no count.",
             )
@@ -101,6 +101,11 @@ class ScriptedModels:
     def answer_direct(self, **kwargs) -> str:
         self.answer_calls += 1
         return "I can explain property terms and look up Dubai market data."
+
+    def answer_unavailable(self, **kwargs) -> str:
+        self.answer_calls += 1
+        asked = kwargs["message"].strip()
+        return f"I don't have enough information about {asked}. If you want, we can look at the area around it."
 
 
 def _turn(graph, message: str, thread_id: str, models: ScriptedModels) -> dict:
@@ -205,8 +210,10 @@ def test_unknown_domain_asks_instead_of_loading_a_catalog():
     state = _turn(build_chat_graph(InMemorySaver()), "Tell me about zoning appeals", "t-unknown", models)
     route = as_query_route(state["query_route"])
     assert route is not None and route.route is Route.NEED_DB
-    assert state["messages"][-1].content.startswith("I don't have a dataset")
-    assert "?" not in state["messages"][-1].content
+    reply = state["messages"][-1].content
+    assert "zoning appeals" in reply
+    assert models.answer_calls == 1
+    assert "dataset" not in reply.lower()
     assert state["catalog_context"] == ""
 
 
@@ -256,12 +263,19 @@ def test_low_confidence_is_logged_and_the_model_route_stands():
     assert "low_confidence" in notes
 
 
-def test_unset_purpose_and_limit_stay_unset():
+def test_a_list_uses_the_shared_page_and_does_not_invent_a_purpose():
     models = ScriptedModels()
-    state = _turn(build_chat_graph(InMemorySaver()), "Show me properties", "t-open", models)
+    graph = build_chat_graph(InMemorySaver())
 
-    assumptions = as_assumptions(state["assumptions"])
-    assert assumptions == Assumptions()
+    properties = as_assumptions(
+        _turn(graph, "Show me properties", "t-properties", models)["assumptions"]
+    )
+    agents = as_assumptions(_turn(graph, "Show me agents", "t-agents", models)["assumptions"])
+
+    assert properties is not None and agents is not None
+    assert properties.purpose is None and agents.purpose is None
+    assert properties.page == agents.page == 1
+    assert properties.limit == agents.limit == 10
 
 
 def test_stated_purpose_is_kept_as_the_model_set_it():

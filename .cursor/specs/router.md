@@ -152,7 +152,9 @@ The query router sets these on every `need_db` turn. They are not filled in afte
 | `limit` | The user asked for a count, or a refine keeps the previous count | No count was given |
 | `order` | The user said how to order the rows | They did not say |
 
-The answer uses those values. It does not invent a purpose or a row count, and it does not stop to ask.
+A list with no count (properties, agents, or any other rows) is paged with `common` pagination: page 1, 10 per page. The same window is used for every list. A count the user asked for replaces that page size. An aggregate, a lookup, or a comparison is not paged.
+
+The answer uses those values. It does not invent a purpose, and it does not stop to ask.
 
 ### 5.7 `turn_kind`
 
