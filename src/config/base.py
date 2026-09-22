@@ -87,6 +87,7 @@ class Config:
     ANTHROPIC_MAX_OUTPUT_TOKENS = _int("ANTHROPIC_MAX_OUTPUT_TOKENS", 4096)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
+    ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-4-5")
 
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")

@@ -1,0 +1,34 @@
+- id: greeting
+  message: Hi, what can you help with?
+  expect_route: direct_answer
+  deterministic: false
+- id: definition
+  message: What is RERA?
+  expect_route: direct_answer
+  deterministic: false
+- id: empty
+  message: "   "
+  expect_route: direct_answer
+  expect_turn_kind: new
+  deterministic: false
+- id: average_price
+  message: Average sale price in Dubai Marina last 12 months
+  expect_route: need_db
+  expect_domains: [transactions]
+  expect_joins: [locations]
+  deterministic: false
+- id: show_properties
+  message: Show me properties
+  expect_route: need_db
+  deterministic: false
+- id: cheaper
+  message: cheaper
+  last_need_db:
+    domain_ids: [transactions]
+    join_ids: [locations]
+    intent_summary: Average sale price in Dubai Marina
+  expect_route: need_db
+  expect_turn_kind: refine
+  expect_domains: [transactions]
+  expect_joins: [locations]
+  deterministic: false

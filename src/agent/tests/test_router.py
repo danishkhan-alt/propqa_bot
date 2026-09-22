@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import InMemorySaver
+
+from agent.context import AgentContext
+from agent.enums.routing import Route, TurnKind
+from agent.graphs.chat import build_chat_graph
+from agent.graphs.nodes import catalog_load, finalize
+from agent.schemas.routes import (
+    Assumptions,
+    DomainRoute,
+    QueryRoute,
+    as_assumptions,
+    as_domain_route,
+    as_last_need_db,
+    as_query_route,
+)
+from agent.services.llm import invoke_structured
+from agent.validator import apply_query_policy, sanitize_domain_route
+
+GOLDEN = Path(__file__).resolve().parents[2] / "evals" / "router_golden.yaml"
+
+
+class ScriptedModels:
+    def __init__(self) -> None:
+        self.query_calls = 0
+        self.domain_calls = 0
+        self.answer_calls = 0
+        self.last_turn_kind: TurnKind | None = None
+
+    def route_query(self, **kwargs) -> QueryRoute:
+        self.query_calls += 1
+        message = kwargs["message"].lower()
+        if "schools" in message:
+            return QueryRoute(
+                route=Route.NEED_DB,
+                turn_kind=TurnKind.PIVOT,
+                confidence=0.9,
+                rationale="Same place, different subject.",
+            )
+        if "cheaper" in message:
+            return QueryRoute(
+                route=Route.NEED_DB,
+                turn_kind=TurnKind.REFINE,
+                purpose="rent",
+                limit=25,
+                confidence=0.9,
+                rationale="Same lookup, tighter price.",
+            )
+        if "show me properties" in message:
+            return QueryRoute(
+                route=Route.NEED_DB,
+                turn_kind=TurnKind.NEW,
+                confidence=0.9,
+                rationale="A list with no purpose and no count.",
+            )
+        if "for rent" in message:
+            return QueryRoute(
+                route=Route.NEED_DB,
+                turn_kind=TurnKind.NEW,
+                purpose="rent",
+                confidence=0.9,
+                rationale="The user asked for rent.",
+            )
+        if "marina" in message or "price" in message:
+            return QueryRoute(
+                route=Route.NEED_DB,
+                turn_kind=TurnKind.NEW,
+                purpose="sale",
+                confidence=0.9,
+                rationale="Sold prices.",
+            )
+        return QueryRoute(
+            route=Route.DIRECT_ANSWER,
+            turn_kind=TurnKind.NEW,
+            confidence=0.95,
+            rationale="Greeting.",
+        )
+
+    def route_domain(self, **kwargs) -> DomainRoute:
+        self.domain_calls += 1
+        self.last_turn_kind = kwargs["turn_kind"]
+        if kwargs["turn_kind"] is TurnKind.PIVOT:
+            return DomainRoute(
+                domain_ids=["schools"],
+                join_ids=["locations"],
+                confidence=0.9,
+                rationale="Nearby schools.",
+            )
+        return DomainRoute(
+            domain_ids=["transactions"],
+            join_ids=["locations"],
+            confidence=0.92,
+            rationale="Sold prices.",
+        )
+
+    def answer_direct(self, **kwargs) -> str:
+        self.answer_calls += 1
+        return "I can explain property terms and look up Dubai market data."
+
+
+def _turn(graph, message: str, thread_id: str, models: ScriptedModels) -> dict:
+    result = graph.invoke(
+        {"messages": [HumanMessage(content=message)]},
+        config={"configurable": {"thread_id": thread_id}},
+        context=AgentContext(user_id="user-1", models=models),
+        version="v2",
+    )
+    value = getattr(result, "value", result)
+    return value if isinstance(value, dict) else dict(value)
+
+
+def test_graph_routes_a_greeting_without_the_domain_router():
+    models = ScriptedModels()
+    state = _turn(build_chat_graph(InMemorySaver()), "Hi, what can you help with?", "t-hi", models)
+
+    route = as_query_route(state["query_route"])
+    assert route is not None
+    assert route.route is Route.DIRECT_ANSWER
+    assert models.query_calls == 1
+    assert models.domain_calls == 0
+    assert models.answer_calls == 1
+    assert state["messages"][-1].content.startswith("I can explain")
+    assert state.get("catalog_context", "") == ""
+    assert state["awaiting_sql"] is False
+
+
+def test_price_question_follows_the_model_into_a_lookup():
+    models = ScriptedModels()
+    state = _turn(
+        build_chat_graph(InMemorySaver()),
+        "Average sale price in Dubai Marina last 12 months",
+        "t-price",
+        models,
+    )
+
+    route = as_query_route(state["query_route"])
+    domain = as_domain_route(state["domain_route"])
+    assert route is not None and route.route is Route.NEED_DB
+    assert domain is not None
+    assert domain.domain_ids == ["transactions"]
+    assert domain.join_ids == ["locations"]
+    assert state["awaiting_sql"] is True
+    assert state["catalog_context"] == ""
+    assert as_last_need_db(state["last_need_db"]).domain_ids == ["transactions"]
+    assert models.answer_calls == 0
+
+
+def test_refine_reuses_domains_when_the_model_says_refine():
+    models = ScriptedModels()
+    graph = build_chat_graph(InMemorySaver())
+    _turn(graph, "Average sale price in Dubai Marina last 12 months", "t-refine", models)
+    state = _turn(graph, "cheaper", "t-refine", models)
+
+    route = as_query_route(state["query_route"])
+    domain = as_domain_route(state["domain_route"])
+    assumptions = as_assumptions(state["assumptions"])
+    assert route is not None and route.turn_kind is TurnKind.REFINE
+    assert domain is not None and domain.domain_ids == ["transactions"]
+    assert assumptions is not None and assumptions.purpose == "rent" and assumptions.limit == 25
+    assert models.query_calls == 2
+    assert models.domain_calls == 1
+
+
+def test_new_subject_on_a_follow_up_pivots_and_re_routes_domains():
+    models = ScriptedModels()
+    graph = build_chat_graph(InMemorySaver())
+    _turn(graph, "Average sale price in Dubai Marina last 12 months", "t-pivot", models)
+    state = _turn(graph, "schools near those", "t-pivot", models)
+
+    route = as_query_route(state["query_route"])
+    domain = as_domain_route(state["domain_route"])
+    assert route is not None and route.turn_kind is TurnKind.PIVOT
+    assert domain is not None and domain.domain_ids == ["schools"]
+    assert models.last_turn_kind is TurnKind.PIVOT
+
+
+def test_empty_message_is_routed_by_the_model():
+    models = ScriptedModels()
+    state = _turn(build_chat_graph(InMemorySaver()), "   ", "t-empty", models)
+
+    route = as_query_route(state["query_route"])
+    reply = state["messages"][-1].content
+    assert route is not None and route.route is Route.DIRECT_ANSWER
+    assert models.query_calls == 1
+    assert models.answer_calls == 1
+    assert reply.startswith("I can explain")
+
+
+def test_unknown_domain_asks_instead_of_loading_a_catalog():
+    class Unknown(ScriptedModels):
+        def route_query(self, **kwargs) -> QueryRoute:
+            self.query_calls += 1
+            return QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Lookup.")
+
+        def route_domain(self, **kwargs) -> DomainRoute:
+            self.domain_calls += 1
+            return DomainRoute(domain_ids=["not_a_domain"], join_ids=[], confidence=0.5, rationale="Invented.")
+
+    models = Unknown()
+    state = _turn(build_chat_graph(InMemorySaver()), "Tell me about zoning appeals", "t-unknown", models)
+    route = as_query_route(state["query_route"])
+    assert route is not None and route.route is Route.NEED_DB
+    assert state["messages"][-1].content.startswith("I don't have a dataset")
+    assert "?" not in state["messages"][-1].content
+    assert state["catalog_context"] == ""
+
+
+def test_catalog_yaml_is_loaded_for_the_turn_and_not_kept():
+    state = {
+        "messages": [HumanMessage(content="Average sale price in Dubai Marina")],
+        "query_route": QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=1, rationale="Lookup."),
+        "domain_route": DomainRoute(
+            domain_ids=["transactions"],
+            join_ids=["locations"],
+            confidence=1,
+            rationale="Sold prices.",
+        ),
+    }
+    loaded = catalog_load(state)
+    assert "real_estate_transactions" in loaded["catalog_context"]
+    assert "# join: locations" in loaded["catalog_context"]
+    final = finalize({**state, **loaded})
+    assert final["catalog_context"] == ""
+    assert final["loaded_domains"] == []
+    assert final["last_need_db"].domain_ids == ["transactions"]
+
+
+def test_sanitize_drops_unknown_ids_and_caps_packs():
+    route = DomainRoute(
+        domain_ids=["listings", "schools", "rta", "amenities", "made_up"],
+        join_ids=[],
+        confidence=0.8,
+        rationale="Too many.",
+    )
+    cleaned, notes = sanitize_domain_route(route)
+    assert cleaned.domain_ids == ["listings", "schools", "rta"]
+    assert cleaned.join_ids == []
+    assert "dropped_unknown" in notes
+    assert "truncated_primary" in notes
+
+
+def test_low_confidence_is_logged_and_the_model_route_stands():
+    route = QueryRoute(
+        route=Route.DIRECT_ANSWER,
+        turn_kind=TurnKind.NEW,
+        confidence=0.2,
+        rationale="Unsure.",
+    )
+    updated, notes = apply_query_policy(route, None)
+    assert updated.route is Route.DIRECT_ANSWER
+    assert "low_confidence" in notes
+
+
+def test_unset_purpose_and_limit_stay_unset():
+    models = ScriptedModels()
+    state = _turn(build_chat_graph(InMemorySaver()), "Show me properties", "t-open", models)
+
+    assumptions = as_assumptions(state["assumptions"])
+    assert assumptions == Assumptions()
+
+
+def test_stated_purpose_is_kept_as_the_model_set_it():
+    models = ScriptedModels()
+    state = _turn(build_chat_graph(InMemorySaver()), "apartments for rent near a metro", "t-rent", models)
+
+    assumptions = as_assumptions(state["assumptions"])
+    assert assumptions is not None
+    assert assumptions.purpose == "rent"
+    assert assumptions.limit is None
+
+
+def test_structured_output_retries_once_then_uses_the_fallback():
+    class Boom:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def invoke(self, messages, config=None):
+            self.calls += 1
+            raise ValueError("bad json")
+
+    runnable = Boom()
+    fallback = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.3, rationale="Fallback.")
+    parsed = invoke_structured(runnable, [], None, fallback)
+    assert parsed is fallback
+    assert runnable.calls == 2
+
+
+def test_golden_file_is_model_routed():
+    cases = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
+    assert {case["id"] for case in cases} >= {"empty", "cheaper", "greeting", "average_price"}
+    assert all(case["deterministic"] is False for case in cases)

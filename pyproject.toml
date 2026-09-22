@@ -11,6 +11,10 @@ dependencies = [
     "pyyaml",
     "redis",
     "starlette",
+    "langgraph>=1.2.11",
+    "langchain>=1.4.0",
+    "langchain-anthropic>=1.7.0",
+    "langfuse>=4.15",
 ]
 
 [project.optional-dependencies]
@@ -21,4 +25,4 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["src/common/tests"]
+testpaths = ["src/common/tests", "src/agent/tests"]

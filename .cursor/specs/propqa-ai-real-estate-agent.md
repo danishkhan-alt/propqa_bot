@@ -49,7 +49,7 @@ User message
     │
     ▼
 ┌──────────────────────────┐
-│  Query router            │  direct_answer  |  need_db  |  clarify
+│  Query router            │  direct_answer  |  need_db
 └────────────┬─────────────┘
              │
      ┌───────┴────────┐
@@ -99,8 +99,7 @@ First hop on every user turn. Input: current message + short conversation summar
 | Route | When | Next step |
 | --- | --- | --- |
 | `direct_answer` | No stored fact is required | LLM answers immediately |
-| `need_db` | Answer depends on warehouse data | Domain router → SQL tool |
-| `clarify` | Intent is too vague to query safely | Ask one focused question |
+| `need_db` | Answer depends on warehouse data, including when filters are missing | Domain router → SQL tool. Purpose, limit, and order come from the query router |
 
 ### 5.2 Direct-answer examples
 
@@ -157,7 +156,7 @@ These groups are the starting catalog. Names and table lists will be refined onc
 
 A question may select **more than one** domain. Example: “2-bed listings in JVC near good schools” → `listings` + `schools` (+ `locations` if needed for joins).
 
-Cap selected domains (suggested: **max 2**, rarely 3). If more look necessary, prefer `clarify` or a two-step tool plan rather than loading half the warehouse.
+Cap selected domains (suggested: **max 2**, rarely 3). If more look necessary, run a two-step tool plan rather than loading half the warehouse.
 
 ### 6.3 Domain catalog record
 
@@ -316,7 +315,7 @@ These are not yet set in `.env`. Add them when we instrument; do not commit secr
 Attach on every trace:
 
 - `session_id`, `user_id` (when we have auth)
-- tags: `route:{direct_answer|need_db|clarify}`, `domains:{id,...}`, env
+- tags: `route:{direct_answer|need_db}`, `domains:{id,...}`, env
 - metadata: model name, catalog version, row cap, timeout
 - version: git sha or catalog version so we can compare releases
 
@@ -406,7 +405,7 @@ Do this in order so we do not prompt-stuff the whole warehouse on day one.
 
 ### Phase 1 — Query router + direct answers
 
-- Implement query router (`direct_answer` / `need_db` / `clarify`)
+- Implement query router (`direct_answer` / `need_db`). The model sets purpose, limit, and order; a missing value stays null
 - Direct-answer node with a small system prompt
 - Trace router decisions in Langfuse
 - No SQL yet
