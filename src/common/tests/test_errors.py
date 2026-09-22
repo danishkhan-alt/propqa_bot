@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+import json
+
+from common.errors import InvalidRequestBody, RateLimited
+from common.errors.system import InternalError
+from common.http.request_response import api_error, api_response
+
+
+def test_api_response_wraps_result():
+    response = api_response({"ok": True})
+    body = json.loads(response.body)
+    assert response.status_code == 200
+    assert body["result"] == {"ok": True}
+    assert body["status"] == 200
+
+
+def test_api_error_is_problem_details():
+    response = api_error(InvalidRequestBody("bad json"))
+    body = json.loads(response.body)
+    assert response.status_code == 422
+    assert response.media_type == "application/problem+json"
+    assert body["code"] == "VALIDATION"
+    assert body["subcode"] == "BAD_DATA"
+    assert body["detail"] == "bad json"
+
+
+def test_rate_limited_sets_retry_after():
+    response = api_error(RateLimited(12))
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "12"
+
+
+def test_internal_error_has_system_codes():
+    response = api_error(InternalError())
+    body = json.loads(response.body)
+    assert body["code"] == "SYSTEM"
+    assert body["subcode"] == "INTERNAL_ERROR"
+    assert body["status"] == 500

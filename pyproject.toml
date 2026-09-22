@@ -1,0 +1,23 @@
+[project]
+name = "propqa-chatbot"
+version = "0.1.0"
+description = "Propqa AI real-estate agent"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "python-dotenv",
+    "redis",
+    "starlette",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["src/common/tests"]
