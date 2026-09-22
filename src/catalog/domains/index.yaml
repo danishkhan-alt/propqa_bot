@@ -1,0 +1,150 @@
+schema: chatbot_ai
+note: Router should load this index only. Load a domain YAML after routing. Open-data noise (courts, visas,
+  flights, chats, ridership) is omitted.
+domains:
+- id: listings
+  file: listings.yaml
+  name: Properties, units, and buildings
+  description: DLD-registered plots, freehold units, and buildings. Use this for what exists in an area
+    (type, size, freehold, building status). This is inventory, not classified asking prices.
+  synonyms:
+  - listings
+  - units
+  - apartments
+  - villas
+  - buildings
+  - freehold
+  - title deed
+  - plot
+  - land registry
+  table_count: 14
+- id: transactions
+  file: transactions.yaml
+  name: Sales, rents, and valuations
+  description: DLD sales, Ejari-style rent contracts, official valuations, and the residential sale index.
+    Use for transacted prices, volumes, and rents.
+  synonyms:
+  - sales
+  - sold
+  - transactions
+  - deals
+  - transacted price
+  - rent
+  - ejari
+  - tenancy
+  - valuation
+  - average price
+  table_count: 7
+- id: locations
+  file: locations.yaml
+  name: Communities, areas, and geo hierarchy
+  description: Dubai communities, subcommunities, Makani entrances, population, and area insights. This
+    is the usual join bridge for other domains.
+  synonyms:
+  - community
+  - area
+  - neighbourhood
+  - location
+  - subcommunity
+  - makani
+  - sector
+  - where is
+  table_count: 12
+- id: developers
+  file: developers.yaml
+  name: Developers, projects, and construction
+  description: Off-plan and master projects, consultants, contractors, building permits, and MRHE housing
+    projects. Use for handover, completion, and who is building what.
+  synonyms:
+  - developer
+  - project
+  - off-plan
+  - handover
+  - completion
+  - permit
+  - contractor
+  - consultant
+  - escrow
+  table_count: 14
+- id: schools
+  file: schools.yaml
+  name: Schools, nurseries, and universities
+  description: KHDA private schools, ratings, fees, nearby schools per community, early-childhood centres,
+    and universities. Use for education near a property.
+  synonyms:
+  - school
+  - KHDA
+  - nursery
+  - university
+  - curriculum
+  - school fees
+  - inspection rating
+  table_count: 13
+- id: rta
+  file: rta.yaml
+  name: Transport, parking, and roads
+  description: Metro, tram, bus, marine stations, parking, Salik gates, cycle tracks, and major roads.
+    Use for commute and parking around a community.
+  synonyms:
+  - metro
+  - tram
+  - bus
+  - RTA
+  - parking
+  - salik
+  - toll
+  - commute
+  - station
+  table_count: 33
+- id: amenities
+  file: amenities.yaml
+  name: Parks, healthcare, and lifestyle
+  description: Parks and beaches, hospitals/clinics, and community things-to-do. Use for lifestyle and
+    nearby facilities, not school or metro lookups.
+  synonyms:
+  - park
+  - beach
+  - hospital
+  - clinic
+  - amenities
+  - things to do
+  - healthcare
+  - pool
+  table_count: 4
+- id: agencies
+  file: agencies.yaml
+  name: Brokers, agencies, and valuators
+  description: Licensed real-estate offices, brokers, permits, valuators, and owners associations. Use
+    for who can sell or manage a building.
+  synonyms:
+  - broker
+  - agency
+  - agent
+  - valuator
+  - owners association
+  - RERA license
+  table_count: 6
+- id: regulations
+  file: regulations.yaml
+  name: Service charges and property procedures
+  description: Owners-association service charges by community/project and DLD property-map request procedures.
+  synonyms:
+  - service charge
+  - maintenance fee
+  - OA fees
+  - DLD procedure
+  - site plan
+  table_count: 2
+- id: market
+  file: market.yaml
+  name: Price indices and construction statistics
+  description: Official DSC price indices, rent indices, construction-cost series, and building-stock
+    aggregates. Use for market movement, not individual deals.
+  synonyms:
+  - price index
+  - rent index
+  - construction cost
+  - market trend
+  - inflation
+  - stock of buildings
+  table_count: 23

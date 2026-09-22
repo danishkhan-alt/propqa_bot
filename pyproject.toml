@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]",
     "pydantic",
     "python-dotenv",
+    "pyyaml",
     "redis",
     "starlette",
 ]

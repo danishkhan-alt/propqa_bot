@@ -1,0 +1,734 @@
+id: transactions
+name: Sales, rents, and valuations
+schema: chatbot_ai
+description: DLD sales, Ejari-style rent contracts, official valuations, and the residential sale index.
+  Use for transacted prices, volumes, and rents.
+synonyms:
+- sales
+- sold
+- transactions
+- deals
+- transacted price
+- rent
+- ejari
+- tenancy
+- valuation
+- average price
+grain: one row is a sale, a rent-contract line, a valuation, or a monthly index point
+joins:
+- domain: locations
+  keys:
+  - area_id
+  - area_name_en
+  - area_name_ar
+- domain: developers
+  keys:
+  - project_name_en
+  - master_project_en
+  - project_id
+- domain: listings
+  keys:
+  - property_id
+pitfalls:
+- actual_worth is the registered transacted price, not an asking price.
+- rent_contracts are registered tenancies, not listing rents.
+- Filter by procedure / group to separate sales from mortgages and other DLD procedures.
+- meter_sale_price is AED per sqm; do not mix with actual_worth totals.
+tables:
+- name: real_estate_transactions
+  description: Real estate transactions from Dubai Land Department
+  primary_key:
+  - transaction_id
+  columns:
+  - name: no_of_parties_role_3
+    type: numeric(3,0)
+    meaning: No of parties role 3
+    examples:
+    - 0
+  - name: no_of_parties_role_2
+    type: numeric(3,0)
+    meaning: No of parties role 2
+    examples:
+    - 1
+  - name: no_of_parties_role_1
+    type: numeric(3,0)
+    meaning: No of parties role 1
+    examples:
+    - 1
+  - name: meter_rent_price
+    type: numeric(30,6)
+    meaning: Rent per square metre in AED
+  - name: rent_value
+    type: numeric(30,6)
+    meaning: Contract rent amount in AED
+  - name: meter_sale_price
+    type: numeric(30,6)
+    meaning: Sale price per square metre in AED
+    examples:
+    - 31465.1
+    - 10540.37
+  - name: actual_worth
+    type: numeric(30,6)
+    meaning: Transacted sale value in AED
+    examples:
+    - 1601888
+    - 902888
+  - name: procedure_area
+    type: numeric(30,6)
+    meaning: Area recorded on the transaction in square metres
+    examples:
+    - 50.91
+    - 85.66
+  - name: has_parking
+    type: numeric(1,0)
+    meaning: Whether parking is included
+    examples:
+    - 0
+    - 1
+  - name: rooms_en
+    type: character varying(200)
+    meaning: Bedroom layout in English (Studio, 1 B/R, 2 B/R, ...)
+    examples:
+    - Studio
+    - 1 B/R
+  - name: rooms_ar
+    type: character varying(200)
+    meaning: Bedroom layout in Arabic
+  - name: nearest_mall_en
+    type: character varying(203)
+    meaning: Nearest mall in English
+    examples:
+    - Marina Mall
+  - name: nearest_mall_ar
+    type: character varying(202)
+    meaning: Nearest mall in Arabic
+  - name: nearest_metro_en
+    type: character varying(201)
+    meaning: Nearest metro station in English
+    examples:
+    - Marina Mall Metro Station
+    - Jumeirah Beach Resdency
+  - name: nearest_metro_ar
+    type: character varying(200)
+    meaning: Nearest metro station in Arabic
+  - name: nearest_landmark_en
+    type: character varying(200)
+    meaning: Nearest landmark in English
+    examples:
+    - Burj Al Arab
+    - Sports City Swimming Academy
+  - name: nearest_landmark_ar
+    type: character varying(200)
+    meaning: Nearest landmark in Arabic
+  - name: master_project_ar
+    type: character varying(200)
+    meaning: Master community / master development in Arabic
+  - name: master_project_en
+    type: character varying(200)
+    meaning: Master community / master development in English
+    examples:
+    - Dubai Marina
+    - DMCC Master Community
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project / building name in English
+    examples:
+    - DUBAI MARINA MALL
+    - PARK ISLANDS
+  - name: project_name_ar
+    type: character varying(200)
+    meaning: Project / building name in Arabic
+  - name: project_number
+    type: numeric(30,0)
+    meaning: Project number
+    examples:
+    - 1460
+    - 1458
+  - name: building_name_en
+    type: character varying(200)
+    meaning: Building name in English
+    examples:
+    - Dubai Marina Mall Hotel
+    - PARK ISLAND BLAKELY
+  - name: building_name_ar
+    type: character varying(200)
+    meaning: Building name in Arabic
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Dubai community or area name in English
+    examples:
+    - Marsa Dubai
+    - Al Thanyah Fifth
+  - name: area_name_ar
+    type: character varying(200)
+    meaning: Dubai community or area name in Arabic
+  - name: area_id
+    type: numeric(10,0)
+    meaning: Community / area identifier
+    examples:
+    - 330
+    - 350
+  - name: reg_type_en
+    type: character varying(100)
+    meaning: Reg type in English
+    examples:
+    - Off-Plan Properties
+  - name: reg_type_ar
+    type: character varying(100)
+    meaning: Reg type in Arabic
+  - name: reg_type_id
+    type: numeric(1,0)
+    meaning: Reg type identifier
+    examples:
+    - 0
+  - name: property_usage_en
+    type: character varying(100)
+    meaning: Property usage in English
+    examples:
+    - Residential
+    - Commercial
+  - name: property_usage_ar
+    type: character varying(100)
+    meaning: Property usage in Arabic
+  - name: property_sub_type_en
+    type: character varying(100)
+    meaning: Subtype in English (Flat, Villa, Office, Shop, ...)
+    examples:
+    - Flat
+    - Office
+  - name: property_sub_type_ar
+    type: character varying(100)
+    meaning: Property sub type in Arabic
+  - name: property_sub_type_id
+    type: numeric(10,0)
+    meaning: Property sub type identifier
+    examples:
+    - 60
+    - 42
+  - name: property_type_en
+    type: character varying(50)
+    meaning: Property type in English (Unit, Villa, Land, Building)
+    examples:
+    - Unit
+  - name: property_type_ar
+    type: character varying(50)
+    meaning: Property type in Arabic
+  - name: property_type_id
+    type: numeric(4,0)
+    meaning: Property type identifier
+    examples:
+    - 3
+  - name: instance_date
+    type: date
+    meaning: Date the procedure / transaction was registered
+    examples:
+    - YYYY-MM-DD
+  - name: procedure_name_en
+    type: character varying(200)
+    meaning: DLD procedure name in English (Sale, Mortgage, ...)
+    examples:
+    - Sell - Pre registration
+  - name: procedure_name_ar
+    type: character varying(200)
+    meaning: Procedure name in Arabic
+  - name: trans_group_en
+    type: character varying(200)
+    meaning: Trans group in English
+    examples:
+    - Sales
+  - name: trans_group_ar
+    type: character varying(200)
+    meaning: Trans group in Arabic
+  - name: trans_group_id
+    type: numeric(3,0)
+    meaning: Trans group identifier
+    examples:
+    - 1
+  - name: procedure_id
+    type: numeric(3,0)
+    meaning: Procedure identifier
+    examples:
+    - 102
+  - name: transaction_id
+    type: character varying(100)
+    meaning: DLD transaction identifier
+    examples:
+    - 1-102-2000-2
+    - 1-102-2003-103
+  qualified_name: chatbot_ai.real_estate_transactions
+- name: real_estate_transaction_groups
+  description: Dubai Land Department real estate transaction group lookup
+  primary_key:
+  - group_id
+  columns:
+  - name: group_id
+    type: numeric(22,0)
+    meaning: Transaction group identifier
+    examples:
+    - 1
+    - 2
+  - name: name_ar
+    type: character varying(200)
+    meaning: Name in Arabic
+  - name: name_en
+    type: character varying(200)
+    meaning: Name in English
+    examples:
+    - Sales
+    - Mortgages
+  qualified_name: chatbot_ai.real_estate_transaction_groups
+- name: real_estate_transaction_procedures
+  description: Dubai Land Department real estate transaction procedure lookup
+  primary_key:
+  - group_id
+  - procedure_id
+  columns:
+  - name: group_id
+    type: numeric(22,0)
+    meaning: Transaction group identifier
+    examples:
+    - 1
+  - name: procedure_id
+    type: numeric(22,0)
+    meaning: Procedure identifier
+    examples:
+    - 4
+    - 11
+  - name: is_pre_registration
+    type: numeric(22,0)
+    meaning: Is pre registration
+    examples:
+    - 0
+    - 1
+  - name: name_ar
+    type: character varying(400)
+    meaning: Name in Arabic
+  - name: name_en
+    type: character varying(400)
+    meaning: Name in English
+    examples:
+    - Adding Land By Sell
+    - Sell
+  qualified_name: chatbot_ai.real_estate_transaction_procedures
+- name: real_estate_market_types
+  description: Dubai Land Department real estate market type lookup
+  primary_key:
+  - market_type_id
+  columns:
+  - name: market_type_id
+    type: numeric(22,0)
+    meaning: Market type identifier
+    examples:
+    - 1
+    - 2
+  - name: name_ar
+    type: character varying(200)
+    meaning: Name in Arabic
+  - name: name_en
+    type: character varying(200)
+    meaning: Name in English
+    examples:
+    - Primary Market
+    - Secondary Market
+  qualified_name: chatbot_ai.real_estate_market_types
+- name: rent_contracts
+  description: Dubai Land Department rent contracts
+  primary_key:
+  - contract_id
+  - line_number
+  columns:
+  - name: contract_id
+    type: character varying(100)
+    meaning: Ejari / rent contract identifier
+    examples:
+    - CNT10000
+    - CNT10001
+  - name: line_number
+    type: numeric(4,0)
+    meaning: Line number
+    examples:
+    - 1
+  - name: tenant_type_en
+    type: character varying(50)
+    meaning: Tenant type in English (Person / Company)
+    examples:
+    - Person
+  - name: tenant_type_ar
+    type: character varying(50)
+    meaning: Tenant type in Arabic
+  - name: tenant_type_id
+    type: numeric(3,0)
+    meaning: Tenant type identifier
+    examples:
+    - 0
+  - name: nearest_mall_en
+    type: character varying(200)
+    meaning: Nearest mall in English
+    examples:
+    - City Centre Mirdif
+    - Ibn-e-Battuta Mall
+  - name: nearest_mall_ar
+    type: character varying(200)
+    meaning: Nearest mall in Arabic
+  - name: nearest_metro_en
+    type: character varying(200)
+    meaning: Nearest metro station in English
+    examples:
+    - Abu Hail Metro Station
+    - Harbour Tower
+  - name: nearest_metro_ar
+    type: character varying(200)
+    meaning: Nearest metro station in Arabic
+  - name: nearest_landmark_en
+    type: character varying(200)
+    meaning: Nearest landmark in English
+    examples:
+    - Dubai International Airport
+    - Sports City Swimming Academy
+  - name: nearest_landmark_ar
+    type: character varying(200)
+    meaning: Nearest landmark in Arabic
+  - name: actual_area
+    type: numeric(18,2)
+    meaning: Area in square metres (unit, plot, or contracted area)
+    examples:
+    - 26.01
+    - 109
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Dubai community or area name in English
+    examples:
+    - Hor Al Anz East
+    - Jabal Ali First
+  - name: area_name_ar
+    type: character varying(200)
+    meaning: Dubai community or area name in Arabic
+  - name: area_id
+    type: numeric(10,0)
+    meaning: Community / area identifier
+    examples:
+    - 234
+    - 445
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master community / master development in English
+    examples:
+    - Discovery Gardens
+  - name: master_project_ar
+    type: character varying(250)
+    meaning: Master community / master development in Arabic
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project / building name in English
+  - name: project_name_ar
+    type: character varying(200)
+    meaning: Project / building name in Arabic
+  - name: project_number
+    type: numeric(38,0)
+    meaning: Project number
+  - name: property_usage_ar
+    type: character varying(200)
+    meaning: Property usage in Arabic
+  - name: property_usage_en
+    type: character varying(200)
+    meaning: Property usage in English
+    examples:
+    - Residential
+  - name: ejari_property_sub_type_ar
+    type: character varying(50)
+    meaning: Ejari property sub type in Arabic
+  - name: ejari_property_sub_type_en
+    type: character varying(50)
+    meaning: Ejari property sub type in English
+    examples:
+    - Studio
+    - 1bed room+Hall
+  - name: ejari_property_sub_type_id
+    type: numeric(10,0)
+    meaning: Ejari property sub type identifier
+    examples:
+    - 11
+    - 1
+  - name: ejari_property_type_ar
+    type: character varying(50)
+    meaning: Ejari property type in Arabic
+  - name: ejari_property_type_en
+    type: character varying(50)
+    meaning: Ejari property type in English
+    examples:
+    - Flat
+  - name: ejari_property_type_id
+    type: numeric(10,0)
+    meaning: Ejari property type identifier
+    examples:
+    - 842
+  - name: ejari_bus_property_type_en
+    type: character varying(100)
+    meaning: Ejari bus property type in English
+    examples:
+    - Unit
+  - name: ejari_bus_property_type_ar
+    type: character varying(100)
+    meaning: Ejari bus property type in Arabic
+  - name: ejari_bus_property_type_id
+    type: numeric(10,0)
+    meaning: Ejari bus property type identifier
+    examples:
+    - 2
+  - name: is_free_hold
+    type: numeric(1,0)
+    meaning: True when the property is freehold
+    examples:
+    - 0
+    - 1
+  - name: no_of_prop
+    type: numeric(4,0)
+    meaning: No of prop
+    examples:
+    - 1
+  - name: annual_amount
+    type: numeric(18,2)
+    meaning: Annual rent in AED
+    examples:
+    - 25000
+    - 60000
+  - name: contract_amount
+    type: numeric(18,2)
+    meaning: Contract amount
+    examples:
+    - 25000
+    - 14795
+  - name: contract_end_date
+    type: date
+    meaning: Rent contract end date
+    examples:
+    - YYYY-MM-DD
+  - name: contract_start_date
+    type: date
+    meaning: Rent contract start date
+    examples:
+    - YYYY-MM-DD
+  - name: contract_reg_type_en
+    type: character varying(50)
+    meaning: Contract reg type in English
+    examples:
+    - New
+  - name: contract_reg_type_ar
+    type: character varying(50)
+    meaning: Contract reg type in Arabic
+  - name: contract_reg_type_id
+    type: numeric(3,0)
+    meaning: Contract reg type identifier
+    examples:
+    - 1
+  qualified_name: chatbot_ai.rent_contracts
+- name: property_valuation_records
+  description: Property valuation records from Dubai Land Department
+  primary_key:
+  - procedure_year
+  - procedure_number
+  - procedure_id
+  columns:
+  - name: property_total_value
+    type: numeric(24,2)
+    meaning: Valued worth of the property in AED
+    examples:
+    - 254034
+    - 8954960
+  - name: actual_area
+    type: numeric(24,4)
+    meaning: Area in square metres (unit, plot, or contracted area)
+    examples:
+    - 1072.75
+    - 2971.23
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Dubai community or area name in English
+    examples:
+    - Al Warqa Third
+    - Al Barsha First
+  - name: area_name_ar
+    type: character varying(200)
+    meaning: Dubai community or area name in Arabic
+  - name: area_id
+    type: numeric(10,0)
+    meaning: Community / area identifier
+    examples:
+    - 298
+    - 368
+  - name: property_sub_type_en
+    type: character varying(50)
+    meaning: Subtype in English (Flat, Villa, Office, Shop, ...)
+    examples:
+    - Residential
+    - Commercial
+  - name: property_sub_type_ar
+    type: character varying(50)
+    meaning: Property sub type in Arabic
+  - name: property_sub_type_id
+    type: numeric(4,0)
+    meaning: Property sub type identifier
+    examples:
+    - 63
+    - 62
+  - name: property_type_en
+    type: character varying(50)
+    meaning: Property type in English (Unit, Villa, Land, Building)
+    examples:
+    - Land
+  - name: property_type_ar
+    type: character varying(50)
+    meaning: Property type in Arabic
+  - name: property_type_id
+    type: numeric(4,0)
+    meaning: Property type identifier
+    examples:
+    - 1
+  - name: procedure_area
+    type: numeric(24,4)
+    meaning: Area recorded on the transaction in square metres
+    examples:
+    - 1072.75
+    - 2971.22
+  - name: row_status_code
+    type: character varying(100)
+    meaning: Row status code
+    examples:
+    - COMPLETED
+  - name: actual_worth
+    type: numeric(24,2)
+    meaning: Transacted sale value in AED
+    examples:
+    - 254034
+    - 8954960
+  - name: instance_date
+    type: timestamp without time zone
+    meaning: Date the procedure / transaction was registered
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: procedure_number
+    type: numeric(10,0)
+    meaning: Procedure number
+    examples:
+    - 2
+    - 130
+  - name: procedure_year
+    type: numeric(4,0)
+    meaning: Procedure year
+    examples:
+    - YYYY
+  - name: procedure_name_en
+    type: character varying(100)
+    meaning: DLD procedure name in English (Sale, Mortgage, ...)
+    examples:
+    - Property Evaluation
+  - name: procedure_name_ar
+    type: character varying(100)
+    meaning: Procedure name in Arabic
+  - name: procedure_id
+    type: numeric(3,0)
+    meaning: Procedure identifier
+    examples:
+    - 24
+  qualified_name: chatbot_ai.property_valuation_records
+- name: residential_sale_index
+  description: Dubai Land Department residential sale index
+  primary_key:
+  - first_date_of_month
+  columns:
+  - name: all_monthly_index
+    type: numeric(22,3)
+    meaning: All monthly index
+    examples:
+    - 1.019
+    - 1.018
+  - name: all_quarterly_index
+    type: numeric(22,3)
+    meaning: All quarterly index
+    examples:
+    - 1.017
+    - 1.015
+  - name: all_yearly_index
+    type: numeric(22,3)
+    meaning: All yearly index
+  - name: flat_monthly_index
+    type: numeric(22,3)
+    meaning: Flat monthly index
+    examples:
+    - 1.034
+    - 1.032
+  - name: flat_quarterly_index
+    type: numeric(22,3)
+    meaning: Flat quarterly index
+    examples:
+    - 1.031
+    - 1.026
+  - name: flat_yearly_index
+    type: numeric(22,3)
+    meaning: Flat yearly index
+  - name: villa_monthly_index
+    type: numeric(22,3)
+    meaning: Villa monthly index
+    examples:
+    - 1.035
+    - 1.016
+  - name: villa_quarterly_index
+    type: numeric(22,3)
+    meaning: Villa quarterly index
+    examples:
+    - 1.001
+    - 0.982
+  - name: villa_yearly_index
+    type: numeric(22,3)
+    meaning: Villa yearly index
+  - name: all_monthly_price_index
+    type: numeric(22,3)
+    meaning: All monthly price index
+    examples:
+    - 992984
+    - 1000907
+  - name: all_quarterly_price_index
+    type: numeric(22,3)
+    meaning: All quarterly price index
+    examples:
+    - 989475
+    - 999459
+  - name: all_yearly_price_index
+    type: numeric(22,3)
+    meaning: All yearly price index
+  - name: flat_monthly_price_index
+    type: numeric(22,3)
+    meaning: Flat monthly price index
+    examples:
+    - 973739
+    - 981915
+  - name: flat_quarterly_price_index
+    type: numeric(22,3)
+    meaning: Flat quarterly price index
+    examples:
+    - 969028
+    - 977668
+  - name: flat_yearly_price_index
+    type: numeric(22,3)
+    meaning: Flat yearly price index
+  - name: villa_monthly_price_index
+    type: numeric(22,3)
+    meaning: Villa monthly price index
+    examples:
+    - 1612610
+    - 1583663
+  - name: villa_quarterly_price_index
+    type: numeric(22,3)
+    meaning: Villa quarterly price index
+    examples:
+    - 1599180
+    - 1564472
+  - name: villa_yearly_price_index
+    type: numeric(22,3)
+    meaning: Villa yearly price index
+  - name: first_date_of_month
+    type: date
+    meaning: Month this index row represents
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.residential_sale_index

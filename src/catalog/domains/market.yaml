@@ -1,0 +1,896 @@
+id: market
+name: Price indices and construction statistics
+schema: chatbot_ai
+description: Official DSC price indices, rent indices, construction-cost series, and building-stock aggregates.
+  Use for market movement, not individual deals.
+synonyms:
+- price index
+- rent index
+- construction cost
+- market trend
+- inflation
+- stock of buildings
+grain: one row is a period (month/quarter/year) for a statistical series
+joins: []
+pitfalls:
+- These tables are wide/messy DSC extracts (value + type + year). They are not deal-level.
+- For a community average price, prefer real_estate_transactions, not these city-wide indices.
+- Ignore leftover column_* fields; they are extract artifacts.
+tables:
+- name: residential_property_price_index_base_year_2019_2026_07_16
+  description: Residential property price index base year 2019 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Villas
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 158.77
+    - 203.56
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 26.01
+  qualified_name: chatbot_ai.residential_property_price_index_base_year_2019_2026_07_16
+- name: commercial_property_price_index_base_year_2019_2026_07_16
+  description: Commercial property price index base year 2019 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Shops & Offices
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 172.95
+    - 223.12
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 38.76
+  qualified_name: chatbot_ai.commercial_property_price_index_base_year_2019_2026_07_16
+- name: residential_rent_price_index_base_year_2024_2026_07_16
+  description: Residential rent price index base year 2024 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 76.51
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - RRPI General Index
+    - Units
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 112.96
+    - 113.06
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  qualified_name: chatbot_ai.residential_rent_price_index_base_year_2024_2026_07_16
+- name: annual_percentage_change_in_residential_property_price_d4f4bb36
+  description: Annual percentage change in residential property price d4f4bb36
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Villas
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 12.0
+    - 19.74
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 26.01
+  qualified_name: chatbot_ai.annual_percentage_change_in_residential_property_price_d4f4bb36
+- name: annual_percentage_change_in_commercial_property_price__cec3c152
+  description: Annual percentage change in commercial property price  cec3c152
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Shops & Offices
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 8.35
+    - 15.04
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 38.76
+  qualified_name: chatbot_ai.annual_percentage_change_in_commercial_property_price__cec3c152
+- name: annual_percentage_change_in_residential_rents_price_in_9e8d8281
+  description: Annual percentage change in residential rents price in 9e8d8281
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 76.51
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - RRPI General Index
+    - Units
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 7.27
+    - 7.42
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  qualified_name: chatbot_ai.annual_percentage_change_in_residential_rents_price_in_9e8d8281
+- name: monthly_percentage_change_in_residential_rents_price_i_09e18e38
+  description: Monthly percentage change in residential rents price i 09e18e38
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 76.51
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - RRPI General Index
+    - Units
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 0.66
+    - 0.69
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  qualified_name: chatbot_ai.monthly_percentage_change_in_residential_rents_price_i_09e18e38
+- name: quarterly_percentage_change_in_residential_property_pr_a5a9c409
+  description: Quarterly percentage change in residential property pr a5a9c409
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Villas
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 3.33
+    - 2.39
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 26.01
+  qualified_name: chatbot_ai.quarterly_percentage_change_in_residential_property_pr_a5a9c409
+- name: quarterly_percentage_change_in_commercial_property_pri_96bb404c
+  description: Quarterly percentage change in commercial property pri 96bb404c
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Shops & Offices
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - -0.76
+    - -0.43
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 38.76
+  qualified_name: chatbot_ai.quarterly_percentage_change_in_commercial_property_pri_96bb404c
+- name: construction_cost_index_by_building_stages_2019_100_2026_07_16
+  description: Construction cost index by building stages 2019 100 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - 'First: Site preparation'
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Residential buildings
+    - Non.Residential buildings
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 113.87
+    - 113.72
+  - name: quarter_number
+    type: double precision
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 2.25
+  qualified_name: chatbot_ai.construction_cost_index_by_building_stages_2019_100_2026_07_16
+- name: construction_cost_index_by_economic_activity_2012_100__974b7e58
+  description: Construction cost index by economic activity 2012 100  974b7e58
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Residential buildings
+    - Non.Residential buildings
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 106.83
+    - 105.76
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - General Index
+    - Mining and Quarrying
+  - name: quarter_number
+    type: double precision
+    meaning: Quarter number
+    examples:
+    - 1-4
+  qualified_name: chatbot_ai.construction_cost_index_by_economic_activity_2012_100__974b7e58
+- name: construction_cost_index_by_economic_activity_2019_100__c3793813
+  description: Construction cost index by economic activity 2019 100  c3793813
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - General Index
+    - Materials
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Residential buildings
+    - Non.Residential buildings
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 113.87
+    - 113.72
+  - name: quarter_number
+    type: double precision
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: weight
+    type: double precision
+    meaning: Weight
+    examples:
+    - 100.0
+    - 57.97
+  qualified_name: chatbot_ai.construction_cost_index_by_economic_activity_2019_100__c3793813
+- name: annual_percentage_change_in_construction_cost_index_2026_07_16
+  description: Annual percentage change in construction cost index 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Residential buildings
+    - Non.Residential buildings
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - -1.6
+    - -1.44
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - General Index
+    - Mining and Quarrying
+  - name: quarter_number
+    type: double precision
+    meaning: Quarter number
+    examples:
+    - 1-4
+  qualified_name: chatbot_ai.annual_percentage_change_in_construction_cost_index_2026_07_16
+- name: average_construction_material_prices_2026_07_16
+  description: Average construction material prices 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: materials
+    type: text
+    meaning: Materials
+    examples:
+    - Cement sulphate Resistance
+    - Cement Portland Cement
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 15.71
+    - 13.04
+  - name: quarternum
+    type: double precision
+    meaning: Quarternum
+    examples:
+    - 1.0
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Cement
+    - Aggregates and Sand
+  - name: quantity
+    type: text
+    meaning: Quantity
+    examples:
+    - 50 kg bag
+    - 20 kg bag
+  qualified_name: chatbot_ai.average_construction_material_prices_2026_07_16
+- name: economic_indicators_of_real_estate_activities_2026_07_16
+  description: Economic indicators of real estate activities 2026 07 16
+  primary_key: []
+  columns:
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 111961826.0
+    - 44658490.0
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Output
+    - Intermediate Consumption
+  qualified_name: chatbot_ai.economic_indicators_of_real_estate_activities_2026_07_16
+- name: economic_indicators_of_construction_2026_07_16
+  description: Economic indicators of construction 2026 07 16
+  primary_key: []
+  columns:
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 163731297.0
+    - 106094199.0
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Output
+    - Intermediate Consumption
+  qualified_name: chatbot_ai.economic_indicators_of_construction_2026_07_16
+- name: completed_buildings_aggregation
+  description: Completed buildings across Dubai geographical areas by type
+  primary_key:
+  - year
+  - building_type_en
+  columns:
+  - name: year
+    type: numeric(4,0)
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: building_type_ar
+    type: character varying(250)
+    meaning: Building type in Arabic
+  - name: building_type_en
+    type: character varying(250)
+    meaning: Building type in English
+    examples:
+    - Arabic House
+    - Industrial Building
+  - name: count
+    type: numeric(10,0)
+    meaning: Count
+    examples:
+    - 5685
+    - 1162
+  qualified_name: chatbot_ai.completed_buildings_aggregation
+- name: completed_buildings_2026_07_16
+  description: Completed buildings 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Area
+    - Value
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Private Villas
+    - Investment Villas
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 111836.0
+    - 451.0
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  qualified_name: chatbot_ai.completed_buildings_2026_07_16
+- name: completed_buildings_by_area_type_urban_and_rural_2026_07_16
+  description: Completed buildings by area type urban and rural 2026 07 16
+  primary_key: []
+  columns:
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Multi-storey building
+    - Private Villa
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: bigint
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 15563
+    - 47464
+  - name: area_type
+    type: text
+    meaning: Area type
+    examples:
+    - Urban
+    - Rural
+  qualified_name: chatbot_ai.completed_buildings_by_area_type_urban_and_rural_2026_07_16
+- name: buildings_under_construction_by_type_2026_07_16
+  description: Buildings under construction by type 2026 07 16
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: bigint
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 9422
+    - 11633
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Private Villas
+    - Investment Villas
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  qualified_name: chatbot_ai.buildings_under_construction_by_type_2026_07_16
+- name: housing_units_aggregation
+  description: Completed housing units by type across Dubai (DSC aggregation)
+  primary_key:
+  - year
+  - unit_type_en
+  columns:
+  - name: unit_type_ar
+    type: character varying(250)
+    meaning: Unit type in Arabic
+  - name: unit_type_en
+    type: character varying(250)
+    meaning: Unit type in English
+    examples:
+    - Arabic house
+    - Flat
+  - name: count
+    type: numeric(10,0)
+    meaning: Count
+    examples:
+    - 5685
+    - 661452
+  - name: year
+    type: numeric(4,0)
+    meaning: Calendar year
+    examples:
+    - YYYY
+  qualified_name: chatbot_ai.housing_units_aggregation
+- name: housing_units_by_area_type_urban_and_rural_2026_07_16
+  description: Housing units by area type urban and rural 2026 07 16
+  primary_key: []
+  columns:
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - Other
+    - Villa
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: bigint
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 1165
+    - 509
+  - name: area_type
+    type: text
+    meaning: Area type
+    examples:
+    - Urban
+    - Rural
+  qualified_name: chatbot_ai.housing_units_by_area_type_urban_and_rural_2026_07_16
+- name: building_permits_issued_and_licensed_areas_by_building_80cb34d3
+  description: Building permits issued and licensed areas by building 80cb34d3
+  primary_key: []
+  columns:
+  - name: quarter
+    type: text
+    meaning: Calendar quarter
+    examples:
+    - Qn
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+    examples:
+    - '---'
+  - name: title
+    type: text
+    meaning: Series title
+    examples:
+    - Number
+    - Area (Square foot)
+  - name: quarter_number
+    type: bigint
+    meaning: Quarter number
+    examples:
+    - 1-4
+  - name: month
+    type: text
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: type
+    type: text
+    meaning: Breakdown category for this series
+    examples:
+    - Private Villa
+    - Investment Villa
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: double precision
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 1482.0
+    - 220.0
+  - name: month_number
+    type: bigint
+    meaning: Month number
+    examples:
+    - MM
+  qualified_name: chatbot_ai.building_permits_issued_and_licensed_areas_by_building_80cb34d3

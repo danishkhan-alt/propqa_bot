@@ -1,0 +1,387 @@
+id: amenities
+name: Parks, healthcare, and lifestyle
+schema: chatbot_ai
+description: Parks and beaches, hospitals/clinics, and community things-to-do. Use for lifestyle and nearby
+  facilities, not school or metro lookups.
+synonyms:
+- park
+- beach
+- hospital
+- clinic
+- amenities
+- things to do
+- healthcare
+- pool
+grain: one row is a park, health facility, or community activity
+joins:
+- domain: locations
+  keys:
+  - community_id
+  - location
+  - latitude
+  - longitude
+  - area_id
+pitfalls:
+- Building-level amenities (pool/gym inside a tower) are not in these tables; those live on listings if
+  present.
+- sheryan_health_facilities is DHA licensed facilities, not a distance-to-listing index.
+tables:
+- name: dubai_parks_and_beaches_coordinates
+  description: Dubai parks and beaches X and Y coordinates
+  primary_key:
+  - park_name
+  - park_name_ar
+  - location
+  - location_ar
+  - coordinate_x
+  - coordinate_y
+  columns:
+  - name: park_name
+    type: character varying(100)
+    meaning: Park name
+    examples:
+    - Creek Park
+    - Al Safa Park
+  - name: park_name_ar
+    type: character varying(100)
+    meaning: Park name in Arabic
+  - name: location
+    type: character varying(100)
+    meaning: Location
+    examples:
+    - The ladies toilet 12
+    - Toilet men 13
+  - name: english_description
+    type: character varying(300)
+    meaning: English description
+  - name: arabic_description
+    type: character varying(300)
+    meaning: Arabic description
+  - name: coordinate_x
+    type: character varying(20)
+    meaning: Coordinate x
+    examples:
+    - DDD.dddddd
+  - name: coordinate_y
+    type: character varying(20)
+    meaning: Coordinate y
+    examples:
+    - DD.dddddd
+  - name: location_ar
+    type: character varying(100)
+    meaning: Location in Arabic
+  qualified_name: chatbot_ai.dubai_parks_and_beaches_coordinates
+- name: ps_things_to_do
+  description: Ps things to do
+  primary_key:
+  - things_to_do_id
+  columns:
+  - name: things_to_do_id
+    type: uuid
+    meaning: Things to do identifier
+    examples:
+    - 61b048d4-7721-5086-b72e-2e3eaaddbb3a
+    - bd5495fe-89eb-57a2-8799-45bbafe1f928
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+  - name: owner_type
+    type: character varying(20)
+    meaning: Owner type
+    examples:
+    - community
+  - name: things_to_do_intro
+    type: text
+    meaning: Things to do intro
+  - name: activity_name
+    type: character varying(255)
+    meaning: Activity name
+    examples:
+    - The girls with a pearl, Seventh Heaven
+    - Boss Babe @ Dubai Science Park, Holiday Inn Dubai Science Park
+  - name: activity_type
+    type: character varying(255)
+    meaning: Activity type
+    examples:
+    - Ladies Night
+    - McGettigan's Dubai Science Park (6.5 km)
+  - name: activity_time
+    type: character varying(255)
+    meaning: Activity time
+    examples:
+    - HH:MM
+  - name: venue
+    type: text
+    meaning: Venue
+    examples:
+    - Hide Out Al Barari (0.8 km)
+    - McGettigan's Dubai Science Park (6.5 km)
+  foreign_keys:
+  - columns:
+    - community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  - columns:
+    - subcommunity_id
+    references: chatbot_ai.ps_subcommunities
+    referenced_columns:
+    - subcommunity_id
+  qualified_name: chatbot_ai.ps_things_to_do
+- name: sheryan_health_facilities
+  description: Active Sheryan health facility details from DHA
+  primary_key:
+  - facility_id
+  columns:
+  - name: facility_id
+    type: character varying(50)
+    meaning: Facility identifier
+    examples:
+    - '6888872'
+    - 0001569
+  - name: facility_name_english
+    type: character varying(500)
+    meaning: Facility name english
+    examples:
+    - Pakistan Medical Center
+    - Willow Nursery
+  - name: facility_name_arabic
+    type: character varying(500)
+    meaning: Facility name arabic
+  - name: facility_category_name_english
+    type: character varying(200)
+    meaning: Facility category name english
+    examples:
+    - Clinical Biochemistry
+    - Nursing
+  - name: facility_category_name_arabic
+    type: character varying(200)
+    meaning: Facility category name arabic
+  - name: facility_subcategory_name_english
+    type: character varying(200)
+    meaning: Facility subcategory name english
+    examples:
+    - Polyclinic (Multiple Specialties)
+    - School clinic
+  - name: facility_subcategory_name_arabic
+    type: character varying(200)
+    meaning: Facility subcategory name arabic
+  - name: address_line_one
+    type: character varying(250)
+    meaning: Address line one
+    examples:
+    - Pakistan Association Dubai
+  - name: address_line_two_english
+    type: character varying(400)
+    meaning: Address line two english
+    examples:
+    - Al Seba Street
+  - name: address_line_two_arabic
+    type: character varying(400)
+    meaning: Address line two arabic
+    examples:
+    - OUD METHA
+    - Dubai Marina and Jumeira Beach
+  - name: po_box
+    type: character varying(50)
+    meaning: Po box
+  - name: website
+    type: character varying(500)
+    meaning: Website
+    examples:
+    - https://example.ae
+  - name: telephone_1
+    type: character varying(100)
+    meaning: Telephone 1
+    examples:
+    - +971XXXXXXXXX
+  - name: telephone_2
+    type: character varying(100)
+    meaning: Telephone 2
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(100)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: expiry_date
+    type: date
+    meaning: Expiry date
+    examples:
+    - YYYY-MM-DD
+  - name: status
+    type: character varying(50)
+    meaning: Status
+    examples:
+    - FAC_ACT
+    - FAC_ACT_AEX
+  - name: area_id
+    type: character varying(250)
+    meaning: Community / area identifier
+    examples:
+    - '43'
+    - '139'
+  - name: x_coordinate
+    type: numeric(38,12)
+    meaning: X coordinate
+    examples:
+    - DDD.dddddd
+  - name: y_coordinate
+    type: numeric(38,12)
+    meaning: Y coordinate
+    examples:
+    - DD.dddddd
+  - name: email
+    type: character varying(200)
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: area_english
+    type: character varying(500)
+    meaning: Area english
+    examples:
+    - OUD METHA
+    - Dubai Marina and Jumeira Beach
+  - name: area_arabic
+    type: character varying(500)
+    meaning: Area arabic
+    examples:
+    - OUD METHA
+    - Dubai Marina and Jumeira Beach
+  qualified_name: chatbot_ai.sheryan_health_facilities
+- name: sheryan_facility_detail
+  description: Sheryan facility detail
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: unique_id
+    type: text
+    meaning: Unique identifier
+    examples:
+    - '0000035'
+    - '0000036'
+  - name: f_name_english
+    type: text
+    meaning: F name english
+    examples:
+    - Al Zahra Pvt. Hospital
+    - Dr Imran Tahir Aestheticare Centre
+  - name: f_name_arabic
+    type: text
+    meaning: F name arabic
+  - name: facility_category_name_english
+    type: text
+    meaning: Facility category name english
+    examples:
+    - Anesthesia
+    - Plastic Surgery
+  - name: facility_category_name_arabic
+    type: text
+    meaning: Facility category name arabic
+  - name: facilitysubcategorynameenglish
+    type: text
+    meaning: Facilitysubcategorynameenglish
+    examples:
+    - General Hospital (>100)
+    - Polyclinic (Multiple Specialties)
+  - name: facilitysubcategorynamearabic
+    type: text
+    meaning: Facilitysubcategorynamearabic
+  - name: address_line_one
+    type: text
+    meaning: Address line one
+    examples:
+    - Al Zahra Pvt Hospital Dubai
+    - '9298'
+  - name: address_line_two_english
+    type: text
+    meaning: Address line two english
+    examples:
+    - Al Na'ayat Street 6
+    - Al Wasl Road 929
+  - name: address_line_two_arabic
+    type: text
+    meaning: Address line two arabic
+    examples:
+    - AL BARSHA FIRST
+    - Al Manara
+  - name: po_box
+    type: text
+    meaning: Po box
+  - name: website
+    type: text
+    meaning: Website
+    examples:
+    - https://example.ae
+  - name: telephone_1
+    type: text
+    meaning: Telephone 1
+    examples:
+    - +971XXXXXXXXX
+  - name: telephone_2
+    type: text
+    meaning: Telephone 2
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: text
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: expiry_date
+    type: date
+    meaning: Expiry date
+    examples:
+    - YYYY-MM-DD
+  - name: status
+    type: text
+    meaning: Status
+    examples:
+    - FAC_ACT
+    - FAC_ACT_AEX
+  - name: area_id
+    type: integer
+    meaning: Community / area identifier
+    examples:
+    - 132
+    - 124
+  - name: x_coordinate
+    type: double precision
+    meaning: X coordinate
+    examples:
+    - DDD.dddddd
+  - name: y_coordinate
+    type: double precision
+    meaning: Y coordinate
+    examples:
+    - DD.dddddd
+  - name: email
+    type: text
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: area_english
+    type: text
+    meaning: Area english
+    examples:
+    - AL BARSHA FIRST
+    - Al Manara
+  - name: area_arabic
+    type: text
+    meaning: Area arabic
+    examples:
+    - AL BARSHA FIRST
+    - Al Manara
+  qualified_name: chatbot_ai.sheryan_facility_detail

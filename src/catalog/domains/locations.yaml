@@ -1,0 +1,730 @@
+id: locations
+name: Communities, areas, and geo hierarchy
+schema: chatbot_ai
+description: Dubai communities, subcommunities, Makani entrances, population, and area insights. This
+  is the usual join bridge for other domains.
+synonyms:
+- community
+- area
+- neighbourhood
+- location
+- subcommunity
+- makani
+- sector
+- where is
+grain: one row is a community, subcommunity, entrance, or area-insight profile
+joins:
+- domain: listings
+  keys:
+  - community_id
+  - area_id
+  - name_en
+- domain: schools
+  keys:
+  - community_id
+  - areaen
+- domain: rta
+  keys:
+  - community_name
+  - community_num
+pitfalls:
+- Community names are not always spelled the same across DLD vs Property Share vs RTA tables.
+- area_insights_communities.location_id points at public.locations_v2, not chatbot_ai.
+- Prefer ps_communities / dubai_community_areas for names; use dmgisnet_enterances for Makani coordinates.
+tables:
+- name: dubai_community_areas
+  description: DLD lookup of Dubai community areas
+  primary_key:
+  - area_id
+  columns:
+  - name: area_id
+    type: numeric(22,0)
+    meaning: Community / area identifier
+    examples:
+    - 229
+    - 230
+  - name: name_en
+    type: character varying(200)
+    meaning: Name in English
+    examples:
+    - Um Suqaim
+    - Abu Hail
+  - name: name_ar
+    type: character varying(200)
+    meaning: Name in Arabic
+  - name: municipality_number
+    type: character varying(3)
+    meaning: Municipality number
+    examples:
+    - '0'
+    - '126'
+  qualified_name: chatbot_ai.dubai_community_areas
+- name: area_insights_communities
+  description: Area insights communities
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Id
+    examples:
+    - 5
+    - 56
+  - name: location_id
+    type: bigint
+    meaning: Location identifier
+    examples:
+    - 2956
+    - 2572
+  - name: title_en
+    type: character varying
+    meaning: Title in English
+    examples:
+    - Al Barari
+    - Al Wohoosh
+  - name: nationalities
+    type: jsonb
+    meaning: Nationalities
+    examples:
+    - JSON
+  - name: community_tag
+    type: jsonb
+    meaning: Community tag
+    examples:
+    - JSON
+  - name: schools
+    type: jsonb
+    meaning: Schools
+    examples:
+    - JSON
+  - name: universities
+    type: jsonb
+    meaning: Universities
+    examples:
+    - JSON
+  - name: nurseries
+    type: jsonb
+    meaning: Nurseries
+    examples:
+    - JSON
+  - name: parks
+    type: jsonb
+    meaning: Parks
+    examples:
+    - JSON
+  - name: bicycle_tracks
+    type: jsonb
+    meaning: Bicycle tracks
+    examples:
+    - JSON
+  - name: healthcare
+    type: jsonb
+    meaning: Healthcare
+    examples:
+    - JSON
+  - name: metro
+    type: jsonb
+    meaning: Metro
+    examples:
+    - JSON
+  - name: bus
+    type: jsonb
+    meaning: Bus
+    examples:
+    - JSON
+  - name: tram
+    type: jsonb
+    meaning: Tram
+    examples:
+    - JSON
+  - name: marine
+    type: jsonb
+    meaning: Marine
+    examples:
+    - JSON
+  - name: whats_within_reach
+    type: jsonb
+    meaning: Whats within reach
+    examples:
+    - JSON
+  - name: restaurants
+    type: jsonb
+    meaning: Restaurants
+    examples:
+    - JSON
+  - name: cafes
+    type: jsonb
+    meaning: Cafes
+    examples:
+    - JSON
+  - name: swimming
+    type: jsonb
+    meaning: Swimming
+    examples:
+    - JSON
+  - name: sports
+    type: jsonb
+    meaning: Sports
+    examples:
+    - JSON
+  - name: retail
+    type: jsonb
+    meaning: Retail
+    examples:
+    - JSON
+  - name: groceries
+    type: jsonb
+    meaning: Groceries
+    examples:
+    - JSON
+  - name: public_transit
+    type: jsonb
+    meaning: Public transit
+    examples:
+    - JSON
+  - name: image
+    type: text
+    meaning: Image
+    examples:
+    - https://propqa-assets.s3.me-central-1.amazonaws.com/communities/al-barari.jpg
+    - https://propqa-assets.s3.me-central-1.amazonaws.com/communities/al-wohoosh.jpg
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+  - name: family_community
+    type: jsonb
+    meaning: Family community
+    examples:
+    - JSON
+  - name: display_community
+    type: boolean
+    meaning: Display community
+    examples:
+    - false
+    - true
+  - name: seo_content
+    type: jsonb
+    meaning: Seo content
+    examples:
+    - JSON
+  - name: browse_by_area_of_dubai
+    type: text
+    meaning: Browse by area of dubai
+    examples:
+    - Dubailand & Inland
+    - Downtown & The Canal
+  - name: community_property_types
+    type: text
+    meaning: Community property types
+    examples:
+    - Villa & Townhouses Communities
+    - Mixed Communities
+  - name: readiness_status
+    type: text
+    meaning: Readiness status
+    examples:
+    - Established
+    - New & Offplan
+  - name: people_living
+    type: text[]
+    meaning: People living
+    examples:
+    - '[''Best For Families'', ''Luxury Addresses'']'
+    - '[]'
+  - name: community_amenities
+    type: text[]
+    meaning: Community amenities
+    examples:
+    - '[]'
+  foreign_keys:
+  - columns:
+    - location_id
+    references: public.locations_v2
+    referenced_columns:
+    - id
+  qualified_name: chatbot_ai.area_insights_communities
+- name: dmgisnet_enterances
+  description: Dubai Municipality GIS Net building entrances
+  primary_key:
+  - makani
+  columns:
+  - name: makani
+    type: character varying(15)
+    meaning: Dubai Makani building entrance number
+    examples:
+    - NNNNNNNNNN
+  - name: dltmy
+    type: double precision
+    meaning: Dltmy
+    examples:
+    - 2796282.882
+    - 2796380.128
+  - name: comm_num
+    type: double precision
+    meaning: Comm num
+    examples:
+    - 118.0
+    - 244.0
+  - name: comm_name_
+    type: character varying(254)
+    meaning: Comm name
+    examples:
+    - NAIF
+    - MUHAISANAH THIRD
+  - name: comm_nam_1
+    type: character varying(254)
+    meaning: Comm nam 1
+  - name: enteranceid
+    type: bigint
+    meaning: Enteranceid
+    examples:
+    - 3104
+    - 3965
+  - name: gzd
+    type: character varying(6)
+    meaning: Gzd
+    examples:
+    - CN
+  - name: zone_
+    type: character varying(10)
+    meaning: Zone
+  - name: point_x
+    type: double precision
+    meaning: Point x
+    examples:
+    - 55.31436695
+    - 55.31320951
+  - name: point_y
+    type: double precision
+    meaning: Point y
+    examples:
+    - 25.27288286
+    - 25.27376056
+  - name: mgrs
+    type: character varying(255)
+    meaning: Mgrs
+    examples:
+    - 40RCN3026596230
+    - 40RCN3015096329
+  - name: type_desc_e
+    type: character varying(255)
+    meaning: Type desc e
+  - name: dltmx
+    type: double precision
+    meaning: Dltmx
+    examples:
+    - 498089.592
+    - 497973.023
+  qualified_name: chatbot_ai.dmgisnet_enterances
+- name: sectors
+  description: Dubai Municipality administrative sectors from GIS Net
+  primary_key:
+  - sec_num
+  columns:
+  - name: perimeter
+    type: numeric(12,4)
+    meaning: Perimeter
+    examples:
+    - 0
+  - name: sec_num
+    type: numeric(8,0)
+    meaning: Sec num
+    examples:
+    - 600
+    - 200
+  qualified_name: chatbot_ai.sectors
+- name: population_by_community
+  description: Dubai Statistics Center population by community
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: numeric(10,0)
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: year
+    type: numeric(4,0)
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: community_number_community_name_ar
+    type: character varying(250)
+    meaning: Community number community name in Arabic
+  - name: community_number_community_name_en
+    type: character varying(250)
+    meaning: Community number community name in English
+    examples:
+    - 415-AL KHAIRAN FIRST
+    - 416-NAD AL HAMAR
+  - name: population
+    type: numeric(12,0)
+    meaning: Population
+    examples:
+    - 2
+    - 13589
+  qualified_name: chatbot_ai.population_by_community
+- name: estimated_population_by_community_2026_07_16
+  description: Estimated population by community 2026 07 16
+  primary_key: []
+  columns:
+  - name: sector_community
+    type: text
+    meaning: Sector community
+    examples:
+    - NAKHLAT DEIRA
+    - AL CORNICHE
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: bigint
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 2
+    - 7824
+  - name: code
+    type: bigint
+    meaning: Code
+    examples:
+    - 101
+    - 111
+  qualified_name: chatbot_ai.estimated_population_by_community_2026_07_16
+- name: estimated_population_by_sex_and_community_2026_07_16
+  description: Estimated population by sex and community 2026 07 16
+  primary_key: []
+  columns:
+  - name: sector_community
+    type: text
+    meaning: Sector community
+    examples:
+    - NAKHLAT DEIRA
+    - AL CORNICHE
+  - name: year
+    type: bigint
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: value
+    type: bigint
+    meaning: Numeric observation (index, count, percentage, or AED)
+    examples:
+    - 2
+    - 0
+  - name: gender
+    type: text
+    meaning: Gender
+    examples:
+    - Male
+    - Female
+  - name: code
+    type: bigint
+    meaning: Code
+    examples:
+    - 101
+    - 111
+  qualified_name: chatbot_ai.estimated_population_by_sex_and_community_2026_07_16
+- name: population_cluster
+  description: Smart Dubai population cluster classification lookup
+  primary_key:
+  - code
+  columns:
+  - name: english_classification
+    type: character varying(100)
+    meaning: English classification
+    examples:
+    - Labor Accommodation
+    - Public Residence
+  - name: code
+    type: character varying(100)
+    meaning: Code
+    examples:
+    - '1'
+    - '2'
+  - name: arabic_classification
+    type: character varying(100)
+    meaning: Arabic classification
+  qualified_name: chatbot_ai.population_cluster
+- name: ps_communities
+  description: Ps communities
+  primary_key:
+  - community_id
+  columns:
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+    - c5f69b56-76a0-5dc3-8007-490b52890f84
+  - name: community_slug
+    type: character varying(255)
+    meaning: Community slug
+    examples:
+    - al-barari
+    - al-barsha-1
+  - name: community_name
+    type: character varying(255)
+    meaning: Community name
+    examples:
+    - Al Barari
+    - Al Barsha 1
+  - name: commute_times_by_car
+    type: text
+    meaning: Commute times by car
+  - name: airport_proximity
+    type: text
+    meaning: Airport proximity
+  - name: road_access
+    type: text
+    meaning: Road access
+  - name: transport_disclaimer
+    type: text
+    meaning: Transport disclaimer
+  - name: schools_intro
+    type: text
+    meaning: Schools intro
+  - name: schools
+    type: jsonb
+    meaning: Schools
+    examples:
+    - JSON
+  - name: things_to_do_intro
+    type: text
+    meaning: Things to do intro
+  - name: things_to_do
+    type: jsonb
+    meaning: Things to do
+    examples:
+    - JSON
+  - name: nearby_neighbourhoods_intro
+    type: text
+    meaning: Nearby neighbourhoods intro
+    examples:
+    - Explore communities that are either adjacent or close to Al Barari.
+    - Explore communities that are either adjacent or close to Al Barsha 1.
+  - name: nearby_neighbourhoods
+    type: jsonb
+    meaning: Nearby neighbourhoods
+    examples:
+    - JSON
+  - name: buildings
+    type: jsonb
+    meaning: Buildings
+    examples:
+    - JSON
+  - name: location_nearby
+    type: jsonb
+    meaning: Location nearby
+    examples:
+    - JSON
+  qualified_name: chatbot_ai.ps_communities
+- name: ps_subcommunities
+  description: Ps subcommunities
+  primary_key:
+  - subcommunity_id
+  columns:
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+    examples:
+    - 3aeaff63-e527-5eff-b315-d755ab5f4872
+    - bff458f6-d572-5645-a6ac-29a1a726edb1
+  - name: parent_community_id
+    type: uuid
+    meaning: Parent community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+    - 75600f2c-0ea1-5695-883e-197cbf54abd5
+  - name: parent_community_slug
+    type: character varying(255)
+    meaning: Parent community slug
+    examples:
+    - al-barari
+    - hayat-dubai-south
+  - name: subcommunity_slug
+    type: character varying(255)
+    meaning: Subcommunity slug
+    examples:
+    - altissima
+    - ashjar
+  - name: subcommunity_name
+    type: character varying(255)
+    meaning: Subcommunity name
+    examples:
+    - Altissima
+    - Ashjar
+  - name: source_file
+    type: character varying(255)
+    meaning: Source file
+    examples:
+    - altissima.json
+    - ashjar.json
+  - name: commute_times_by_car
+    type: text
+    meaning: Commute times by car
+  - name: airport_proximity
+    type: text
+    meaning: Airport proximity
+  - name: road_access
+    type: text
+    meaning: Road access
+  - name: transport_disclaimer
+    type: text
+    meaning: Transport disclaimer
+  - name: schools_intro
+    type: text
+    meaning: Schools intro
+  - name: schools
+    type: jsonb
+    meaning: Schools
+    examples:
+    - JSON
+  - name: things_to_do_intro
+    type: text
+    meaning: Things to do intro
+  - name: things_to_do
+    type: jsonb
+    meaning: Things to do
+    examples:
+    - JSON
+  - name: nearby_neighbourhoods_intro
+    type: text
+    meaning: Nearby neighbourhoods intro
+    examples:
+    - Explore communities that are either adjacent or close to Altissima.
+    - Explore communities that are either adjacent or close to Ashjar.
+  - name: nearby_neighbourhoods
+    type: jsonb
+    meaning: Nearby neighbourhoods
+    examples:
+    - JSON
+  - name: buildings
+    type: jsonb
+    meaning: Buildings
+    examples:
+    - JSON
+  - name: location_nearby
+    type: jsonb
+    meaning: Location nearby
+    examples:
+    - JSON
+  foreign_keys:
+  - columns:
+    - parent_community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  qualified_name: chatbot_ai.ps_subcommunities
+- name: ps_locations_nearby
+  description: Ps locations nearby
+  primary_key:
+  - locations_nearby_id
+  columns:
+  - name: locations_nearby_id
+    type: uuid
+    meaning: Locations nearby identifier
+    examples:
+    - 26e152ce-6440-54cb-aecc-b878af985b5f
+    - 4a1fbe7d-accc-50b6-93af-33c47f8e5de6
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+  - name: owner_type
+    type: character varying(20)
+    meaning: Owner type
+    examples:
+    - community
+  - name: category
+    type: character varying(100)
+    meaning: Category
+    examples:
+    - Attractions
+    - Parks & beaches
+  - name: place_name
+    type: character varying(255)
+    meaning: Place name
+    examples:
+    - IMG Worlds of Adventure
+    - Global Village
+  - name: distance
+    type: character varying(50)
+    meaning: Distance
+    examples:
+    - 2.1 km
+    - 3.3 km
+  foreign_keys:
+  - columns:
+    - community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  - columns:
+    - subcommunity_id
+    references: chatbot_ai.ps_subcommunities
+    referenced_columns:
+    - subcommunity_id
+  qualified_name: chatbot_ai.ps_locations_nearby
+- name: ps_nearby_neighbourhoods
+  description: Ps nearby neighbourhoods
+  primary_key:
+  - nearby_neighbourhood_id
+  columns:
+  - name: nearby_neighbourhood_id
+    type: uuid
+    meaning: Nearby neighbourhood identifier
+    examples:
+    - 8d98be44-aa20-5756-8691-e08c900780a3
+    - b14ee4c4-aac9-5ccd-8688-6a3299962949
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+  - name: owner_type
+    type: character varying(20)
+    meaning: Owner type
+    examples:
+    - community
+  - name: nearby_neighbourhoods_intro
+    type: text
+    meaning: Nearby neighbourhoods intro
+    examples:
+    - Explore communities that are either adjacent or close to Al Barari.
+  - name: neighbourhood_name
+    type: character varying(255)
+    meaning: Neighbourhood name
+    examples:
+    - Majan
+    - Living Legends
+  - name: distance
+    type: character varying(50)
+    meaning: Distance
+    examples:
+    - 1.0 km
+    - 1.6 km
+  - name: description
+    type: text
+    meaning: Series description or breakdown
+  foreign_keys:
+  - columns:
+    - community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  - columns:
+    - subcommunity_id
+    references: chatbot_ai.ps_subcommunities
+    referenced_columns:
+    - subcommunity_id
+  qualified_name: chatbot_ai.ps_nearby_neighbourhoods

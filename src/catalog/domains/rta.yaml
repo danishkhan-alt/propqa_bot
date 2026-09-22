@@ -1,0 +1,2130 @@
+id: rta
+name: Transport, parking, and roads
+schema: chatbot_ai
+description: Metro, tram, bus, marine stations, parking, Salik gates, cycle tracks, and major roads. Use
+  for commute and parking around a community.
+synonyms:
+- metro
+- tram
+- bus
+- RTA
+- parking
+- salik
+- toll
+- commute
+- station
+grain: one row is a station, stop, parking zone, road, or fare row
+joins:
+- domain: locations
+  keys:
+  - community_name
+  - community_num
+  - area_en
+  - latitude
+  - longitude
+- domain: listings
+  keys:
+  - nearest_metro_en
+pitfalls:
+- Prefer *_gis / station tables for locations. Ridership and fleet tables are excluded.
+- Parking zone names and community numbers may not match DLD area names exactly.
+tables:
+- name: metro_stations
+  description: RTA Dubai metro stations
+  primary_key:
+  - location_id
+  columns:
+  - name: location_id
+    type: numeric(8,0)
+    meaning: Location identifier
+    examples:
+    - 150
+    - 173
+  - name: zone_id
+    type: numeric(8,0)
+    meaning: Zone identifier
+    examples:
+    - 2
+    - 6
+  - name: location_name_english
+    type: character varying(200)
+    meaning: Location name english
+    examples:
+    - Mashreq Metro Station
+    - Al Ghubaiba Metro Station
+  - name: location_name_arabic
+    type: character varying(200)
+    meaning: Location name arabic
+  - name: line_name
+    type: character varying(200)
+    meaning: Line name
+    examples:
+    - Red Metro line
+    - Green Metro line
+  - name: station_location_longitude
+    type: numeric(9,6)
+    meaning: Station location longitude
+    examples:
+    - DDD.dddddd
+  - name: station_location_latitude
+    type: numeric(9,6)
+    meaning: Station location latitude
+    examples:
+    - DD.dddddd
+  - name: station_opening_date
+    type: date
+    meaning: Station opening date
+    examples:
+    - YYYY-MM-DD
+  - name: station_closing_date
+    type: date
+    meaning: Station closing date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.metro_stations
+- name: metro_stations_gis
+  description: Metro stations gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: rail_stations_no
+    type: text
+    meaning: Rail stations no
+    examples:
+    - R37
+    - R34
+  - name: rail_system
+    type: text
+    meaning: Rail system
+    examples:
+    - Metro
+  - name: community_name
+    type: text
+    meaning: Community name
+    examples:
+    - EMIRATES HILL FIRST
+    - EMIRATES HILL SECOND
+  - name: x_coordinate
+    type: text
+    meaning: X coordinate
+    examples:
+    - DDD.dddddd
+  - name: y_coordinate
+    type: text
+    meaning: Y coordinate
+    examples:
+    - DD.dddddd
+  - name: station_type
+    type: text
+    meaning: Station type
+    examples:
+    - E2
+    - ET
+  - name: active
+    type: text
+    meaning: Active
+    examples:
+    - 'YES'
+  - name: station_location_type
+    type: text
+    meaning: Station location type
+    examples:
+    - Elevated
+  - name: station_location
+    type: text
+    meaning: Station location
+    examples:
+    - Red Line(MRed)
+  - name: station_name_ar
+    type: text
+    meaning: Station name in Arabic
+  - name: station_name_en
+    type: text
+    meaning: Station name in English
+    examples:
+    - DMCC
+    - Dubai Internet City
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: station_location_type_ar
+    type: text
+    meaning: Station location type in Arabic
+  - name: station_location_ar
+    type: text
+    meaning: Station location in Arabic
+  - name: placemark_name
+    type: text
+    meaning: Placemark name
+    examples:
+    - kml_1
+    - kml_2
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: status
+    type: text
+    meaning: Status
+  qualified_name: chatbot_ai.metro_stations_gis
+- name: metro_lines
+  description: RTA Dubai metro lines
+  primary_key:
+  - line_name
+  columns:
+  - name: line_name
+    type: character varying(200)
+    meaning: Line name
+    examples:
+    - Red Metro Line
+    - Green Metro Line
+  - name: line_description
+    type: character varying(200)
+    meaning: Line description
+    examples:
+    - Red Metro Line
+    - Green Metro Line
+  qualified_name: chatbot_ai.metro_lines
+- name: metro_lines_gis
+  description: Metro lines gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: rail_route_id
+    type: text
+    meaning: Rail route identifier
+    examples:
+    - '2029508'
+    - '2029509'
+  - name: num_of_stations
+    type: text
+    meaning: Num of stations
+    examples:
+    - '29'
+    - '20'
+  - name: service_area
+    type: text
+    meaning: Service area
+    examples:
+    - Rashidiya to JAFZA/Limitless
+    - Al Qusais to Al Jaddaf
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: placemark_name
+    type: text
+    meaning: Placemark name
+    examples:
+    - kml_1
+    - kml_2
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '0'
+    - '93'
+  - name: line_segment_count
+    type: text
+    meaning: Line segment count
+    examples:
+    - '0'
+    - '1'
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: end_lon
+    type: text
+    meaning: End lon
+    examples:
+    - DDD.dddddd
+  - name: end_lat
+    type: text
+    meaning: End lat
+    examples:
+    - DD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.metro_lines_gis
+- name: tram_stations
+  description: RTA Dubai tram stations
+  primary_key:
+  - location_id
+  columns:
+  - name: location_id
+    type: numeric(8,0)
+    meaning: Location identifier
+    examples:
+    - 221
+    - 218
+  - name: zone_id
+    type: numeric(8,0)
+    meaning: Zone identifier
+    examples:
+    - 2
+  - name: location_name_english
+    type: character varying(200)
+    meaning: Location name english
+    examples:
+    - Media City
+    - Dubai Marina
+  - name: location_name_arabic
+    type: character varying(200)
+    meaning: Location name arabic
+  - name: line_name
+    type: character varying(200)
+    meaning: Line name
+    examples:
+    - Tram line
+  - name: station_location_longitude
+    type: numeric(9,6)
+    meaning: Station location longitude
+    examples:
+    - DDD.dddddd
+  - name: station_location_latitude
+    type: numeric(9,6)
+    meaning: Station location latitude
+    examples:
+    - DD.dddddd
+  - name: station_opening_date
+    type: date
+    meaning: Station opening date
+    examples:
+    - YYYY-MM-DD
+  - name: station_closing_date
+    type: date
+    meaning: Station closing date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.tram_stations
+- name: tram_stations_gis
+  description: Tram stations gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: station_num
+    type: text
+    meaning: Station num
+    examples:
+    - '6'
+    - '2'
+  - name: station_name_en
+    type: text
+    meaning: Station name in English
+    examples:
+    - Marina Towers
+    - Jumeirah Beach Residence 2
+  - name: station_name_ar
+    type: text
+    meaning: Station name in Arabic
+  - name: tram_station_id
+    type: text
+    meaning: Tram station identifier
+    examples:
+    - '2687306'
+    - '2687301'
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: station_id
+    type: text
+    meaning: Station identifier
+    examples:
+    - S6
+    - S2
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.tram_stations_gis
+- name: tram_lines
+  description: RTA Dubai tram lines
+  primary_key:
+  - line_name
+  columns:
+  - name: line_name
+    type: character varying(200)
+    meaning: Line name
+    examples:
+    - Tram Line
+  - name: line_description
+    type: character varying(200)
+    meaning: Line description
+    examples:
+    - Tram Line
+  qualified_name: chatbot_ai.tram_lines
+- name: tram_lines_gis
+  description: Tram lines gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: placemark_name
+    type: text
+    meaning: Placemark name
+    examples:
+    - kml_1
+    - kml_2
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '2'
+    - '4'
+  - name: line_segment_count
+    type: text
+    meaning: Line segment count
+    examples:
+    - '1'
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: end_lon
+    type: text
+    meaning: End lon
+    examples:
+    - DDD.dddddd
+  - name: end_lat
+    type: text
+    meaning: End lat
+    examples:
+    - DD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.tram_lines_gis
+- name: dubai_tram_lines
+  description: RTA Dubai tram lines
+  primary_key:
+  - line_name
+  columns:
+  - name: line_name
+    type: character varying(200)
+    meaning: Line name
+    examples:
+    - Tram Line
+  - name: line_description
+    type: character varying(200)
+    meaning: Line description
+    examples:
+    - Tram Line
+  qualified_name: chatbot_ai.dubai_tram_lines
+- name: bus_stops_gis
+  description: Bus stops gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: bus_stop_id
+    type: text
+    meaning: Bus stop identifier
+    examples:
+    - '703501'
+    - '920201'
+  - name: stops_name_en
+    type: text
+    meaning: Stops name in English
+    examples:
+    - Al Qusais Industrial Area 3, Masjid Mustaqeem 1
+    - Al Ihassan Trading FZCO 1
+  - name: stops_name_ar
+    type: text
+    meaning: Stops name in Arabic
+  - name: short_name
+    type: text
+    meaning: Short name
+    examples:
+    - QIA3MM1
+    - AIT1
+  - name: farezone
+    type: text
+    meaning: Farezone
+    examples:
+    - '5'
+    - '1'
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: routes
+    type: text
+    meaning: Routes
+    examples:
+    - 43, F22, F24
+    - F53
+  - name: area_en
+    type: text
+    meaning: Area in English
+    examples:
+    - QIA3MM
+    - AIT
+  - name: area_ar
+    type: text
+    meaning: Area in Arabic
+  - name: area_abbr
+    type: text
+    meaning: Area abbr
+    examples:
+    - Al Qusais Industrial Area 3, Masjid Mustaqeem
+    - Al Ihassan Trading FZCO
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: st_name
+    type: text
+    meaning: St name
+    examples:
+    - Al Wasel Road
+    - Al Hamriya Street
+  qualified_name: chatbot_ai.bus_stops_gis
+- name: bus_stop_details
+  description: RTA bus stop details
+  primary_key:
+  - stop_id
+  - route_name
+  columns:
+  - name: report_date
+    type: date
+    meaning: Report date
+    examples:
+    - YYYY-MM-DD
+  - name: stop_name
+    type: character varying(200)
+    meaning: Stop name
+    examples:
+    - IML
+    - Mizhar 1, F-1
+  - name: stop_location_latitude
+    type: numeric(9,6)
+    meaning: Stop location latitude
+    examples:
+    - DD.dddddd
+  - name: bus_stop_type
+    type: character varying(200)
+    meaning: Bus stop type
+  - name: time_table_panel
+    type: character varying(5)
+    meaning: Time table panel
+    examples:
+    - 'Yes'
+  - name: mupi_available
+    type: character varying(5)
+    meaning: Mupi available
+  - name: rtpi_available
+    type: character varying(5)
+    meaning: Rtpi available
+  - name: last_survey_date
+    type: date
+    meaning: Last survey date
+    examples:
+    - YYYY-MM-DD
+  - name: valid_from
+    type: date
+    meaning: Valid from
+    examples:
+    - YYYY-MM-DD
+  - name: valid_until
+    type: date
+    meaning: Valid until
+    examples:
+    - YYYY-MM-DD
+  - name: stop_id
+    type: numeric(8,0)
+    meaning: Stop identifier
+    examples:
+    - 3603
+    - 1621
+  - name: street_name
+    type: character varying(200)
+    meaning: Street name
+  - name: route_name
+    type: character varying(200)
+    meaning: Route name
+    examples:
+    - F48
+    - F33
+  - name: stop_location_longitude
+    type: numeric(9,6)
+    meaning: Stop location longitude
+    examples:
+    - DDD.dddddd
+  qualified_name: chatbot_ai.bus_stop_details
+- name: bus_routes
+  description: RTA bus routes and stops
+  primary_key:
+  - route_name
+  - direction
+  - stop_number
+  - stop_name
+  columns:
+  - name: route_name
+    type: character varying(200)
+    meaning: Route name
+    examples:
+    - F08
+    - '53'
+  - name: route_type
+    type: character varying(200)
+    meaning: Route type
+    examples:
+    - Feeder
+    - Urban
+  - name: direction
+    type: character varying(40)
+    meaning: Direction
+    examples:
+    - NTSPS1 -> DFCFC1
+    - ICPM1 -> GSBS4
+  - name: stop_name
+    type: character varying(200)
+    meaning: Stop name
+    examples:
+    - Nad Al Hamar Grand Masjid 1
+    - Emirates Driving Institute 1
+  - name: stop_number
+    type: integer
+    meaning: Stop number
+    examples:
+    - 16
+    - 8
+  qualified_name: chatbot_ai.bus_routes
+- name: bus_network_coverage
+  description: RTA bus network coverage by community
+  primary_key:
+  - community_num
+  columns:
+  - name: report_date
+    type: date
+    meaning: Report date
+    examples:
+    - YYYY-MM-DD
+  - name: community_num
+    type: numeric(9,0)
+    meaning: Community num
+    examples:
+    - 382
+    - 232
+  - name: community_name
+    type: character varying(200)
+    meaning: Community name
+    examples:
+    - AL SAFOUH SECOND
+    - AL QUSAIS FIRST
+  - name: community_area_size
+    type: numeric(9,2)
+    meaning: Community area size
+    examples:
+    - 4
+    - 3
+  - name: makani_points
+    type: numeric(9,0)
+    meaning: Makani points
+    examples:
+    - 886
+    - 305
+  - name: population
+    type: numeric(9,0)
+    meaning: Population
+    examples:
+    - 6609
+    - 49504
+  - name: nume_of_bus_stops
+    type: numeric(9,0)
+    meaning: Nume of bus stops
+    examples:
+    - 36
+    - 20
+  - name: accessible_population
+    type: numeric(9,0)
+    meaning: Accessible population
+    examples:
+    - 6124
+    - 49504
+  - name: geographic_coverage
+    type: numeric(9,2)
+    meaning: Geographic coverage
+    examples:
+    - 94
+    - 98
+  qualified_name: chatbot_ai.bus_network_coverage
+- name: public_transportation_stations
+  description: RTA public transportation stations
+  primary_key:
+  - transport_mode
+  - station_number
+  columns:
+  - name: transport_mode
+    type: character varying(50)
+    meaning: Transport mode
+  - name: station_name_english
+    type: character varying(200)
+    meaning: Station name english
+  - name: station_name_arabic
+    type: character varying(50)
+    meaning: Station name arabic
+  - name: station_number
+    type: character varying(50)
+    meaning: Station number
+  - name: station_location_type_english
+    type: character varying(50)
+    meaning: Station location type english
+  - name: station_location_type_arabic
+    type: character varying(50)
+    meaning: Station location type arabic
+  - name: current_service_status
+    type: character varying(50)
+    meaning: Current service status
+  - name: number_stops
+    type: numeric(3,0)
+    meaning: Number stops
+  - name: number_layby
+    type: numeric(3,0)
+    meaning: Number layby
+  - name: customer_facilities
+    type: character varying(200)
+    meaning: Customer facilities
+  - name: parking_facilities
+    type: character varying(50)
+    meaning: Parking facilities
+  - name: zone_id
+    type: character varying(50)
+    meaning: Zone identifier
+  - name: line_name
+    type: character varying(250)
+    meaning: Line name
+  - name: station_location_longitude
+    type: numeric(12,8)
+    meaning: Station location longitude
+    examples:
+    - DDD.dddddd
+  - name: station_location_latitude
+    type: numeric(12,8)
+    meaning: Station location latitude
+    examples:
+    - DD.dddddd
+  - name: station_opening_date
+    type: date
+    meaning: Station opening date
+    examples:
+    - YYYY-MM-DD
+  - name: station_closing_date
+    type: date
+    meaning: Station closing date
+    examples:
+    - YYYY-MM-DD
+  - name: station_starttime_saturday
+    type: time without time zone
+    meaning: Station starttime saturday
+  - name: station_endtime_saturday
+    type: time without time zone
+    meaning: Station endtime saturday
+  - name: station_starttime_sunday
+    type: time without time zone
+    meaning: Station starttime sunday
+  - name: station_endtime_sunday
+    type: time without time zone
+    meaning: Station endtime sunday
+  - name: station_starttime_monday
+    type: time without time zone
+    meaning: Station starttime monday
+  - name: station_endtime_monday
+    type: time without time zone
+    meaning: Station endtime monday
+  - name: station_starttime_tuesday
+    type: time without time zone
+    meaning: Station starttime tuesday
+  - name: station_endtime_tuesday
+    type: time without time zone
+    meaning: Station endtime tuesday
+  - name: station_starttime_wednesday
+    type: time without time zone
+    meaning: Station starttime wednesday
+  - name: station_endtime_wednesday
+    type: time without time zone
+    meaning: Station endtime wednesday
+  - name: station_starttime_thursday
+    type: time without time zone
+    meaning: Station starttime thursday
+  - name: station_endtime_thursday
+    type: time without time zone
+    meaning: Station endtime thursday
+  - name: station_starttime_friday
+    type: time without time zone
+    meaning: Station starttime friday
+  - name: station_endtime_friday
+    type: time without time zone
+    meaning: Station endtime friday
+  qualified_name: chatbot_ai.public_transportation_stations
+- name: public_transportation_routes_stops
+  description: RTA public transportation routes and stops
+  primary_key:
+  - route_name
+  - route_direction
+  - stop_order_number
+  - stop_id
+  columns:
+  - name: report_date
+    type: date
+    meaning: Report date
+    examples:
+    - YYYY-MM-DD
+  - name: transport_mode
+    type: character varying(200)
+    meaning: Transport mode
+    examples:
+    - Bus
+  - name: route_name
+    type: character varying(200)
+    meaning: Route name
+    examples:
+    - '91'
+    - '67'
+  - name: route_stops
+    type: numeric(6,0)
+    meaning: Route stops
+    examples:
+    - 25
+    - 37
+  - name: first_stop
+    type: character varying(200)
+    meaning: First stop
+    examples:
+    - Al Ghubaiba Bus Stn
+    - Endurance City Terminus
+  - name: last_stop
+    type: character varying(200)
+    meaning: Last stop
+    examples:
+    - Jebel Ali Bus Stn
+    - Al Ghubaiba Bus Station 49
+  - name: depot_name
+    type: character varying(200)
+    meaning: Depot name
+    examples:
+    - JAD
+    - Al Ruwayyah Depot
+  - name: route_type
+    type: numeric(4,0)
+    meaning: Route type
+    examples:
+    - 1
+    - 5
+  - name: route_direction
+    type: numeric(1,0)
+    meaning: Route direction
+    examples:
+    - 2
+    - 1
+  - name: route_frequency
+    type: numeric(10,2)
+    meaning: Route frequency
+    examples:
+    - 15
+    - 122
+  - name: route_number_of_services
+    type: numeric(10,2)
+    meaning: Route number of services
+    examples:
+    - 72
+    - 8
+  - name: stop_order_number
+    type: numeric(10,2)
+    meaning: Stop order number
+    examples:
+    - 2
+    - 5
+  - name: stop_name
+    type: character varying(200)
+    meaning: Stop name
+    examples:
+    - Al Fahidi Metro Station A1
+    - Nakheel Stables 2
+  - name: stop_id
+    type: character varying(10)
+    meaning: Stop identifier
+    examples:
+    - '202101'
+    - '180502188'
+  - name: route_length
+    type: numeric(38,6)
+    meaning: Route length
+    examples:
+    - 2039
+    - 82
+  - name: operated_days
+    type: numeric(10,2)
+    meaning: Operated days
+    examples:
+    - 3
+    - 1
+  - name: operated_hours
+    type: numeric(10,2)
+    meaning: Operated hours
+    examples:
+    - 18
+    - 8
+  - name: street_name
+    type: character varying(200)
+    meaning: Street name
+    examples:
+    - Khalid Bin Al Walid Road
+    - Al Awir Road
+  - name: stop_location_longitude
+    type: numeric(12,8)
+    meaning: Stop location longitude
+    examples:
+    - DDD.dddddd
+  - name: stop_location_latitude
+    type: numeric(12,8)
+    meaning: Stop location latitude
+    examples:
+    - DD.dddddd
+  - name: bus_stop_type
+    type: character varying(200)
+    meaning: Bus stop type
+    examples:
+    - Nornal - Pole
+  - name: time_table_panel
+    type: character varying(5)
+    meaning: Time table panel
+    examples:
+    - 'Yes'
+  - name: mupi_available
+    type: character varying(5)
+    meaning: Mupi available
+    examples:
+    - 'Yes'
+    - 'No'
+  - name: rtpi_available
+    type: character varying(5)
+    meaning: Rtpi available
+    examples:
+    - 'No'
+  - name: last_survey_date
+    type: date
+    meaning: Last survey date
+    examples:
+    - YYYY-MM-DD
+  - name: pattern
+    type: character varying(200)
+    meaning: Pattern
+  qualified_name: chatbot_ai.public_transportation_routes_stops
+- name: marine_stations
+  description: RTA marine stations
+  primary_key:
+  - station_id
+  columns:
+  - name: station_id
+    type: numeric(8,0)
+    meaning: Station identifier
+    examples:
+    - 29701
+    - 27701
+  - name: station_name
+    type: character varying(200)
+    meaning: Station name
+    examples:
+    - Safa Park
+    - Port Rashid
+  - name: route_name
+    type: character varying(200)
+    meaning: Route name
+    examples:
+    - N/A
+    - Water Bus
+  - name: station_location_latitiude
+    type: numeric(12,6)
+    meaning: Station location latitiude
+    examples:
+    - 25.19
+    - 25.28
+  - name: station_location_longitiude
+    type: numeric(12,6)
+    meaning: Station location longitiude
+    examples:
+    - 55.25
+    - 55.29
+  - name: valid_from
+    type: date
+    meaning: Valid from
+    examples:
+    - YYYY-MM-DD
+  - name: valid_until
+    type: date
+    meaning: Valid until
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.marine_stations
+- name: marine_stations_gis
+  description: Marine stations gis
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: placemark_name
+    type: text
+    meaning: Placemark name
+    examples:
+    - Al Shindagha
+    - Deira Old Souq
+  - name: station_id
+    type: text
+    meaning: Station identifier
+    examples:
+    - '25501'
+    - '25601'
+  - name: station_name
+    type: text
+    meaning: Station name
+    examples:
+    - Al Shindagha
+    - Deira Old Souq
+  - name: route_name
+    type: text
+    meaning: Route name
+    examples:
+    - N/A
+    - CR1
+  - name: longitude_attr
+    type: text
+    meaning: Longitude attr
+    examples:
+    - DDD.dddddd
+  - name: latitude_attr
+    type: text
+    meaning: Latitude attr
+    examples:
+    - DD.dddddd
+  - name: valid_from
+    type: text
+    meaning: Valid from
+    examples:
+    - YYYY-MM-DD
+  - name: valid_until
+    type: text
+    meaning: Valid until
+    examples:
+    - YYYY-MM-DD
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.marine_stations_gis
+- name: marine_lines
+  description: RTA marine transport lines
+  primary_key:
+  - route_name
+  - route_direction
+  - marine_mode
+  columns:
+  - name: date
+    type: date
+    meaning: Date
+    examples:
+    - YYYY-MM-DD
+  - name: route_name
+    type: character varying(50)
+    meaning: Route name
+    examples:
+    - CR11
+    - DC-2
+  - name: route_description
+    type: character varying(400)
+    meaning: Route description
+  - name: route_direction
+    type: character varying(15)
+    meaning: Route direction
+    examples:
+    - In / Out
+  - name: marine_mode
+    type: character varying(200)
+    meaning: Marine mode
+    examples:
+    - Petrol Abra
+    - Ferry
+  - name: start_station
+    type: character varying(200)
+    meaning: Start station
+    examples:
+    - Al Jaddaf Marine Transport station
+    - Alwajeha Al Maeyah Marine Transport Station
+  - name: end_station
+    type: character varying(200)
+    meaning: End station
+    examples:
+    - Dubai Creek Harbour Marine Transport station
+    - Sheikh Zayed Road Marine Transport Station
+  - name: number_of_stops
+    type: numeric(8,0)
+    meaning: Number of stops
+  qualified_name: chatbot_ai.marine_lines
+- name: number_of_parking_spaces_per_zone
+  description: RTA number of parking spaces per zone
+  primary_key:
+  - parking_area
+  - community_num
+  - community_name_en
+  - community_name_ar
+  - park_spaces_count
+  columns:
+  - name: parking_area
+    type: character varying(50)
+    meaning: Parking area
+    examples:
+    - AREA 123
+    - AREA 114
+  - name: community_num
+    type: integer
+    meaning: Community num
+    examples:
+    - 123
+    - 114
+  - name: community_name_en
+    type: character varying(50)
+    meaning: Community name in English
+    examples:
+    - AL MUTEENA
+    - AL BUTEEN
+  - name: community_name_ar
+    type: character varying(50)
+    meaning: Community name in Arabic
+  - name: park_spaces_count
+    type: integer
+    meaning: Park spaces count
+    examples:
+    - 2566
+    - 4137
+  qualified_name: chatbot_ai.number_of_parking_spaces_per_zone
+- name: parking_inspector_path
+  description: Parking inspector path
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: area_name
+    type: text
+    meaning: Area name
+  - name: parking_zone_id
+    type: text
+    meaning: Parking zone identifier
+    examples:
+    - '125'
+    - '612'
+  - name: capacity
+    type: text
+    meaning: Capacity
+    examples:
+    - '96'
+    - '622'
+  - name: mpark_code
+    type: text
+    meaning: Mpark code
+    examples:
+    - 125B
+    - 125A
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '232'
+    - '372'
+  - name: polygon_count
+    type: text
+    meaning: Polygon count
+    examples:
+    - '1'
+    - '7'
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.parking_inspector_path
+- name: parking_rates
+  description: RTA parking rates
+  primary_key:
+  - year
+  - month
+  - zone
+  - duration
+  columns:
+  - name: year
+    type: integer
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: month
+    type: character varying(3)
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: zone
+    type: character varying(200)
+    meaning: Zone
+    examples:
+    - Multi-Storey Parking
+    - D
+  - name: duration
+    type: double precision
+    meaning: Duration
+    examples:
+    - 1.0
+    - 2.0
+  - name: fare
+    type: double precision
+    meaning: Fare
+    examples:
+    - 5.0
+    - 8.0
+  qualified_name: chatbot_ai.parking_rates
+- name: rail_parking
+  description: Rail parking
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: rail_parking_id
+    type: text
+    meaning: Rail parking identifier
+    examples:
+    - '2722901'
+    - '2722902'
+  - name: parking_name
+    type: text
+    meaning: Parking name
+    examples:
+    - AL Qusais Car Park
+    - Rashidiya
+  - name: parking_area
+    type: text
+    meaning: Parking area
+    examples:
+    - '29571.632943'
+    - '15478.930702'
+  - name: status
+    type: text
+    meaning: Status
+    examples:
+    - UnderConstruction
+  - name: parking_location
+    type: text
+    meaning: Parking location
+    examples:
+    - GREEN
+    - RED
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '9'
+    - '5'
+  - name: polygon_count
+    type: text
+    meaning: Polygon count
+    examples:
+    - '1'
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.rail_parking
+- name: salik_tariff
+  description: RTA Salik tariff by year and month
+  primary_key:
+  - year
+  - month
+  columns:
+  - name: year
+    type: integer
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: month
+    type: character varying(3)
+    meaning: Calendar month
+    examples:
+    - MM
+  - name: fare
+    type: double precision
+    meaning: Fare
+    examples:
+    - 4.0
+  qualified_name: chatbot_ai.salik_tariff
+- name: salik_tolling_gates_location
+  description: Salik tolling gates location
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: direction
+    type: text
+    meaning: Direction
+    examples:
+    - Towards Sharjah
+    - Towards Abu Dhabi
+  - name: gate_name
+    type: text
+    meaning: Gate name
+    examples:
+    - Airport Tunnel
+    - Al Barsha
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.salik_tolling_gates_location
+- name: bicycle_tracks
+  description: Bicycle tracks
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: name
+    type: text
+    meaning: Name
+    examples:
+    - Cycle Track - Expo Route
+  - name: name_ar
+    type: text
+    meaning: Name in Arabic
+  - name: length_in_m
+    type: text
+    meaning: Length in m
+    examples:
+    - '118.38'
+    - '71.96'
+  - name: width_in_m
+    type: text
+    meaning: Width in m
+    examples:
+    - '2.0'
+  - name: paving_material
+    type: text
+    meaning: Paving material
+    examples:
+    - Asphalt
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '7'
+    - '2'
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: end_lon
+    type: text
+    meaning: End lon
+    examples:
+    - DDD.dddddd
+  - name: end_lat
+    type: text
+    meaning: End lat
+    examples:
+    - DD.dddddd
+  qualified_name: chatbot_ai.bicycle_tracks
+- name: major_roads
+  description: Major roads
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: functional_class
+    type: text
+    meaning: Functional class
+    examples:
+    - Expressways
+    - Freeways
+  - name: nr_of_lanes
+    type: text
+    meaning: Nr of lanes
+    examples:
+    - '3'
+    - '1'
+  - name: carriageway_type
+    type: text
+    meaning: Carriageway type
+    examples:
+    - Single
+    - Dual
+  - name: community_name
+    type: text
+    meaning: Community name
+    examples:
+    - MENA JABAL ALI
+  - name: road_name
+    type: text
+    meaning: Road name
+    examples:
+    - Jabal Ali Lehbab Road - E77
+    - Sheikh Zayed Road - E11
+  - name: route_id
+    type: text
+    meaning: Route identifier
+    examples:
+    - E77
+    - E11
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: point_count
+    type: text
+    meaning: Point count
+    examples:
+    - '13'
+    - '17'
+  - name: line_segment_count
+    type: text
+    meaning: Line segment count
+    examples:
+    - '1'
+  - name: start_lon
+    type: text
+    meaning: Start lon
+    examples:
+    - DDD.dddddd
+  - name: start_lat
+    type: text
+    meaning: Start lat
+    examples:
+    - DD.dddddd
+  - name: end_lon
+    type: text
+    meaning: End lon
+    examples:
+    - DDD.dddddd
+  - name: end_lat
+    type: text
+    meaning: End lat
+    examples:
+    - DD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.major_roads
+- name: taxi_stand_locations
+  description: RTA taxi stand locations
+  primary_key:
+  - location_name
+  - location_longitude
+  - location_latitude
+  columns:
+  - name: location_name
+    type: character varying(200)
+    meaning: Location name
+    examples:
+    - Al Garhoud, Emirates Co op socity
+    - UAE Exchange, Jebel Ali
+  - name: location_longitude
+    type: numeric(15,8)
+    meaning: Location longitude
+    examples:
+    - 55.35
+    - 55.09
+  - name: location_latitude
+    type: numeric(15,8)
+    meaning: Location latitude
+    examples:
+    - 25.24
+    - 24.98
+  qualified_name: chatbot_ai.taxi_stand_locations
+- name: speed_and_radar_limits
+  description: Speed and radar limits from Dubai Police open data
+  primary_key:
+  - recseq
+  columns:
+  - name: street
+    type: character varying(256)
+    meaning: Street
+  - name: lane_count
+    type: numeric(10,0)
+    meaning: Lane count
+    examples:
+    - 6
+    - 5
+  - name: speed_limit
+    type: character varying(64)
+    meaning: Speed limit
+    examples:
+    - '110'
+    - '80'
+  - name: radar_limit
+    type: character varying(64)
+    meaning: Radar limit
+    examples:
+    - '131'
+    - '101'
+  - name: update_date
+    type: character varying(8)
+    meaning: Update date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.speed_and_radar_limits
+- name: nol_machines
+  description: Nol machines
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: nol_machines_id
+    type: text
+    meaning: Nol machines identifier
+    examples:
+    - '100025'
+    - '100026'
+  - name: city
+    type: text
+    meaning: City
+    examples:
+    - Dubai
+  - name: nol_device_sn
+    type: text
+    meaning: Nol device sn
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: location
+    type: text
+    meaning: Location
+    examples:
+    - Damascus Street - D64
+    - Road name deleted
+  qualified_name: chatbot_ai.nol_machines
+- name: nol_metro_card_sales_merchant_locations
+  description: Nol metro card sales merchant locations
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: branch_name_en
+    type: text
+    meaning: Branch name in English
+    examples:
+    - Redha Al-Ansari Exchange
+    - Regency Group (Grand City Mall)
+  - name: branch_name_ar
+    type: text
+    meaning: Branch name in Arabic
+  - name: emirate_en
+    type: text
+    meaning: Emirate in English
+    examples:
+    - Sharjah
+    - Dubai
+  - name: emirate_ar
+    type: text
+    meaning: Emirate in Arabic
+  - name: address_en
+    type: text
+    meaning: Address in English
+    examples:
+    - Al-Wehda St., Sharjah City Center
+    - Latifa Bint Hamdan St. & 318th Rd. Intersection, Al-Quoz
+  - name: address_ar
+    type: text
+    meaning: Address in Arabic
+  - name: location_en
+    type: text
+    meaning: Location in English
+    examples:
+    - Sharjah City Center
+    - Al-Khail Mall - Grand Hyper
+  - name: location_ar
+    type: text
+    meaning: Location in Arabic
+  - name: latitude_attr
+    type: text
+    meaning: Latitude attr
+    examples:
+    - DD.dddddd
+  - name: longitude_attr
+    type: text
+    meaning: Longitude attr
+    examples:
+    - DDD.dddddd
+  - name: phone_number
+    type: text
+    meaning: Phone number
+    examples:
+    - +971XXXXXXXXX
+  - name: working_hours_en
+    type: text
+    meaning: Working hours in English
+    examples:
+    - HH:MM-HH:MM
+  - name: working_hours_ar
+    type: text
+    meaning: Working hours in Arabic
+  - name: x
+    type: text
+    meaning: X
+    examples:
+    - '506058.4629'
+    - '491215.3366'
+  - name: y
+    type: text
+    meaning: Y
+    examples:
+    - '2802054.1835'
+    - '2782581.608'
+  - name: placemark_name
+    type: text
+    meaning: Placemark name
+    examples:
+    - kml_1
+    - kml_2
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.nol_metro_card_sales_merchant_locations
+- name: rta_customer_service_centers
+  description: Rta customer service centers
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: last_edited_date
+    type: text
+    meaning: Last edited date
+    examples:
+    - YYYY-MM-DD
+  - name: center_area
+    type: text
+    meaning: Center area
+    examples:
+    - Deira Area
+    - Bur Dubai Area
+  - name: operating_hours_ar
+    type: text
+    meaning: Operating hours in Arabic
+  - name: active
+    type: text
+    meaning: Active
+    examples:
+    - 'YES'
+  - name: location_ar
+    type: text
+    meaning: Location in Arabic
+  - name: telephone_nbr
+    type: text
+    meaning: Telephone nbr
+    examples:
+    - +971XXXXXXXXX
+  - name: center_name
+    type: text
+    meaning: Center name
+    examples:
+    - Emirates Transport Driving Institute
+    - Belhasa Driving Center- Al Qouz 4
+  - name: customer_service_center_id
+    type: text
+    meaning: Customer service center identifier
+    examples:
+    - '57'
+    - '58'
+  - name: center_name_ar
+    type: text
+    meaning: Center name in Arabic
+  - name: location
+    type: text
+    meaning: Location
+    examples:
+    - Warsan 3 Opposite RTA buses station
+    - Al Qouz 4
+  - name: operating_hours
+    type: text
+    meaning: Operating hours
+    examples:
+    - HH:MM-HH:MM
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: coordinates
+    type: text
+    meaning: Coordinates
+    examples:
+    - lng,lat
+  qualified_name: chatbot_ai.rta_customer_service_centers
+- name: ps_transport
+  description: Ps transport
+  primary_key:
+  - transport_id
+  columns:
+  - name: transport_id
+    type: uuid
+    meaning: Transport identifier
+    examples:
+    - ffc70c0f-d1e4-5a2e-b998-bb7e7cbe946d
+    - 86074ddb-9668-5e6c-a0e2-4d3db95ff339
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+    - c5f69b56-76a0-5dc3-8007-490b52890f84
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+  - name: owner_type
+    type: character varying(20)
+    meaning: Owner type
+    examples:
+    - community
+  - name: commute_times_by_car
+    type: text
+    meaning: Commute times by car
+  - name: airport_proximity
+    type: text
+    meaning: Airport proximity
+  - name: road_access
+    type: text
+    meaning: Road access
+  - name: transport_disclaimer
+    type: text
+    meaning: Transport disclaimer
+  foreign_keys:
+  - columns:
+    - community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  - columns:
+    - subcommunity_id
+    references: chatbot_ai.ps_subcommunities
+    referenced_columns:
+    - subcommunity_id
+  qualified_name: chatbot_ai.ps_transport
+- name: dewa_ev_green_charger_points
+  description: DEWA electric vehicle green charger point locations
+  primary_key:
+  - devicedb_id
+  columns:
+  - name: devicedb_id
+    type: character varying(50)
+    meaning: Devicedb identifier
+    examples:
+    - '10538'
+    - '297'
+  - name: totalnbofconnectors
+    type: character varying(5)
+    meaning: Totalnbofconnectors
+    examples:
+    - '2'
+    - '3'
+  - name: connectortype
+    type: character varying(400)
+    meaning: Connectortype
+    examples:
+    - 62196-2 (Three Phase) , 62196-2 (Three Phase)
+    - 62196-2 (Three Phase) , Combined ChaDeMo/ComboCCS , Combined ChaDeMo/C
+  - name: hubelean_id
+    type: character varying(50)
+    meaning: Hubelean identifier
+    examples:
+    - UAE-HBN-CCL387
+    - UAE-HBN-CCL156
+  - name: location_name
+    type: character varying(255)
+    meaning: Location name
+    examples:
+    - J.Ali-Bachelor Staff Accomadation, Jebal Ali Gen.stn.
+    - J.ALI-City Centre,Meisam - Left side
+  - name: location_address
+    type: character varying(255)
+    meaning: Location address
+    examples:
+    - Jebal Ali, Dubai, United Arab Emirates
+    - MAF, Dubai, United Arab Emirates
+  - name: longitude
+    type: character varying(50)
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: character varying(50)
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  qualified_name: chatbot_ai.dewa_ev_green_charger_points

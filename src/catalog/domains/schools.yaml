@@ -1,0 +1,1392 @@
+id: schools
+name: Schools, nurseries, and universities
+schema: chatbot_ai
+description: KHDA private schools, ratings, fees, nearby schools per community, early-childhood centres,
+  and universities. Use for education near a property.
+synonyms:
+- school
+- KHDA
+- nursery
+- university
+- curriculum
+- school fees
+- inspection rating
+grain: one row is a school, fee row, or community-school distance
+joins:
+- domain: locations
+  keys:
+  - community_id
+  - areaen
+  - area_en
+  - location
+  - lat
+  - long
+pitfalls:
+- KHDA ratings and fee tables use different school-name spellings; join on educationcenterid when possible.
+- private_schools has historical DSIB ratings by year; khda_school_search has the latest overall rating.
+- ps_schools distances are relative to a Property Share community, not a lat/long radius query.
+tables:
+- name: khda_dubai_private_schools
+  description: Private schools operating in Dubai (KHDA)
+  primary_key:
+  - name_eng
+  columns:
+  - name: name_eng
+    type: character varying(300)
+    meaning: Name eng
+    examples:
+    - Jumeira Baccalaureate School
+    - Dubai Schools Corporation Al Khawaneej L.L.C
+  - name: educationcenterid
+    type: character varying(20)
+    meaning: Educationcenterid
+    examples:
+    - '509'
+    - '502020'
+  - name: curriculumen
+    type: character varying(100)
+    meaning: School curriculum in English
+    examples:
+    - IB
+    - US
+  - name: grades_years
+    type: character varying(100)
+    meaning: Grades years
+    examples:
+    - Pre primary to Grade 12
+    - KG 1 to Grade 8
+  - name: students
+    type: numeric(10,0)
+    meaning: Students
+    examples:
+    - 1614
+    - 1300
+  - name: school_rating
+    type: character varying(200)
+    meaning: KHDA / DSIB inspection rating
+    examples:
+    - Very good
+    - Acceptable
+  - name: location
+    type: character varying(100)
+    meaning: Location
+    examples:
+    - JUMEIRA FIRST
+    - AL KHWANEEJ SECOND
+  qualified_name: chatbot_ai.khda_dubai_private_schools
+- name: khda_school_search
+  description: Private school search details (KHDA)
+  primary_key:
+  - educationcenterid
+  columns:
+  - name: educationcenterid
+    type: numeric(10,0)
+    meaning: Educationcenterid
+    examples:
+    - 15159
+    - 3
+  - name: educationcenter_typeid
+    type: numeric(10,0)
+    meaning: Educationcenter typeid
+    examples:
+    - 1
+  - name: name_eng
+    type: character varying(500)
+    meaning: Name eng
+    examples:
+    - American School of Creative Science L.L.C
+    - Al Shurooq Private School
+  - name: name_ar
+    type: character varying(500)
+    meaning: Name in Arabic
+  - name: lat
+    type: numeric(12,6)
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: numeric(12,6)
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: establishedon
+    type: timestamp without time zone
+    meaning: Establishedon
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: overallperformanceen
+    type: character varying(200)
+    meaning: Latest KHDA inspection rating in English
+    examples:
+    - Good
+    - Acceptable
+  - name: overallperformancear
+    type: character varying(200)
+    meaning: Overallperformancear
+  - name: inspectionyear
+    type: character varying(50)
+    meaning: Inspectionyear
+    examples:
+    - YYYY-YYYY
+  - name: curriculumen
+    type: character varying(100)
+    meaning: School curriculum in English
+    examples:
+    - American
+    - Ministry of Education
+  - name: curriculumar
+    type: character varying(100)
+    meaning: Curriculumar
+  - name: areaen
+    type: character varying(200)
+    meaning: Areaen
+    examples:
+    - NADD AL SHIBA SECOND
+    - JUMEIRA FIRST
+  - name: areaar
+    type: character varying(200)
+    meaning: Areaar
+  - name: studentcount
+    type: numeric(20,0)
+    meaning: Number of students
+  - name: address
+    type: character varying(500)
+    meaning: Address
+    examples:
+    - '2'
+    - '332_0763'
+  - name: addressar
+    type: character varying(500)
+    meaning: Addressar
+  - name: pobox
+    type: character varying(100)
+    meaning: Pobox
+    examples:
+    - '1'
+    - '11656'
+  - name: telephone
+    type: character varying(100)
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(100)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: mobile
+    type: character varying(100)
+    meaning: Mobile
+    examples:
+    - +971XXXXXXXXX
+  - name: web_address
+    type: character varying(500)
+    meaning: Web address
+    examples:
+    - https://example.ae
+  - name: email
+    type: character varying(200)
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: inspectionreportpdflinken
+    type: character varying(500)
+    meaning: Inspectionreportpdflinken
+    examples:
+    - http://www.khda.gov.ae/DISB/AttachmentDownload.aspx?DOC_ID=113070
+    - http://www.khda.gov.ae/DISB/AttachmentDownload.aspx?DOC_ID=111724
+  - name: hepqualityassuranceen
+    type: character varying(500)
+    meaning: Hepqualityassuranceen
+  - name: hepqualityassurancear
+    type: character varying(500)
+    meaning: Hepqualityassurancear
+  qualified_name: chatbot_ai.khda_school_search
+- name: khda_inspection_grade_range
+  description: KHDA school inspection grade ranges
+  primary_key:
+  - schoolid
+  - graderangeid
+  - graderangeorder
+  columns:
+  - name: schoolid
+    type: numeric(10,0)
+    meaning: Schoolid
+    examples:
+    - 291
+    - 210
+  - name: graderangeid
+    type: numeric(10,0)
+    meaning: Graderangeid
+    examples:
+    - 15
+    - 20
+  - name: graderangeorder
+    type: numeric(10,0)
+    meaning: Graderangeorder
+    examples:
+    - 11
+    - 2
+  - name: educationcenterid
+    type: numeric(10,0)
+    meaning: Educationcenterid
+    examples:
+    - 103
+    - 2
+  - name: graderangedesc
+    type: character varying(200)
+    meaning: Graderangedesc
+    examples:
+    - Years 1 - 6
+    - Grades 6 - 9
+  - name: graderangedescar
+    type: character varying(200)
+    meaning: Graderangedescar
+  qualified_name: chatbot_ai.khda_inspection_grade_range
+- name: khda_hep_search
+  description: Higher education institution search details (KHDA)
+  primary_key:
+  - educationcenterid
+  columns:
+  - name: educationcenterid
+    type: numeric(10,0)
+    meaning: Educationcenterid
+    examples:
+    - 777
+    - 768
+  - name: educationcenter_typeid
+    type: numeric(10,0)
+    meaning: Educationcenter typeid
+    examples:
+    - 3
+  - name: name_eng
+    type: character varying(500)
+    meaning: Name eng
+    examples:
+    - Birla Institute of Technology and Science Pilani (Bits Pilani) Dubai Campus
+    - Heriot-Watt University
+  - name: name_ar
+    type: character varying(500)
+    meaning: Name in Arabic
+  - name: lat
+    type: numeric(12,6)
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: numeric(12,6)
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: establishedon
+    type: timestamp without time zone
+    meaning: Establishedon
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: areaen
+    type: character varying(200)
+    meaning: Areaen
+    examples:
+    - NA
+  - name: areaar
+    type: character varying(200)
+    meaning: Areaar
+  - name: country
+    type: character varying(200)
+    meaning: Country
+    examples:
+    - India
+    - UNITED KINGDOM (UK)
+  - name: countryar
+    type: character varying(200)
+    meaning: Countryar
+  - name: address
+    type: character varying(500)
+    meaning: Address
+    examples:
+    - Plot No. 8120334, DIAC, Dubai, UAE
+  - name: addressar
+    type: character varying(500)
+    meaning: Addressar
+  - name: pobox
+    type: character varying(100)
+    meaning: Pobox
+    examples:
+    - '345055'
+    - '500648'
+  - name: telephone
+    type: character varying(100)
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(100)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: web_address
+    type: character varying(500)
+    meaning: Web address
+    examples:
+    - https://example.ae
+  - name: email
+    type: character varying(200)
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: hepyear
+    type: character varying(20)
+    meaning: Hepyear
+    examples:
+    - YYYY
+  - name: hepnumber_students
+    type: numeric(20,0)
+    meaning: Hepnumber students
+    examples:
+    - 1715
+    - 4763
+  - name: hepgraduates_per_year
+    type: numeric(20,0)
+    meaning: Hepgraduates per year
+    examples:
+    - YYYY
+  - name: hepqualityassuranceen
+    type: character varying(500)
+    meaning: Hepqualityassuranceen
+    examples:
+    - International Quality Assurance
+    - Local Quality Assurance
+  - name: hepqualityassurancear
+    type: character varying(500)
+    meaning: Hepqualityassurancear
+  qualified_name: chatbot_ai.khda_hep_search
+- name: khda_hep_programs
+  description: Higher education institution programs in free zones (KHDA)
+  primary_key:
+  - educationcenterid
+  - fullprogramen
+  columns:
+  - name: educationcenterid
+    type: numeric(10,0)
+    meaning: Educationcenterid
+    examples:
+    - 774
+    - 505524
+  - name: fullprogramen
+    type: character varying(250)
+    meaning: Fullprogramen
+    examples:
+    - Bachelor of Arts Honours Business Management (Tourism and Events)
+    - BACHELOR OF BUSINESS ADMINISTRATION - FINANCE
+  - name: fullprogramar
+    type: character varying(250)
+    meaning: Fullprogramar
+  - name: degreeid
+    type: numeric(10,0)
+    meaning: Degreeid
+    examples:
+    - 2
+    - 7
+  - name: degree_en
+    type: character varying(250)
+    meaning: Degree in English
+    examples:
+    - Bachelor's
+    - Master's
+  - name: degree_ar
+    type: character varying(250)
+    meaning: Degree in Arabic
+  - name: specilizationid
+    type: numeric(10,0)
+    meaning: Specilizationid
+    examples:
+    - 2
+    - 4
+  - name: specilization_en
+    type: character varying(250)
+    meaning: Specilization in English
+    examples:
+    - Business
+    - Engineering
+  - name: specilization_ar
+    type: character varying(250)
+    meaning: Specilization in Arabic
+  - name: anualfee
+    type: numeric(20,2)
+    meaning: Anualfee
+    examples:
+    - 62982
+    - 42000
+  - name: lengthofprogramnoofyears
+    type: numeric(10,2)
+    meaning: Lengthofprogramnoofyears
+    examples:
+    - 3
+    - 2
+  - name: languageofinstruction
+    type: character varying(250)
+    meaning: Languageofinstruction
+    examples:
+    - English
+  - name: programmetypeid
+    type: numeric(10,2)
+    meaning: Programmetypeid
+    examples:
+    - 2
+    - 1
+  - name: program_home
+    type: character varying(250)
+    meaning: Program home
+    examples:
+    - Master of Science in Data Science
+    - Graduate Certificate in Business Fundamentals
+  - name: noofinstallment
+    type: numeric(10,0)
+    meaning: Noofinstallment
+  - name: totalcostfullprogramme
+    type: numeric(20,2)
+    meaning: Totalcostfullprogramme
+    examples:
+    - 188946
+    - 126000
+  - name: minfee
+    type: numeric(20,2)
+    meaning: Minfee
+    examples:
+    - 0
+    - 126000
+  - name: maxfee
+    type: numeric(20,2)
+    meaning: Maxfee
+    examples:
+    - 188946
+    - 321860
+  - name: orderby_en
+    type: numeric(10,0)
+    meaning: Orderby in English
+    examples:
+    - 7
+    - 8
+  - name: orderby_ar
+    type: numeric(10,0)
+    meaning: Orderby in Arabic
+  - name: sp_orderby_en
+    type: numeric(10,0)
+    meaning: Sp orderby in English
+    examples:
+    - 2
+    - 4
+  - name: sp_orderby_ar
+    type: numeric(10,0)
+    meaning: Sp orderby in Arabic
+  - name: accreditedbyprofessionalbody
+    type: character varying(250)
+    meaning: Accreditedbyprofessionalbody
+    examples:
+    - Commission for Academic Accreditation
+    - National Assessment and Acreditation Council, India (NAAC)
+  qualified_name: chatbot_ai.khda_hep_programs
+- name: private_schools
+  description: Private schools
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: school_name
+    type: text
+    meaning: School name
+    examples:
+    - Al Adab Iranian Private School for Boys
+    - Al Adab Iranian Private School for Girls
+  - name: location
+    type: text
+    meaning: Location
+    examples:
+    - AL QUSAIS FIRST
+    - AL BARSHA FIRST
+  - name: location_in_arabic
+    type: text
+    meaning: Location in arabic
+  - name: latitude
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: longitude
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: curriculum
+    type: text
+    meaning: School curriculum (IB, British, American, ...)
+    examples:
+    - Iranian - International Baccalaureate
+    - Iranian
+  - name: curriculum_in_arabic
+    type: text
+    meaning: Curriculum in arabic
+  - name: main_telephone
+    type: text
+    meaning: Main telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: school_website
+    type: text
+    meaning: School website
+    examples:
+    - https://example.ae
+  - name: school_email_address
+    type: text
+    meaning: School email address
+    examples:
+    - user@example.ae
+  - name: name_of_principal
+    type: text
+    meaning: Name of principal
+    examples:
+    - Khosro Alimardan Farahmand
+    - Batool Abolghasem Mohaghegh
+  - name: grades
+    type: text
+    meaning: Grades
+    examples:
+    - KG1-G12
+    - Pre Primary-G12
+  - name: year_established_in_dubai
+    type: text
+    meaning: Year established in dubai
+    examples:
+    - '1989'
+    - '1990'
+  - name: 2008_09_dsib_rating
+    type: text
+    meaning: 2008 09 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory
+  - name: 2009_10_dsib_rating
+    type: text
+    meaning: 2009 10 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory - FT
+  - name: 2010_11_dsib_rating
+    type: text
+    meaning: 2010 11 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory - FT
+  - name: 2011_12_dsib_rating
+    type: text
+    meaning: 2011 12 dsib rating
+    examples:
+    - Acceptable
+    - Good
+  - name: 2012_13_dsib_rating
+    type: text
+    meaning: 2012 13 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory
+  - name: 2013_14_dsib_rating
+    type: text
+    meaning: 2013 14 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory
+  - name: 2014_15_dsib_rating
+    type: text
+    meaning: 2014 15 dsib rating
+    examples:
+    - Acceptable
+    - Unsatisfactory
+  - name: 2015_16_dsib_rating
+    type: text
+    meaning: 2015 16 dsib rating
+    examples:
+    - Acceptable
+    - Good
+  - name: 2016_17_dsib_rating
+    type: text
+    meaning: 2016 17 dsib rating
+    examples:
+    - Acceptable
+    - Good
+  - name: 2017_18_dsib_rating
+    type: text
+    meaning: 2017 18 dsib rating
+    examples:
+    - Acceptable
+    - Good
+  - name: 2018_19_dsib_rating
+    type: text
+    meaning: 2018 19 dsib rating
+    examples:
+    - Acceptable
+    - Good
+  - name: 2019_20_dsib_rating
+    type: text
+    meaning: 2019 20 dsib rating
+    examples:
+    - Good
+    - Acceptable
+  - name: 2020_21_dsib_rating
+    type: text
+    meaning: 2020 21 dsib rating
+  - name: 2022_23_dsib_rating
+    type: text
+    meaning: 2022 23 dsib rating
+    examples:
+    - Good
+    - Acceptable
+  - name: 2010_11_enrolments
+    type: text
+    meaning: 2010 11 enrolments
+    examples:
+    - '225'
+    - '244'
+  - name: 2011_12_enrolments
+    type: text
+    meaning: 2011 12 enrolments
+    examples:
+    - '221'
+    - '273'
+  - name: 2012_13_enrolments
+    type: text
+    meaning: 2012 13 enrolments
+    examples:
+    - '260'
+    - '217'
+  - name: 2013_14_enrolments
+    type: text
+    meaning: 2013 14 enrolments
+    examples:
+    - '240'
+    - '180'
+  - name: 2014_15_enrolments
+    type: text
+    meaning: 2014 15 enrolments
+    examples:
+    - '260'
+    - '192'
+  - name: 2015_16_enrollments
+    type: text
+    meaning: 2015 16 enrollments
+    examples:
+    - '271'
+    - '179'
+  - name: 2016_17_enrollments
+    type: text
+    meaning: 2016 17 enrollments
+    examples:
+    - '227'
+    - '147'
+  - name: 2017_18_enrollments
+    type: text
+    meaning: 2017 18 enrollments
+    examples:
+    - '267'
+    - '233'
+  - name: 2018_19_enrollments
+    type: text
+    meaning: 2018 19 enrollments
+    examples:
+    - '215'
+    - '213'
+  - name: 2019_20_enrollments
+    type: text
+    meaning: 2019 20 enrollments
+    examples:
+    - '243'
+    - '206'
+  - name: 2020_21_autumn_enrollments
+    type: text
+    meaning: 2020 21 autumn enrollments
+    examples:
+    - '216'
+    - '173'
+  - name: 2020_21_spring_enrollments
+    type: text
+    meaning: 2020 21 spring enrollments
+    examples:
+    - '205'
+    - '154'
+  - name: 2020_21_summer_enrollments
+    type: text
+    meaning: 2020 21 summer enrollments
+    examples:
+    - '210'
+    - '148'
+  - name: 2021_22_autumn_enrollments
+    type: text
+    meaning: 2021 22 autumn enrollments
+    examples:
+    - '193'
+    - '124'
+  - name: 2021_22_spring_enrollments
+    type: text
+    meaning: 2021 22 spring enrollments
+    examples:
+    - '209'
+    - '162'
+  - name: 2022_23_enrollments
+    type: text
+    meaning: 2022 23 enrollments
+    examples:
+    - '180'
+    - '146'
+  - name: 2023_24_enrollments
+    type: text
+    meaning: 2023 24 enrollments
+    examples:
+    - '160'
+    - '167'
+  qualified_name: chatbot_ai.private_schools
+- name: private_schools_fees
+  description: Private schools fees
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: school_name
+    type: text
+    meaning: School name
+    examples:
+    - The Sheffield Private School
+    - Emirates International School - Meadows
+  - name: grade
+    type: text
+    meaning: Grade
+    examples:
+    - grade_9
+    - grade_2
+  - name: '2011_2012'
+    type: numeric
+    meaning: 2011 2012
+    examples:
+    - 26100
+    - 22040
+  - name: '2012_2013'
+    type: numeric
+    meaning: 2012 2013
+    examples:
+    - 26883
+    - 36005
+  - name: '2013_2014'
+    type: numeric
+    meaning: 2013 2014
+    examples:
+    - 26883
+    - 36005
+  - name: '2014_2015'
+    type: numeric
+    meaning: 2014 2015
+    examples:
+    - 27351
+    - 36945
+  - name: '2016_2017'
+    type: numeric
+    meaning: 2016 2017
+    examples:
+    - 24533
+  - name: '2018_2019'
+    type: numeric
+    meaning: 2018 2019
+    examples:
+    - 25416
+    - 6889
+  - name: '2019_2020'
+    type: numeric
+    meaning: 2019 2020
+    examples:
+    - 34135
+    - 51556
+  - name: '2020_2021'
+    type: numeric
+    meaning: 2020 2021
+    examples:
+    - 34135
+    - 51556
+  - name: '2021_2022'
+    type: numeric
+    meaning: 2021 2022
+    examples:
+    - 34135
+    - 51556
+  - name: '2022_2023'
+    type: numeric
+    meaning: 2022 2023
+    examples:
+    - 34135
+    - 51556
+  - name: '2023_2024'
+    type: numeric
+    meaning: 2023 2024
+    examples:
+    - 7454
+  - name: '2024_2025'
+    type: numeric
+    meaning: 2024 2025
+    examples:
+    - 7648
+  qualified_name: chatbot_ai.private_schools_fees
+- name: psf_fees_by_grade
+  description: Psf fees by grade
+  primary_key: []
+  columns:
+  - name: school_name
+    type: text
+    meaning: School name
+    examples:
+    - Adab Iranian Private School - Girls
+  - name: academic_year
+    type: text
+    meaning: Academic year
+    examples:
+    - YYYY-YYYY
+  - name: grade_label
+    type: text
+    meaning: Grade label
+    examples:
+    - grade_1
+    - grade_10
+  - name: fee_amount
+    type: numeric
+    meaning: Fee amount
+    examples:
+    - 10197
+    - 14729
+  qualified_name: chatbot_ai.psf_fees_by_grade
+- name: schools
+  description: KHDA private school search data
+  primary_key:
+  - name_ar
+  - name_eng
+  - education_center_id
+  columns:
+  - name: curriculum_ar
+    type: character varying(100)
+    meaning: Curriculum in Arabic
+  - name: hep_quality_assurance_ar
+    type: text
+    meaning: Hep quality assurance in Arabic
+  - name: hep_quality_assurance_en
+    type: text
+    meaning: Hep quality assurance in English
+  - name: inspection_report_pdf_link_en
+    type: character varying(1000)
+    meaning: Inspection report pdf link in English
+    examples:
+    - http://www.khda.gov.ae/DISB/AttachmentDownload.aspx?DOC_ID=114306
+    - http://www.khda.gov.ae/DISB/AttachmentDownload.aspx?DOC_ID=111724
+  - name: email
+    type: character varying(300)
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: web_address
+    type: character varying(500)
+    meaning: Web address
+    examples:
+    - https://example.ae
+  - name: mobile
+    type: character varying(300)
+    meaning: Mobile
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(50)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: telephone
+    type: character varying(50)
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: pobox
+    type: character varying(50)
+    meaning: Pobox
+    examples:
+    - '2620'
+    - '11656'
+  - name: address_ar
+    type: character varying(500)
+    meaning: Address in Arabic
+  - name: address
+    type: character varying(500)
+    meaning: Address
+    examples:
+    - 214-0451
+    - '332_0763'
+  - name: student_count
+    type: bigint
+    meaning: Student count
+  - name: area_ar
+    type: character varying(100)
+    meaning: Area in Arabic
+  - name: area_en
+    type: character varying(100)
+    meaning: Area in English
+    examples:
+    - AL GARHOUD
+    - JUMEIRA FIRST
+  - name: curriculum_en
+    type: character varying(200)
+    meaning: Curriculum in English
+    examples:
+    - Ministry of Education
+  - name: inspection_year
+    type: character varying(50)
+    meaning: Inspection year
+    examples:
+    - YYYY-YYYY
+  - name: overall_performance_ar
+    type: character varying(200)
+    meaning: Overall performance in Arabic
+  - name: overall_performance_en
+    type: character varying(200)
+    meaning: Overall performance in English
+    examples:
+    - Acceptable
+    - Good
+  - name: established_on
+    type: timestamp without time zone
+    meaning: Established on
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: longitude
+    type: numeric(20,8)
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: latitude
+    type: numeric(20,8)
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: name_ar
+    type: character varying(300)
+    meaning: Name in Arabic
+  - name: name_eng
+    type: character varying(300)
+    meaning: Name eng
+    examples:
+    - Al Shurooq Private School
+  - name: education_center_type_id
+    type: numeric(30,0)
+    meaning: Education center type identifier
+    examples:
+    - 1
+  - name: education_center_id
+    type: numeric(30,0)
+    meaning: Education center identifier
+    examples:
+    - 2
+    - 3
+  qualified_name: chatbot_ai.schools
+- name: ps_schools
+  description: Ps schools
+  primary_key:
+  - school_id
+  columns:
+  - name: school_id
+    type: uuid
+    meaning: School identifier
+    examples:
+    - fdc945b0-7181-59c2-a43c-35d4e2a5c64d
+    - d6336b68-c661-50b4-ace5-625418d11b1c
+  - name: community_id
+    type: uuid
+    meaning: Community identifier
+    examples:
+    - 4c38ed58-4cf8-5c97-9bda-accda536c9b8
+    - c5f69b56-76a0-5dc3-8007-490b52890f84
+  - name: subcommunity_id
+    type: uuid
+    meaning: Subcommunity identifier
+  - name: owner_type
+    type: character varying(20)
+    meaning: Owner type
+    examples:
+    - community
+  - name: schools_intro
+    type: text
+    meaning: Schools intro
+  - name: school_name
+    type: character varying(255)
+    meaning: School name
+    examples:
+    - Dunecrest American School
+    - GEMS Winchester School, Dubai
+  - name: distance
+    type: character varying(50)
+    meaning: Distance
+    examples:
+    - 0.8 km
+    - 2.9 km
+  - name: area
+    type: character varying(255)
+    meaning: Area
+    examples:
+    - Al Barari
+    - DubaiLand
+  - name: fees
+    type: character varying(100)
+    meaning: Fees
+    examples:
+    - AED 74,500
+    - AED 29,000
+  - name: curriculum
+    type: character varying(255)
+    meaning: School curriculum (IB, British, American, ...)
+    examples:
+    - American, IB
+    - British
+  foreign_keys:
+  - columns:
+    - community_id
+    references: chatbot_ai.ps_communities
+    referenced_columns:
+    - community_id
+  - columns:
+    - subcommunity_id
+    references: chatbot_ai.ps_subcommunities
+    referenced_columns:
+    - subcommunity_id
+  qualified_name: chatbot_ai.ps_schools
+- name: early_childhood_centres_general_information_open_data
+  description: Early childhood centres general information open data
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: early_childhood_centre_name
+    type: text
+    meaning: Early childhood centre name
+    examples:
+    - Dibber Early Childhood Center(Branch)
+    - Active Mindz Nursery
+  - name: early_childhood_centre_name_in_arabic
+    type: text
+    meaning: Early childhood centre name in arabic
+  - name: age_group_from
+    type: text
+    meaning: Age group from
+    examples:
+    - '0'
+    - '1'
+  - name: age_group_to
+    type: text
+    meaning: Age group to
+    examples:
+    - '6'
+    - '5'
+  - name: telephone
+    type: text
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: website
+    type: text
+    meaning: Website
+    examples:
+    - https://example.ae
+  - name: email
+    type: text
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: location
+    type: text
+    meaning: Location
+    examples:
+    - Jumeirah Golf Estates
+    - AL NAHDA FIRST
+  - name: location_in_arabic
+    type: text
+    meaning: Location in arabic
+  qualified_name: chatbot_ai.early_childhood_centres_general_information_open_data
+- name: higher_education
+  description: Higher education
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 16
+    - 23
+  - name: university_name
+    type: text
+    meaning: University name
+    examples:
+    - Harrisburg University of Science & Technology - Dubai
+    - Luiss University Dubai
+  - name: university_name_arabic
+    type: text
+    meaning: University name arabic
+    examples:
+    - Luiss University Dubai
+  - name: university_status
+    type: text
+    meaning: University status
+    examples:
+    - Closed
+  - name: location_inside_freezone
+    type: text
+    meaning: Location inside freezone
+    examples:
+    - Dubai Knowledge Park
+    - TRADE CENTER FIRST
+  - name: pobox
+    type: text
+    meaning: Pobox
+    examples:
+    - '410896'
+    - '28282'
+  - name: telephone
+    type: text
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: mobile
+    type: text
+    meaning: Mobile
+    examples:
+    - +971XXXXXXXXX
+  - name: university_website
+    type: text
+    meaning: University website
+    examples:
+    - https://example.ae
+  - name: university_email
+    type: text
+    meaning: University email
+    examples:
+    - user@example.ae
+  - name: lat
+    type: double precision
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: double precision
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: specialisations
+    type: jsonb
+    meaning: Specialisations
+    examples:
+    - JSON
+  qualified_name: chatbot_ai.higher_education
+- name: universities_uae_with_locations
+  description: Universities uae with locations
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: integer
+    meaning: Id
+    examples:
+    - 1
+    - 2
+  - name: university_name
+    type: text
+    meaning: University name
+    examples:
+    - Abu Dhabi University
+    - American University in Dubai
+  - name: university_name_arabic
+    type: text
+    meaning: University name arabic
+  - name: university_status
+    type: text
+    meaning: University status
+    examples:
+    - Closed
+  - name: location_inside_freezone_english
+    type: text
+    meaning: Location inside freezone english
+    examples:
+    - Dubai Knowledge Park
+    - Dubai Media City
+  - name: pobox
+    type: text
+    meaning: Pobox
+    examples:
+    - '410896'
+    - '28282'
+  - name: telephone
+    type: text
+    meaning: Telephone
+    examples:
+    - +971XXXXXXXXX
+  - name: mobile
+    type: text
+    meaning: Mobile
+    examples:
+    - +971XXXXXXXXX
+  - name: university_website
+    type: text
+    meaning: University website
+    examples:
+    - https://example.ae
+  - name: university_email
+    type: text
+    meaning: University email
+    examples:
+    - user@example.ae
+  - name: lat
+    type: text
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: long
+    type: text
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  - name: google_location
+    type: text
+    meaning: Google location
+    examples:
+    - lng,lat
+  - name: higher_education_institution
+    type: text
+    meaning: Higher education institution
+  - name: specialisation
+    type: text
+    meaning: Specialisation
+  - name: enrolled_undergraduate
+    type: text
+    meaning: Enrolled undergraduate
+  - name: enrolled_post_graduate
+    type: text
+    meaning: Enrolled post graduate
+  - name: graduate_undergraduate
+    type: text
+    meaning: Graduate undergraduate
+  - name: graduated_post_graduate
+    type: text
+    meaning: Graduated post graduate
+  - name: institution
+    type: text
+    meaning: Institution
+  - name: enrolled_students_enrolled_2013_2014
+    type: text
+    meaning: Enrolled students enrolled 2013 2014
+  - name: enrolled_students_enrolled_2014_2015
+    type: text
+    meaning: Enrolled students enrolled 2014 2015
+  - name: enrolled_students_enrolled_2015_2016
+    type: text
+    meaning: Enrolled students enrolled 2015 2016
+  - name: enrolled_students_enrolled_2016_2017
+    type: text
+    meaning: Enrolled students enrolled 2016 2017
+  - name: enrolled_students_enrolled_2017_2018
+    type: text
+    meaning: Enrolled students enrolled 2017 2018
+  - name: enrolled_students_enrolled_2018_2019
+    type: text
+    meaning: Enrolled students enrolled 2018 2019
+  - name: enrolled_students_enrolled_2019_2020
+    type: text
+    meaning: Enrolled students enrolled 2019 2020
+  - name: enrolled_students_enrolled_2020_21
+    type: text
+    meaning: Enrolled students enrolled 2020 21
+  - name: enrolled_students_enrolled_2021_22
+    type: text
+    meaning: Enrolled students enrolled 2021 22
+  - name: enrolled_students_enrolled_2022_23
+    type: text
+    meaning: Enrolled students enrolled 2022 23
+  - name: enrolled_students_enrolled_2023_24
+    type: text
+    meaning: Enrolled students enrolled 2023 24
+  - name: enrolled_students_column1
+    type: text
+    meaning: Enrolled students column1
+  - name: graduated_students_graduated_2013_2014
+    type: text
+    meaning: Graduated students graduated 2013 2014
+  - name: graduated_students_graduated_2014_2015
+    type: text
+    meaning: Graduated students graduated 2014 2015
+  - name: graduated_students_graduated_2015_2016
+    type: text
+    meaning: Graduated students graduated 2015 2016
+  - name: graduated_students_graduated_2016_2017
+    type: text
+    meaning: Graduated students graduated 2016 2017
+  - name: graduated_students_graduated_2017_2018
+    type: text
+    meaning: Graduated students graduated 2017 2018
+  - name: graduated_students_graduated_2018_2019
+    type: text
+    meaning: Graduated students graduated 2018 2019
+  - name: graduated_students_graduated_2019_2020
+    type: text
+    meaning: Graduated students graduated 2019 2020
+  - name: graduated_students_graduated_2020_2021
+    type: text
+    meaning: Graduated students graduated 2020 2021
+  - name: graduated_students_graduated_2021_2022
+    type: text
+    meaning: Graduated students graduated 2021 2022
+  - name: graduated_students_graduated_2022_20223
+    type: text
+    meaning: Graduated students graduated 2022 20223
+  - name: graduated_students_graduated_2023_2024
+    type: text
+    meaning: Graduated students graduated 2023 2024
+  - name: year
+    type: text
+    meaning: Calendar year
+    examples:
+    - YYYY
+  - name: total_enrolment
+    type: text
+    meaning: Total enrolment
+  - name: total_graduates
+    type: text
+    meaning: Total graduates
+  - name: col_3
+    type: text
+    meaning: Col 3
+  qualified_name: chatbot_ai.universities_uae_with_locations

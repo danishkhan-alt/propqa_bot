@@ -1,0 +1,531 @@
+id: agencies
+name: Brokers, agencies, and valuators
+schema: chatbot_ai
+description: Licensed real-estate offices, brokers, permits, valuators, and owners associations. Use for
+  who can sell or manage a building.
+synonyms:
+- broker
+- agency
+- agent
+- valuator
+- owners association
+- RERA license
+grain: one row is a broker, office license, permit, or OA company
+joins:
+- domain: developers
+  keys:
+  - license_number
+  - participant_id
+pitfalls:
+- real_estate_offices is the company; real_estate_brokers are people licensed under an office.
+- Do not treat these as property listings.
+tables:
+- name: real_estate_offices
+  description: Real estate offices and their activities from Dubai Land Department
+  primary_key:
+  - real_estate_id
+  - activity_type_id
+  columns:
+  - name: activity_type_en
+    type: character varying(100)
+    meaning: Activity type in English
+    examples:
+    - Real Estate Buying & Selling Brokerage
+    - Leasing Property Brokerage Agents
+  - name: participant_id
+    type: numeric(10,0)
+    meaning: Participant identifier
+    examples:
+    - 372527
+    - 372528
+  - name: real_estate_id
+    type: numeric(10,0)
+    meaning: Real estate identifier
+    examples:
+    - 1
+    - 2
+  - name: real_estate_number
+    type: numeric(20,0)
+    meaning: Real estate number
+    examples:
+    - 105
+    - 106
+  - name: license_source_id
+    type: numeric(10,0)
+    meaning: License source identifier
+    examples:
+    - -10
+    - 73965376
+  - name: license_source_ar
+    type: character varying(200)
+    meaning: License source in Arabic
+  - name: license_source_en
+    type: character varying(200)
+    meaning: License source in English
+    examples:
+    - DUBAI ECONOMIC DEPARTMENT
+    - TRAKHEEES-DED
+  - name: license_number
+    type: character varying(50)
+    meaning: License number
+    examples:
+    - '543814'
+    - '579556'
+  - name: license_issue_date
+    type: date
+    meaning: License issue date
+    examples:
+    - YYYY-MM-DD
+  - name: license_expiry_date
+    type: date
+    meaning: License expiry date
+    examples:
+    - YYYY-MM-DD
+  - name: is_branch
+    type: numeric(20,0)
+    meaning: Is branch
+    examples:
+    - 0
+  - name: main_office_id
+    type: numeric(10,0)
+    meaning: Main office identifier
+  - name: webpage
+    type: character varying(200)
+    meaning: Webpage
+    examples:
+    - https://example.ae
+  - name: phone
+    type: character varying(100)
+    meaning: Phone
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(30)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: activity_type_id
+    type: numeric(4,0)
+    meaning: Activity type identifier
+    examples:
+    - 2
+    - 5
+  - name: ded_activity_code
+    type: numeric(10,0)
+    meaning: Ded activity code
+    examples:
+    - 702001
+    - 702003
+  - name: activity_type_ar
+    type: character varying(100)
+    meaning: Activity type in Arabic
+  qualified_name: chatbot_ai.real_estate_offices
+- name: real_estate_brokers
+  description: Licensed real estate brokers from Dubai Land Department
+  primary_key:
+  - real_estate_broker_id
+  - real_estate_id
+  columns:
+  - name: participant_id
+    type: numeric(10,0)
+    meaning: Participant identifier
+    examples:
+    - 249230
+    - 374873
+  - name: real_estate_broker_id
+    type: numeric(10,0)
+    meaning: Real estate broker identifier
+    examples:
+    - 2
+    - 3
+  - name: broker_number
+    type: numeric(10,0)
+    meaning: Broker number
+    examples:
+    - 1002
+    - 9793
+  - name: broker_name_ar
+    type: character varying(200)
+    meaning: Broker name in Arabic
+  - name: broker_name_en
+    type: character varying(200)
+    meaning: Broker name in English
+    examples:
+    - DARWISH HAMZA DARWISH ALBISHRI
+    - MOHAMMAD AKRAM MOHAMMAD
+  - name: gender
+    type: boolean
+    meaning: Gender
+    examples:
+    - false
+  - name: license_start_date
+    type: date
+    meaning: License start date
+    examples:
+    - YYYY-MM-DD
+  - name: license_end_date
+    type: date
+    meaning: License end date
+    examples:
+    - YYYY-MM-DD
+  - name: webpage
+    type: character varying(200)
+    meaning: Webpage
+    examples:
+    - https://example.ae
+  - name: phone
+    type: character varying(100)
+    meaning: Phone
+    examples:
+    - +971XXXXXXXXX
+  - name: fax
+    type: character varying(30)
+    meaning: Fax
+    examples:
+    - +971XXXXXXXXX
+  - name: real_estate_id
+    type: numeric(10,0)
+    meaning: Real estate identifier
+    examples:
+    - 72
+    - 15236111
+  - name: real_estate_number
+    type: numeric(20,0)
+    meaning: Real estate number
+    examples:
+    - 11
+    - 15971
+  qualified_name: chatbot_ai.real_estate_brokers
+- name: real_estate_licenses
+  description: Dubai Land Department real estate licenses
+  primary_key:
+  - participant_id
+  - activity_type_id
+  columns:
+  - name: participant_id
+    type: numeric(15,0)
+    meaning: Participant identifier
+    examples:
+    - 398322
+    - 374587
+  - name: activity_type_id
+    type: numeric(10,0)
+    meaning: Activity type identifier
+    examples:
+    - 2
+    - 5
+  - name: activity_name_en
+    type: character varying(200)
+    meaning: Activity name in English
+    examples:
+    - Real Estate Buying & Selling Brokerage
+    - Leasing Property Brokerage Agents
+  - name: activity_name_ar
+    type: character varying(200)
+    meaning: Activity name in Arabic
+  - name: ded_activity_code
+    type: character varying(20)
+    meaning: Ded activity code
+    examples:
+    - '702001'
+    - '702003'
+  - name: print_rmker_arabic
+    type: character varying(500)
+    meaning: Print rmker arabic
+  - name: rent_contract_no
+    type: character varying(50)
+    meaning: Rent contract no
+    examples:
+    - 0220180313001096
+    - 0120260420002188
+  - name: parcel_id
+    type: character varying(20)
+    meaning: Plot / parcel identifier
+    examples:
+    - '1280276'
+  - name: legal_type_english
+    type: character varying(100)
+    meaning: Legal type english
+    examples:
+    - BUSINESS
+  - name: legal_type_arabic
+    type: character varying(100)
+    meaning: Legal type arabic
+  - name: legal_type_id
+    type: numeric(10,0)
+    meaning: Legal type identifier
+    examples:
+    - 1
+  - name: status_english
+    type: character varying(50)
+    meaning: Status english
+    examples:
+    - Active
+    - Cancelled
+  - name: status_arabic
+    type: character varying(50)
+    meaning: Status arabic
+  - name: status_id
+    type: numeric(10,0)
+    meaning: Status identifier
+    examples:
+    - 0
+    - 9
+  - name: cancel_date
+    type: date
+    meaning: Cancel date
+    examples:
+    - YYYY-MM-DD
+  - name: expiry_date
+    type: date
+    meaning: Expiry date
+    examples:
+    - YYYY-MM-DD
+  - name: issue_date
+    type: date
+    meaning: Issue date
+    examples:
+    - YYYY-MM-DD
+  - name: trade_name_english
+    type: character varying(200)
+    meaning: Trade name english
+    examples:
+    - PYRAMID REAL ESTATE EST.
+    - ALGEBRA REAL ESTATE BROKER LLC
+  - name: trade_name_arabic
+    type: character varying(200)
+    meaning: Trade name arabic
+  - name: commerce_registry_number
+    type: numeric(15,0)
+    meaning: Commerce registry number
+    examples:
+    - 35648
+    - 1044551
+  - name: chamber_commerce_number
+    type: numeric(15,0)
+    meaning: Chamber commerce number
+    examples:
+    - 37116
+    - 174321
+  - name: license_number
+    type: character varying(50)
+    meaning: License number
+    examples:
+    - '240534'
+    - '625311'
+  - name: authority_id
+    type: numeric(15,0)
+    meaning: Authority identifier
+    examples:
+    - 613271
+    - 612086
+  qualified_name: chatbot_ai.real_estate_licenses
+- name: real_estate_permits
+  description: Dubai Land Department real estate permits
+  primary_key:
+  - permits_id
+  columns:
+  - name: permits_id
+    type: numeric(15,0)
+    meaning: Permits identifier
+    examples:
+    - 35256287
+    - 1930126
+  - name: participant_name_en
+    type: character varying(2000)
+    meaning: Participant name in English
+    examples:
+    - DANIA PROPERTY MANAGEMENT & CONSULTANCY CO( L.L.C)
+    - GLORY HOMES REAL ESTATE BROKER
+  - name: participant_name_ar
+    type: character varying(2000)
+    meaning: Participant name in Arabic
+  - name: license_number
+    type: character varying(50)
+    meaning: License number
+    examples:
+    - '221560'
+    - '681417'
+  - name: service_en
+    type: character varying(500)
+    meaning: Service in English
+    examples:
+    - Inside Dubai
+    - Company Service
+  - name: service_ar
+    type: character varying(500)
+    meaning: Service in Arabic
+  - name: service_id
+    type: numeric(10,0)
+    meaning: Service identifier
+    examples:
+    - 82
+    - 81
+  - name: main_service_en
+    type: character varying(500)
+    meaning: Main service in English
+    examples:
+    - Electronic Advertisement
+  - name: main_service_ar
+    type: character varying(500)
+    meaning: Main service in Arabic
+  - name: parent_service_id
+    type: numeric(10,0)
+    meaning: Parent service identifier
+    examples:
+    - 80
+  - name: permit_status_en
+    type: character varying(1000)
+    meaning: Permit status in English
+    examples:
+    - Auto Approval
+    - Cancelled
+  - name: permit_status_ar
+    type: character varying(1000)
+    meaning: Permit status in Arabic
+  - name: permit_status_id
+    type: numeric(10,0)
+    meaning: Permit status identifier
+    examples:
+    - 7
+    - 4
+  - name: parent_parmits_id
+    type: numeric(15,0)
+    meaning: Parent parmits identifier
+  - name: exhibition_name_en
+    type: character varying(1000)
+    meaning: Exhibition name in English
+  - name: exhibition_name_ar
+    type: character varying(2000)
+    meaning: Exhibition name in Arabic
+  - name: location
+    type: character varying(400)
+    meaning: Location
+  - name: end_date
+    type: date
+    meaning: End date
+    examples:
+    - YYYY-MM-DD
+  - name: start_date
+    type: date
+    meaning: Start date
+    examples:
+    - YYYY-MM-DD
+  - name: permit_number
+    type: character varying(200)
+    meaning: Permit number
+    examples:
+    - '40683'
+    - '10906'
+  qualified_name: chatbot_ai.real_estate_permits
+- name: licensed_real_estate_valuators
+  description: Licensed real estate valuators from Dubai Land Department
+  primary_key:
+  - valuator_number
+  - valuation_company_number
+  columns:
+  - name: license_end_date
+    type: character varying(10)
+    meaning: License end date
+    examples:
+    - YYYY-MM-DD
+  - name: license_start_date
+    type: character varying(10)
+    meaning: License start date
+    examples:
+    - YYYY-MM-DD
+  - name: gender_en
+    type: character varying(10)
+    meaning: Gender in English
+    examples:
+    - male
+  - name: gender_ar
+    type: character varying(10)
+    meaning: Gender in Arabic
+  - name: gender_id
+    type: numeric(1,0)
+    meaning: Gender identifier
+    examples:
+    - 0
+  - name: valuator_nationality_en
+    type: character varying(100)
+    meaning: Valuator nationality in English
+    examples:
+    - United Kingdom
+    - United Arab Emirates
+  - name: valuator_nationality_ar
+    type: character varying(100)
+    meaning: Valuator nationality in Arabic
+  - name: valuator_nationality_id
+    type: numeric(10,0)
+    meaning: Valuator nationality identifier
+    examples:
+    - 26
+    - 1
+  - name: valuator_name_en
+    type: character varying(200)
+    meaning: Valuator name in English
+    examples:
+    - STEVEN JAMES MORGAN
+    - ABDULLATIF MOHAMMAD IBRAHIM ABDULLA AL BANNA
+  - name: valuator_name_ar
+    type: character varying(200)
+    meaning: Valuator name in Arabic
+  - name: valuator_number
+    type: numeric(10,0)
+    meaning: Valuator number
+    examples:
+    - 7984
+    - 9118
+  - name: valuation_company_name_en
+    type: character varying(200)
+    meaning: Valuation company name in English
+    examples:
+    - SAVILLS REAL ESTATE L.L.C
+    - AL ZAJEL REAL ESTATE L.L.C
+  - name: valuation_company_name_ar
+    type: character varying(200)
+    meaning: Valuation company name in Arabic
+  - name: valuation_company_number
+    type: numeric(10,0)
+    meaning: Valuation company number
+    examples:
+    - 422
+    - 2425
+  qualified_name: chatbot_ai.licensed_real_estate_valuators
+- name: licenced_owner_associations
+  description: Licenced owner associations from Dubai Land Department
+  primary_key:
+  - company_name_ar
+  - company_name_en
+  columns:
+  - name: company_name_ar
+    type: character varying(200)
+    meaning: Company name in Arabic
+  - name: company_name_en
+    type: character varying(200)
+    meaning: Company name in English
+    examples:
+    - 360 FIVE COMMUNITY MANAGEMENT L.L.C
+    - A R B OWNER ASSOCIATION MANAGEMENT SERVICES
+  - name: phone
+    type: character varying(200)
+    meaning: Phone
+    examples:
+    - +971XXXXXXXXX
+  - name: email
+    type: character varying(60)
+    meaning: Email
+    examples:
+    - user@example.ae
+  - name: latitude
+    type: numeric(15,13)
+    meaning: Latitude
+    examples:
+    - DD.dddddd
+  - name: longitude
+    type: numeric(15,13)
+    meaning: Longitude
+    examples:
+    - DDD.dddddd
+  qualified_name: chatbot_ai.licenced_owner_associations

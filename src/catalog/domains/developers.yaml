@@ -1,0 +1,964 @@
+id: developers
+name: Developers, projects, and construction
+schema: chatbot_ai
+description: Off-plan and master projects, consultants, contractors, building permits, and MRHE housing
+  projects. Use for handover, completion, and who is building what.
+synonyms:
+- developer
+- project
+- off-plan
+- handover
+- completion
+- permit
+- contractor
+- consultant
+- escrow
+grain: one row is a project, permit, or project-building link
+joins:
+- domain: listings
+  keys:
+  - project_id
+  - project_no
+  - parcel_id
+  - building_id
+- domain: locations
+  keys:
+  - community_name
+  - parcel_id
+pitfalls:
+- real_estate_projects is the DLD project register; projects_information is municipality permit workflow.
+- percent_completed is a project-level figure, not a unit handover date.
+tables:
+- name: real_estate_projects
+  description: Real estate projects from Dubai Land Department
+  primary_key:
+  - project_id
+  columns:
+  - name: project_id
+    type: numeric(10,0)
+    meaning: Project identifier
+    examples:
+    - -14590397
+    - 1
+  - name: project_number
+    type: numeric(10,0)
+    meaning: Project number
+    examples:
+    - 1591
+    - 504
+  - name: project_name
+    type: character varying(200)
+    meaning: Project name
+  - name: developer_id
+    type: numeric(10,0)
+    meaning: Developer identifier
+    examples:
+    - 29
+    - 3
+  - name: developer_number
+    type: numeric(20,0)
+    meaning: Developer number
+    examples:
+    - 29
+    - 3
+  - name: developer_name
+    type: character varying(200)
+    meaning: Developer name
+  - name: master_developer_id
+    type: numeric(10,0)
+    meaning: Master developer identifier
+    examples:
+    - 856
+    - 153
+  - name: master_developer_number
+    type: numeric(20,0)
+    meaning: Master developer number
+    examples:
+    - 856
+    - 153
+  - name: master_developer_name
+    type: character varying(200)
+    meaning: Master developer name
+  - name: project_start_date
+    type: date
+    meaning: Project start date
+    examples:
+    - YYYY-MM-DD
+  - name: project_end_date
+    type: date
+    meaning: Project end date
+    examples:
+    - YYYY-MM-DD
+  - name: project_type_id
+    type: numeric(20,0)
+    meaning: Project type identifier
+    examples:
+    - 1
+  - name: project_type_ar
+    type: character varying(100)
+    meaning: Project type in Arabic
+  - name: project_classification_id
+    type: numeric(10,0)
+    meaning: Project classification identifier
+    examples:
+    - 1
+  - name: project_classification_ar
+    type: character varying(50)
+    meaning: Project classification in Arabic
+  - name: escrow_agent_id
+    type: numeric(10,0)
+    meaning: Escrow agent identifier
+    examples:
+    - 5
+    - 2
+  - name: escrow_agent_name
+    type: character varying(200)
+    meaning: Escrow agent holding project funds
+  - name: project_status
+    type: character varying(200)
+    meaning: Project status
+    examples:
+    - FINISHED
+  - name: project_status_ar
+    type: character varying(100)
+    meaning: Project status in Arabic
+  - name: percent_completed
+    type: numeric(10,3)
+    meaning: Completion percentage of the project
+    examples:
+    - 100
+  - name: completion_date
+    type: date
+    meaning: Completion date
+    examples:
+    - YYYY-MM-DD
+  - name: cancellation_date
+    type: date
+    meaning: Cancellation date
+    examples:
+    - YYYY-MM-DD
+  - name: project_description_ar
+    type: character varying(2000)
+    meaning: Project description in Arabic
+  - name: project_description_en
+    type: character varying(2000)
+    meaning: Project description in English
+  - name: property_id
+    type: numeric(10,0)
+    meaning: DLD property identifier for a unit, plot, or building
+    examples:
+    - 1962225142
+    - 1280882525
+  - name: area_id
+    type: numeric(10,0)
+    meaning: Community / area identifier
+    examples:
+    - 443
+    - 350
+  - name: area_name_ar
+    type: character varying(200)
+    meaning: Dubai community or area name in Arabic
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Dubai community or area name in English
+    examples:
+    - Al Thanyah First
+    - Al Thanyah Fifth
+  - name: master_project_ar
+    type: character varying(200)
+    meaning: Master community / master development in Arabic
+  - name: master_project_en
+    type: character varying(200)
+    meaning: Master community / master development in English
+    examples:
+    - Barsha Heights
+    - Jumeirah Lakes Towers
+  - name: no_of_lands
+    type: numeric(10,0)
+    meaning: No of lands
+    examples:
+    - 0
+  - name: no_of_units
+    type: numeric(10,0)
+    meaning: Number of units on the floor or building
+    examples:
+    - 542
+    - 248
+  - name: no_of_buildings
+    type: numeric(10,0)
+    meaning: No of buildings
+    examples:
+    - 1
+  - name: no_of_villas
+    type: numeric(10,0)
+    meaning: No of villas
+    examples:
+    - 0
+  - name: zoning_authority_ar
+    type: character varying(200)
+    meaning: Zoning authority in Arabic
+  - name: zoning_authority_en
+    type: character varying(200)
+    meaning: Zoning authority in English
+    examples:
+    - Dubai Development Authority (DDA)
+    - Dubai Municipality
+  - name: zoning_authority_id
+    type: numeric(10,0)
+    meaning: Zoning authority identifier
+    examples:
+    - 2
+    - 1
+  qualified_name: chatbot_ai.real_estate_projects
+- name: projects_information
+  description: Dubai Municipality projects information
+  primary_key:
+  - project_no
+  columns:
+  - name: work_start_date
+    type: date
+    meaning: Work start date
+    examples:
+    - YYYY-MM-DD
+  - name: expected_completion_date
+    type: date
+    meaning: Expected completion date
+    examples:
+    - YYYY-MM-DD
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 1
+    - 2
+  - name: consultant_english
+    type: character varying(600)
+    meaning: Consultant english
+    examples:
+    - DESIGN & ARCHITECTURE BUREAU (DAR)
+    - STYLE CONSULTING ENGINEERS
+  - name: consultant_arabic
+    type: character varying(600)
+    meaning: Consultant arabic
+  - name: contractor_english
+    type: character varying(600)
+    meaning: Contractor english
+    examples:
+    - AL MAJID CONTRACTING
+    - FORWARD ENGINEERING BUILDING CONTRACTING L L C
+  - name: contractor_arabic
+    type: character varying(600)
+    meaning: Contractor arabic
+  - name: project_status_english
+    type: character varying(100)
+    meaning: Project status english
+    examples:
+    - Closed
+    - Open
+  - name: project_status_arabic
+    type: character varying(100)
+    meaning: Project status arabic
+    examples:
+    - Closed
+    - Open
+  - name: project_creation_date
+    type: date
+    meaning: Project creation date
+    examples:
+    - YYYY-MM-DD
+  - name: project_completion_date
+    type: date
+    meaning: Project completion date
+    examples:
+    - YYYY-MM-DD
+  - name: parcel_id
+    type: numeric(15,0)
+    meaning: Plot / parcel identifier
+    examples:
+    - 3130459
+    - 2510322
+  - name: related_entity_name_en
+    type: character varying(100)
+    meaning: Related entity name in English
+    examples:
+    - Non-Governmental
+  - name: related_entity_name_ar
+    type: character varying(100)
+    meaning: Related entity name in Arabic
+  - name: applicanttype
+    type: character varying(100)
+    meaning: Applicanttype
+    examples:
+    - Consultant
+  - name: consultant_license_no
+    type: character varying(25)
+    meaning: Consultant license no
+    examples:
+    - '102617'
+    - '126231'
+  - name: contractor_license_no
+    type: character varying(25)
+    meaning: Contractor license no
+    examples:
+    - '215821'
+    - '220516'
+  - name: permit_date
+    type: date
+    meaning: Permit date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.projects_information
+- name: project_building_information
+  description: Dubai Municipality project building information
+  primary_key:
+  - project_no
+  - building_id
+  columns:
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 1
+    - 2
+  - name: building_id
+    type: numeric(22,0)
+    meaning: Building identifier
+    examples:
+    - 108336
+    - 2
+  - name: building_construction_stage_e
+    type: character varying(900)
+    meaning: Building construction stage e
+    examples:
+    - Work completed
+  - name: building_construction_stage_a
+    type: character varying(900)
+    meaning: Building construction stage a
+    examples:
+    - Work completed
+  - name: building_cost
+    type: numeric(22,2)
+    meaning: Building cost
+    examples:
+    - 25000000
+    - 800000
+  qualified_name: chatbot_ai.project_building_information
+- name: project_applications
+  description: Dubai Municipality project permit applications
+  primary_key:
+  - application_no
+  columns:
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 316402
+    - 211837
+  - name: app_processing_completion_date
+    type: date
+    meaning: App processing completion date
+    examples:
+    - YYYY-MM-DD
+  - name: application_no
+    type: character varying(100)
+    meaning: Application no
+    examples:
+    - 316402-2-1
+    - 211837-2-1
+  - name: application_type_english
+    type: character varying(100)
+    meaning: Application type english
+    examples:
+    - Final-New Building
+    - Adjustment and Addition Permit Simple (Owners)
+  - name: application_type_arabic
+    type: character varying(150)
+    meaning: Application type arabic
+  qualified_name: chatbot_ai.project_applications
+- name: consultant_projects
+  description: Summary of construction projects from a consultant perspective
+  primary_key:
+  - project_no
+  columns:
+  - name: project_closing_date
+    type: date
+    meaning: Project closing date
+    examples:
+    - YYYY-MM-DD
+  - name: project_status
+    type: character varying(100)
+    meaning: Project status
+    examples:
+    - Closed
+  - name: last_app_submission_date
+    type: date
+    meaning: Last app submission date
+    examples:
+    - YYYY-MM-DD
+  - name: building_count
+    type: numeric(20,0)
+    meaning: Building count
+    examples:
+    - 1
+    - 0
+  - name: community_name
+    type: character varying(200)
+    meaning: Community name
+    examples:
+    - AL TWAR FOURTH
+    - AL KARAMA
+  - name: first_building_permit_date
+    type: date
+    meaning: First building permit date
+    examples:
+    - YYYY-MM-DD
+  - name: building_type
+    type: character varying(200)
+    meaning: Building type
+    examples:
+    - Private Villa
+    - Industrial Building
+  - name: contractor_english_ar
+    type: character varying(600)
+    meaning: Contractor english in Arabic
+  - name: contractor_english
+    type: character varying(600)
+    meaning: Contractor english
+  - name: project_type
+    type: character varying(200)
+    meaning: Project type
+    examples:
+    - New Building Project
+    - Modification project
+  - name: parcel_id
+    type: character varying(50)
+    meaning: Plot / parcel identifier
+    examples:
+    - '2340815'
+    - '3180323'
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 27414
+    - 27415
+  - name: consultant_english
+    type: character varying(600)
+    meaning: Consultant english
+    examples:
+    - CONCEPT (CONSULTING ENGINEERS)
+    - NEXT ENGINEERING CONSULTANTS L.L.C
+  - name: consultant_license_no
+    type: character varying(50)
+    meaning: Consultant license no
+    examples:
+    - '129512'
+    - '127578'
+  qualified_name: chatbot_ai.consultant_projects
+- name: contractor_projects
+  description: Dubai Municipality contractor projects summary
+  primary_key:
+  - project_no
+  columns:
+  - name: project_closing_date
+    type: date
+    meaning: Project closing date
+    examples:
+    - YYYY-MM-DD
+  - name: project_status
+    type: character varying(100)
+    meaning: Project status
+    examples:
+    - Closed
+    - Open
+  - name: last_app_submission_date
+    type: date
+    meaning: Last app submission date
+    examples:
+    - YYYY-MM-DD
+  - name: building_count
+    type: numeric(20,0)
+    meaning: Building count
+    examples:
+    - 1
+    - 3
+  - name: community_name
+    type: character varying(200)
+    meaning: Community name
+    examples:
+    - AL HAMRIYA
+    - MIRDIF
+  - name: first_building_permit_date
+    type: date
+    meaning: First building permit date
+    examples:
+    - YYYY-MM-DD
+  - name: building_type
+    type: character varying(200)
+    meaning: Building type
+    examples:
+    - Multi Storey
+    - Investment Villa
+  - name: consultant_english_ar
+    type: character varying(600)
+    meaning: Consultant english in Arabic
+  - name: consultant_english
+    type: character varying(600)
+    meaning: Consultant english
+    examples:
+    - DESIGN & ARCHITECTURE BUREAU (DAR)
+    - STYLE CONSULTING ENGINEERS
+  - name: project_type
+    type: character varying(200)
+    meaning: Project type
+    examples:
+    - New Building Project
+    - Others
+  - name: parcel_id
+    type: character varying(50)
+    meaning: Plot / parcel identifier
+    examples:
+    - '3130459'
+    - '2510322'
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 1
+    - 2
+  - name: contractor_english
+    type: character varying(600)
+    meaning: Contractor english
+    examples:
+    - AL MAJID CONTRACTING
+    - FORWARD ENGINEERING BUILDING CONTRACTING L L C
+  - name: contractor_license_no
+    type: character varying(50)
+    meaning: Contractor license no
+    examples:
+    - '215821'
+    - '220516'
+  qualified_name: chatbot_ai.contractor_projects
+- name: building_permits_applications
+  description: Dubai Municipality building permits applications
+  primary_key:
+  - application_id
+  columns:
+  - name: application_id
+    type: numeric(22,0)
+    meaning: Application identifier
+    examples:
+    - 1
+    - 2
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 1
+    - 2
+  - name: parcel_id
+    type: numeric(15,0)
+    meaning: Plot / parcel identifier
+    examples:
+    - 3130459
+    - 2510322
+  - name: permit_no
+    type: character varying(100)
+    meaning: Permit no
+    examples:
+    - 1-1-1
+    - 2-1-1
+  - name: building_type
+    type: character varying(100)
+    meaning: Building type
+    examples:
+    - Multi Storey
+    - Investment Villa
+  - name: approval_date
+    type: date
+    meaning: Approval date
+    examples:
+    - YYYY-MM-DD
+  - name: permit_date
+    type: date
+    meaning: Permit date
+    examples:
+    - YYYY-MM-DD
+  - name: permit_renewal_date
+    type: date
+    meaning: Permit renewal date
+    examples:
+    - YYYY-MM-DD
+  - name: building_count
+    type: numeric(22,0)
+    meaning: Building count
+    examples:
+    - 0
+    - 1
+  - name: total_area
+    type: numeric(22,0)
+    meaning: Total area
+    examples:
+    - 7386
+    - 841
+  - name: application_type_english
+    type: character varying(100)
+    meaning: Application type english
+    examples:
+    - Final-New Building
+    - Preliminary-New Building
+  - name: application_type_arabic
+    type: character varying(150)
+    meaning: Application type arabic
+  - name: application_status_english
+    type: character varying(100)
+    meaning: Application status english
+    examples:
+    - RETURNED
+    - Approved Application Cancelled
+  - name: application_status_arabic
+    type: character varying(100)
+    meaning: Application status arabic
+  - name: application_submission_date
+    type: date
+    meaning: Application submission date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.building_permits_applications
+- name: demolition_permits
+  description: Demolition permits issued by Dubai Municipality
+  primary_key:
+  - building_type
+  - demolition_company
+  - license_no
+  - parcel_id
+  - permit_no
+  columns:
+  - name: building_type
+    type: character varying(100)
+    meaning: Building type
+    examples:
+    - Private Villa
+    - Multi Storey
+  - name: demolition_company
+    type: character varying(300)
+    meaning: Demolition company
+    examples:
+    - AL AREESH WRECKING & DEMOLITION WORKS
+    - JABEL ALZAITON BUILDING DEMOLITION LLC
+  - name: license_no
+    type: character varying(50)
+    meaning: License no
+    examples:
+    - '717509'
+    - '532363'
+  - name: parcel_id
+    type: character varying(50)
+    meaning: Plot / parcel identifier
+    examples:
+    - '3330847'
+    - '2621910'
+  - name: permit_no
+    type: character varying(50)
+    meaning: Permit no
+    examples:
+    - 448277-1-1
+    - 445958-1-1
+  - name: permit_date
+    type: date
+    meaning: Permit date
+    examples:
+    - YYYY-MM-DD
+  - name: dem_area
+    type: numeric(5,0)
+    meaning: Dem area
+    examples:
+    - 0
+    - -223
+  - name: no_demolition_bld
+    type: numeric(5,0)
+    meaning: No demolition bld
+    examples:
+    - 1
+    - 0
+  qualified_name: chatbot_ai.demolition_permits
+- name: service_entities_transactions_listing
+  description: Dubai Municipality service entity permit transaction decisions
+  primary_key:
+  - project_no
+  - application_no
+  - service_entity_id
+  columns:
+  - name: project_no
+    type: numeric(22,0)
+    meaning: Project no
+    examples:
+    - 407351
+    - 386336
+  - name: parcel_id
+    type: character varying(15)
+    meaning: Plot / parcel identifier
+    examples:
+    - '9131184'
+    - '6164933'
+  - name: application_no
+    type: character varying(100)
+    meaning: Application no
+    examples:
+    - 407351-2-1
+    - 386336-7-1
+  - name: service_entity_id
+    type: numeric(22,0)
+    meaning: Service entity identifier
+    examples:
+    - 12
+    - 17
+  - name: service_entity
+    type: character varying(250)
+    meaning: Service entity
+    examples:
+    - Demarcation
+    - Building Application - Water
+  - name: application_submission_date
+    type: date
+    meaning: Application submission date
+    examples:
+    - YYYY-MM-DD
+  - name: app_completion_date
+    type: date
+    meaning: App completion date
+    examples:
+    - YYYY-MM-DD
+  - name: final_status
+    type: character varying(1000)
+    meaning: Final status
+    examples:
+    - APPROVED
+  - name: initial_status
+    type: character varying(1000)
+    meaning: Initial status
+    examples:
+    - APPROVED
+    - CFR
+  - name: final_status_decision_date
+    type: date
+    meaning: Final status decision date
+    examples:
+    - YYYY-MM-DD
+  qualified_name: chatbot_ai.service_entities_transactions_listing
+- name: mrhe_projects
+  description: Ready-made house projects from Mohammed Bin Rashid Housing Establishment
+  primary_key:
+  - project_id
+  columns:
+  - name: project_id
+    type: numeric(22,0)
+    meaning: Project identifier
+    examples:
+    - 131
+    - 105
+  - name: short_descr_l
+    type: character varying(100)
+    meaning: Short descr l
+    examples:
+    - Abu Hail
+    - Oud AlMateena (940)
+  - name: location
+    type: character varying(100)
+    meaning: Location
+  - name: project_desc
+    type: character varying(200)
+    meaning: Project desc
+  qualified_name: chatbot_ai.mrhe_projects
+- name: mrhe_projects_villas
+  description: Project villas from Mohammed Bin Rashid Housing Establishment
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: numeric(22,0)
+    meaning: Id
+    examples:
+    - 4177
+    - 4199
+  - name: project_desc
+    type: character varying(200)
+    meaning: Project desc
+  - name: project_id
+    type: numeric(22,0)
+    meaning: Project identifier
+    examples:
+    - 37
+    - 33
+  - name: based_area
+    type: numeric(22,4)
+    meaning: Based area
+    examples:
+    - 4490.16
+    - 2862
+  - name: plot_area
+    type: character varying(30)
+    meaning: Plot area
+    examples:
+    - '604.32'
+    - '603.85'
+  - name: villa_style
+    type: character varying(50)
+    meaning: Villa style
+  - name: bedroom
+    type: numeric(10,0)
+    meaning: Bedroom
+    examples:
+    - 5
+    - 3
+  - name: floor
+    type: numeric(10,0)
+    meaning: Floor
+    examples:
+    - 2
+    - 1
+  - name: villa_type
+    type: numeric(10,0)
+    meaning: Villa type
+    examples:
+    - 0
+    - 2
+  qualified_name: chatbot_ai.mrhe_projects_villas
+- name: mrhe_ready_made_house_projects
+  description: Mohammed Bin Rashid Housing Establishment ready-made house projects
+  primary_key:
+  - project_id
+  columns:
+  - name: project_id
+    type: numeric(10,0)
+    meaning: Project identifier
+    examples:
+    - 11
+    - 62
+  - name: short_descr_l
+    type: character varying(100)
+    meaning: Short descr l
+    examples:
+    - AlBarsha (258)
+    - Althahra
+  - name: location
+    type: character varying(100)
+    meaning: Location
+  - name: project_desc
+    type: character varying(100)
+    meaning: Project desc
+  qualified_name: chatbot_ai.mrhe_ready_made_house_projects
+- name: mrhe_master_constructions
+  description: Master constructions from Mohammed Bin Rashid Housing Establishment
+  primary_key:
+  - contr_id
+  columns:
+  - name: contr_id
+    type: numeric(22,0)
+    meaning: Contr identifier
+    examples:
+    - 42025
+    - 85616
+  - name: contr_end_dt
+    type: timestamp without time zone
+    meaning: Contr end dt
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: contr_start_dt
+    type: timestamp without time zone
+    meaning: Contr start dt
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: contract_amount
+    type: numeric(22,2)
+    meaning: Contract amount
+    examples:
+    - 2600000
+    - 750000
+  - name: contractor_id
+    type: character varying(30)
+    meaning: Contractor identifier
+    examples:
+    - '5421'
+    - '16409'
+  - name: loan_amount
+    type: numeric(22,2)
+    meaning: Loan amount
+    examples:
+    - 750000
+    - 300000
+  - name: per_completed
+    type: numeric(10,2)
+    meaning: Per completed
+    examples:
+    - 100
+    - 32
+  - name: project_status
+    type: character varying(200)
+    meaning: Project status
+  - name: service_type
+    type: character varying(4000)
+    meaning: Service type
+    examples:
+    - Loans
+    - Grants
+  - name: service_type_ar
+    type: character varying(200)
+    meaning: Service type in Arabic
+  - name: src
+    type: character varying(10)
+    meaning: Src
+    examples:
+    - ENG
+  qualified_name: chatbot_ai.mrhe_master_constructions
+- name: mrhe_land_grants
+  description: Land grants from Mohammed Bin Rashid Housing Establishment
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: numeric(15,0)
+    meaning: Id
+    examples:
+    - 4937
+    - 7203
+  - name: gender_desc
+    type: character varying(100)
+    meaning: Gender desc
+  - name: marital_status
+    type: character varying(100)
+    meaning: Marital status
+  - name: age
+    type: numeric(10,2)
+    meaning: Age
+    examples:
+    - 54
+    - 30
+  - name: applicant_birth_date
+    type: date
+    meaning: Applicant birth date
+    examples:
+    - YYYY-MM-DD
+  - name: applicant_family_count
+    type: numeric(10,0)
+    meaning: Applicant family count
+    examples:
+    - 2
+    - 1
+  - name: application_status_name
+    type: character varying(100)
+    meaning: Application status name
+  - name: approved_date
+    type: timestamp without time zone
+    meaning: Approved date
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: application_date
+    type: timestamp without time zone
+    meaning: Application date
+    examples:
+    - YYYY-MM-DD HH:MM:SS
+  - name: service_type_name
+    type: character varying(200)
+    meaning: Service type name
+  qualified_name: chatbot_ai.mrhe_land_grants
