@@ -6,11 +6,31 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any
 
-MEMORY_TYPES = ("profile", "preference", "semantic", "episodic", "goal", "ephemeral")
-PROVENANCE = ("explicit", "inferred", "system", "summarized")
-STATUSES = ("active", "superseded", "expired", "deleted", "contradicted")
-DEFAULT_CLUSTERS = ("property_prefs", "budget", "location", "persona", "goal")
-ALL_CLUSTERS = (*DEFAULT_CLUSTERS, "personal", "work", "travel")
+from agent.memory.models.enums import (
+    ALL_CLUSTERS,
+    DEFAULT_CLUSTERS,
+    MemoryCluster,
+    MemoryProvenance,
+    MemoryStatus,
+    MemoryType,
+)
+
+__all__ = [
+    "ALL_CLUSTERS",
+    "DEFAULT_CLUSTERS",
+    "MemoryCluster",
+    "MemoryOp",
+    "MemoryProvenance",
+    "MemoryRecord",
+    "MemorySettings",
+    "MemoryStatus",
+    "MemoryType",
+    "clone_frame",
+    "copy_record",
+    "empty_frame",
+    "public_record",
+    "utcnow",
+]
 
 
 def utcnow() -> datetime:
@@ -21,7 +41,7 @@ def utcnow() -> datetime:
 class MemorySettings:
     user_id: str
     memory_enabled: bool = True
-    allowed_clusters: tuple[str, ...] = DEFAULT_CLUSTERS
+    allowed_clusters: tuple[str, ...] = tuple(cluster.value for cluster in DEFAULT_CLUSTERS)
     retention_days: int | None = None
 
     def copy(self) -> MemorySettings:

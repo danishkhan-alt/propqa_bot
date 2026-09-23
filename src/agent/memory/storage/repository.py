@@ -10,7 +10,6 @@ from typing import Any
 from agent.memory.models.column_map import ColumnSpec, seed_map
 from agent.memory.read.scoring import as_datetime
 from agent.memory.models.types import (
-    DEFAULT_CLUSTERS,
     MemoryRecord,
     MemorySettings,
     copy_record,
@@ -233,7 +232,7 @@ class InMemoryRepository:
         with self._lock:
             found = self._settings.get(user_id)
             if found is None:
-                return MemorySettings(user_id=user_id, allowed_clusters=DEFAULT_CLUSTERS)
+                return MemorySettings(user_id=user_id)
             return found.copy()
 
     def save_settings(self, settings: MemorySettings) -> None:
