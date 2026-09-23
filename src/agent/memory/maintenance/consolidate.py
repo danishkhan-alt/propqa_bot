@@ -7,18 +7,10 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from agent.memory.write.filters import to_filter
+from agent.memory.models.column_map import logical_for_filter_key, slot_for_filter_key
 from agent.memory.storage.repository import new_id
 from agent.memory.session.bootstrap import invalidate
 from agent.memory.models.types import MemoryRecord, utcnow
-
-_PREDICATE_SLOT = {
-    "bedrooms": "bedrooms",
-    "price": "budget_max",
-    "location_id_v2": "preferred_location",
-    "purpose": "purpose",
-    "is_furnished": "furnished",
-    "metro_distance_m": "proximity_metro",
-}
 
 
 def consolidate_all(repository, *, now: datetime | None = None, summarize=None) -> None:
@@ -82,17 +74,18 @@ def _infer(repository, user_id: str, now: datetime) -> None:
         if len(rows) < 3:
             continue
         predicates = (rows[0].structured or {}).get("predicates") or {}
+        columns = repository.columns()
         if _explicit_covers(repository, user_id, predicates):
             continue
         if _semantic_exists(repository, user_id, key):
             continue
-        structured = _semantic_structured(predicates)
+        structured = _semantic_structured(predicates, columns)
         record = MemoryRecord(
             id=new_id(),
             user_id=user_id,
             type="semantic",
             cluster=rows[0].cluster,
-            slot=_single_slot(predicates),
+            slot=_single_slot(predicates, columns),
             content=_semantic_sentence(predicates),
             structured={"predicates": predicates, "source": "episodic", **structured},
             confidence=0.6,
@@ -145,8 +138,9 @@ def _predicate_key(structured: dict[str, Any] | None) -> str:
 
 
 def _explicit_covers(repository, user_id: str, predicates: dict) -> bool:
+    columns = repository.columns()
     for name in predicates:
-        slot = _PREDICATE_SLOT.get(name)
+        slot = slot_for_filter_key(name, columns)
         if not slot:
             continue
         existing = repository.get_active_slot(user_id, slot)
@@ -164,22 +158,17 @@ def _semantic_exists(repository, user_id: str, key: str) -> bool:
     return False
 
 
-def _single_slot(predicates: dict) -> str | None:
+def _single_slot(predicates: dict, columns=None) -> str | None:
     if len(predicates) != 1:
         return None
-    return _PREDICATE_SLOT.get(next(iter(predicates)))
+    return slot_for_filter_key(next(iter(predicates)), columns)
 
 
-def _semantic_structured(predicates: dict) -> dict[str, Any]:
+def _semantic_structured(predicates: dict, columns=None) -> dict[str, Any]:
     if len(predicates) != 1:
         return {}
     name, value = next(iter(predicates.items()))
-    column = {
-        "bedrooms": "properties.bedrooms",
-        "price": "properties.price",
-        "location_id_v2": "properties.location_id_v2",
-        "purpose": "properties.purpose",
-    }.get(name)
+    column = logical_for_filter_key(name, columns)
     if column is None or not isinstance(value, dict):
         return {}
     op, raw = next(iter(value.items()))

@@ -99,8 +99,17 @@ CREATE TABLE IF NOT EXISTS memory_column_map (
     logical_col  text PRIMARY KEY,
     physical_col text NOT NULL,
     domain       text NOT NULL,
-    value_type   text NOT NULL
+    value_type   text NOT NULL,
+    filter_key   text,
+    slot         text,
+    exclusive    bool NOT NULL DEFAULT false
 );
+"""
+
+COLUMN_MAP_UPGRADE = """
+ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS filter_key text;
+ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS slot text;
+ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS exclusive bool NOT NULL DEFAULT false;
 """
 
 
@@ -111,14 +120,31 @@ class PostgresMemoryRepository:
     def setup(self) -> None:
         with self._pool.connection() as conn:
             conn.execute(DDL)
+            conn.execute(COLUMN_MAP_UPGRADE)
             with conn.cursor() as cur:
                 cur.executemany(
                     """
-                    INSERT INTO memory_column_map (logical_col, physical_col, domain, value_type)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (logical_col) DO NOTHING
+                    INSERT INTO memory_column_map (
+                        logical_col, physical_col, domain, value_type, filter_key, slot, exclusive
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (logical_col) DO UPDATE SET
+                        filter_key = EXCLUDED.filter_key,
+                        slot = EXCLUDED.slot,
+                        exclusive = EXCLUDED.exclusive
                     """,
-                    [(spec.logical_col, spec.physical_col, spec.domain, spec.value_type) for spec in SEED],
+                    [
+                        (
+                            spec.logical_col,
+                            spec.physical_col,
+                            spec.domain,
+                            spec.value_type,
+                            spec.filter_key,
+                            spec.slot,
+                            spec.exclusive,
+                        )
+                        for spec in SEED
+                    ],
                 )
             conn.commit()
 
@@ -137,11 +163,20 @@ class PostgresMemoryRepository:
 
     def columns(self) -> dict[str, ColumnSpec]:
         rows = self._fetch(
-            "SELECT logical_col, physical_col, domain, value_type FROM memory_column_map"
+            """
+            SELECT logical_col, physical_col, domain, value_type, filter_key, slot, exclusive
+            FROM memory_column_map
+            """
         )
         return {
             row["logical_col"]: ColumnSpec(
-                row["logical_col"], row["physical_col"], row["domain"], row["value_type"]
+                logical_col=row["logical_col"],
+                physical_col=row["physical_col"],
+                domain=row["domain"],
+                value_type=row["value_type"],
+                filter_key=row.get("filter_key"),
+                slot=row.get("slot"),
+                exclusive=bool(row.get("exclusive")),
             )
             for row in rows
         }

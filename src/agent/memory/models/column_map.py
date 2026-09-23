@@ -1,6 +1,7 @@
-"""Logical columns and which routed domain is allowed to see them.
+"""Logical columns, filter keys, preference slots, and domain whitelists.
 
 `properties.price` is a property/market fact. An RTA question must not inherit it.
+Slots and filter keys live here so consolidate / extract / personalize share one map.
 """
 
 from __future__ import annotations
@@ -16,16 +17,70 @@ class ColumnSpec:
     physical_col: str
     domain: str
     value_type: str
+    filter_key: str | None = None
+    slot: str | None = None
+    exclusive: bool = False
 
 
 SEED: tuple[ColumnSpec, ...] = (
-    ColumnSpec("properties.bedrooms", "properties.bedrooms", "property_search", "int"),
-    ColumnSpec("properties.location_id_v2", "properties.location_id_v2", "property_search", "id_list"),
-    ColumnSpec("properties.price", "properties.price", "property_search", "numeric"),
-    ColumnSpec("properties.metro_distance_m", "properties.metro_distance_m", "property_search", "int"),
-    ColumnSpec("properties.purpose", "properties.purpose", "property_search", "text"),
-    ColumnSpec("properties.is_furnished", "properties.is_furnished", "property_search", "bool"),
+    ColumnSpec(
+        "properties.bedrooms",
+        "properties.bedrooms",
+        "property_search",
+        "int",
+        filter_key="bedrooms",
+        slot="bedrooms",
+        exclusive=False,
+    ),
+    ColumnSpec(
+        "properties.location_id_v2",
+        "properties.location_id_v2",
+        "property_search",
+        "id_list",
+        filter_key="location_id_v2",
+        slot="preferred_location",
+        exclusive=True,
+    ),
+    ColumnSpec(
+        "properties.price",
+        "properties.price",
+        "property_search",
+        "numeric",
+        filter_key="price",
+        slot="budget_max",
+        exclusive=True,
+    ),
+    ColumnSpec(
+        "properties.metro_distance_m",
+        "properties.metro_distance_m",
+        "property_search",
+        "int",
+        filter_key="metro_distance_m",
+        slot="proximity_metro",
+        exclusive=True,
+    ),
+    ColumnSpec(
+        "properties.purpose",
+        "properties.purpose",
+        "property_search",
+        "text",
+        filter_key="purpose",
+        slot="purpose",
+        exclusive=True,
+    ),
+    ColumnSpec(
+        "properties.is_furnished",
+        "properties.is_furnished",
+        "property_search",
+        "bool",
+        filter_key="is_furnished",
+        slot="furnished",
+        exclusive=True,
+    ),
 )
+
+# Slots with no warehouse column (persona / goal / projection prefs).
+NON_COLUMN_EXCLUSIVE_SLOTS = frozenset({"persona", "projection_pref", "active_goal"})
 
 # A column's owner is one domain. Several domains may still inject it.
 DOMAIN_COLUMNS: dict[str, frozenset[str]] = {
@@ -54,34 +109,39 @@ CATALOG_TO_MEMORY: dict[str, str] = {
     "rta": "rta_intel",
 }
 
-# One active value. A new explicit statement replaces the old one.
-EXCLUSIVE_SLOTS = frozenset(
-    {
-        "purpose",
-        "persona",
-        "preferred_location",
-        "budget_max",
-        "furnished",
-        "projection_pref",
-        "active_goal",
-        "proximity_metro",
-    }
-)
-
 FILTER_COLUMNS = {
-    "bedrooms": "properties.bedrooms",
-    "price": "properties.price",
-    "location_id_v2": "properties.location_id_v2",
-    "purpose": "properties.purpose",
-    "is_furnished": "properties.is_furnished",
-    "metro_distance_m": "properties.metro_distance_m",
+    spec.filter_key: spec.logical_col for spec in SEED if spec.filter_key
 }
+
+EXCLUSIVE_SLOTS = frozenset(
+    {spec.slot for spec in SEED if spec.slot and spec.exclusive} | NON_COLUMN_EXCLUSIVE_SLOTS
+)
 
 PROJECTION_DOMAINS = frozenset({"property_search", "market_intel"})
 
 
 def seed_map() -> dict[str, ColumnSpec]:
     return {spec.logical_col: spec for spec in SEED}
+
+
+def slot_for_filter_key(
+    filter_key: str, columns: dict[str, ColumnSpec] | None = None
+) -> str | None:
+    """Map a QueryFrame predicate key (e.g. price) to its preference slot (budget_max)."""
+    for spec in (columns or seed_map()).values():
+        if spec.filter_key == filter_key:
+            return spec.slot
+    return None
+
+
+def logical_for_filter_key(
+    filter_key: str, columns: dict[str, ColumnSpec] | None = None
+) -> str | None:
+    """Map a QueryFrame predicate key to the logical column name."""
+    for spec in (columns or seed_map()).values():
+        if spec.filter_key == filter_key:
+            return spec.logical_col
+    return FILTER_COLUMNS.get(filter_key)
 
 
 def columns_for_domains(domains: list[str] | set[str]) -> frozenset[str]:

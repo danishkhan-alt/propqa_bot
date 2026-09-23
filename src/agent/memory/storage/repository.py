@@ -63,7 +63,13 @@ class InMemoryRepository:
         with self._lock:
             spec = self._columns[logical]
             self._columns[logical] = ColumnSpec(
-                spec.logical_col, physical, spec.domain, spec.value_type
+                logical_col=spec.logical_col,
+                physical_col=physical,
+                domain=spec.domain,
+                value_type=spec.value_type,
+                filter_key=spec.filter_key,
+                slot=spec.slot,
+                exclusive=spec.exclusive,
             )
 
     def get(self, user_id: str, memory_id: str) -> MemoryRecord | None:
