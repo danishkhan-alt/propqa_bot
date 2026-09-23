@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/propqa-icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dubai Property AI | PropQA</title>
+    <meta name="description" content="AI-powered Dubai property search, market intelligence, and investment analysis." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Apply dark theme before first paint to prevent flash
+      (function () {
+        var stored = localStorage.getItem("propqa_theme");
+        if (stored !== "light") document.documentElement.classList.add("dark");
+      })();
+    </script>
+    <script>
+      // Polyfill crypto.randomUUID for insecure contexts (plain HTTP), where
+      // the browser does not expose it. Runs before any JS module loads so
+      // React and vendor code never crash on a missing randomUUID.
+      (function () {
+        if (typeof crypto === "undefined") return;
+        if (typeof crypto.randomUUID === "function") return;
+
+        function uuidFromBytes(bytes) {
+          bytes[6] = (bytes[6] & 0x0f) | 0x40;
+          bytes[8] = (bytes[8] & 0x3f) | 0x80;
+          var hex = [];
+          for (var i = 0; i < bytes.length; i++) {
+            hex.push(bytes[i].toString(16).padStart(2, "0"));
+          }
+          return (
+            hex.slice(0, 4).join("") +
+            "-" +
+            hex.slice(4, 6).join("") +
+            "-" +
+            hex.slice(6, 8).join("") +
+            "-" +
+            hex.slice(8, 10).join("") +
+            "-" +
+            hex.slice(10, 16).join("")
+          );
+        }
+
+        crypto.randomUUID = function () {
+          var bytes = new Uint8Array(16);
+          if (typeof crypto.getRandomValues === "function") {
+            crypto.getRandomValues(bytes);
+          } else {
+            for (var i = 0; i < bytes.length; i++) {
+              bytes[i] = Math.floor(Math.random() * 256);
+            }
+          }
+          return uuidFromBytes(bytes);
+        };
+      })();
+    </script>
+  </head>
+  <body class="antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
