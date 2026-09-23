@@ -19,6 +19,18 @@ class ChatState(TypedDict, total=False):
     last_need_db: LastNeedDb | None
     assumptions: Assumptions | None
     awaiting_sql: bool
+    query_frame: dict | None
+    goal: dict | None
+    memory_context: list
+    profile: dict
+    ignore_defaults: bool
+    memory_block: str
+    disclosure: str
+    memory_question: str
+    applied_defaults: list
+    pending_forget: dict | None
+    behaviour_events: list
+    sql_rows: list
 
 
 class ChatInput(TypedDict):

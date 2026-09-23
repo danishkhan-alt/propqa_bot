@@ -23,6 +23,8 @@ from agent.services.catalog_index import (
     table_count,
 )
 from agent.services.llm import default_models
+from agent.graphs.memory import persist_working, read_context
+from agent.memory.read.prompt_text import append_memory_notes
 from agent.services.transcript import history_summary, latest_user_text
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
@@ -34,8 +36,14 @@ logger = get_logger("agent.router")
 # Row results share one page window. An average or a single lookup does not.
 _PAGED = frozenset({Intent.LIST, Intent.RANK})
 
-def load_context(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
-    return {"user_id": runtime.context.user_id}
+def load_context(
+    state: ChatState,
+    runtime: Runtime[AgentContext],
+    config: RunnableConfig,
+) -> dict:
+    update = {"user_id": runtime.context.user_id}
+    update.update(read_context(runtime, config))
+    return update
 
 
 def query_router(
@@ -51,6 +59,7 @@ def query_router(
         history=history_summary(messages),
         last_need_db=last,
         domain_blurbs=domain_blurbs(),
+        memory_context=state.get("memory_block") or "",
         config=config,
     )
     route, notes = apply_query_policy(route, last)
@@ -159,25 +168,27 @@ def answer(
     messages = state.get("messages") or []
     message = latest_user_text(messages)
     if query is None:
-        return _unavailable(runtime, message, messages, config)
+        return _unavailable(state, runtime, message, messages, config)
 
     if query.route is Route.DIRECT_ANSWER:
         text = _models(runtime).answer_direct(
             message=message,
             history=history_summary(messages),
+            memory_block=state.get("memory_block") or "",
             config=config,
         )
+        text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
         return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
     domain = as_domain_route(state.get("domain_route"))
     if domain is None or not domain.domain_ids:
-        return _unavailable(runtime, message, messages, config)
+        return _unavailable(state, runtime, message, messages, config)
 
     # SQL agent will run between catalog_load and this node. Until then, do not invent numbers.
     return {"awaiting_sql": True}
 
 
-def finalize(state: ChatState) -> dict:
+def finalize(state: ChatState, config: RunnableConfig) -> dict:
     """Drop catalog YAML so the checkpointer does not keep schema packs."""
     update: dict = {"catalog_context": "", "loaded_domains": []}
     query = as_query_route(state.get("query_route"))
@@ -208,6 +219,7 @@ def finalize(state: ChatState) -> dict:
         )
     else:
         update["awaiting_sql"] = False
+    update.update(persist_working({**state, **update}, config))
     return update
 
 
@@ -221,11 +233,12 @@ def route_after_query(state: ChatState) -> str:
 def route_after_domain(state: ChatState) -> str:
     domain = as_domain_route(state.get("domain_route"))
     if domain is not None and domain.domain_ids:
-        return "catalog_load"
+        return "apply_defaults"
     return "answer"
 
 
 def _unavailable(
+    state: ChatState,
     runtime: Runtime[AgentContext],
     message: str,
     messages: list,
@@ -236,6 +249,7 @@ def _unavailable(
         history=history_summary(messages),
         config=config,
     )
+    text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
     return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
 

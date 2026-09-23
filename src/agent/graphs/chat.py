@@ -6,6 +6,14 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext, RouterModels
+from agent.graphs.memory import (
+    apply_defaults,
+    confirm_forget,
+    enqueue_extraction,
+    recall_memory,
+    refine_or_new,
+    route_after_refine,
+)
 from agent.graphs.nodes import (
     answer,
     catalog_load,
@@ -25,34 +33,53 @@ logger = get_logger("agent.router")
 _graph: CompiledStateGraph | None = None
 
 
-def build_chat_graph(checkpointer=None) -> CompiledStateGraph:
+def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     """Query router, then domain router and catalog load when the turn needs the warehouse.
 
-    The SQL agent is not in this graph yet. A need_db turn loads the catalog, then
-    finalize drops the YAML and leaves awaiting_sql set.
+    Memory runs around that path: load working state, recall long-term items, refine the
+    query frame, then queue extraction after the answer. The SQL agent is not in this
+    graph yet.
     """
     builder = StateGraph(ChatState, context_schema=AgentContext, input_schema=ChatInput)
     builder.add_node("load_context", load_context)
+    builder.add_node("recall_memory", recall_memory)
+    builder.add_node("refine_or_new", refine_or_new)
+    builder.add_node("confirm_forget", confirm_forget)
     builder.add_node("query_router", query_router)
     builder.add_node("domain_router", domain_router)
+    builder.add_node("apply_defaults", apply_defaults)
     builder.add_node("catalog_load", catalog_load)
     builder.add_node("answer", answer)
+    builder.add_node("enqueue_extraction", enqueue_extraction)
     builder.add_node("finalize", finalize)
 
     builder.add_edge(START, "load_context")
-    builder.add_edge("load_context", "query_router")
+    builder.add_edge("load_context", "recall_memory")
+    builder.add_edge("recall_memory", "refine_or_new")
+    builder.add_conditional_edges("refine_or_new", route_after_refine, ["confirm_forget", "query_router"])
+    builder.add_edge("confirm_forget", END)
     builder.add_conditional_edges("query_router", route_after_query, ["domain_router", "answer"])
-    builder.add_conditional_edges("domain_router", route_after_domain, ["catalog_load", "answer"])
+    builder.add_conditional_edges("domain_router", route_after_domain, ["apply_defaults", "answer"])
+    builder.add_edge("apply_defaults", "catalog_load")
     builder.add_edge("catalog_load", "answer")
-    builder.add_edge("answer", "finalize")
+    builder.add_edge("answer", "enqueue_extraction")
+    builder.add_edge("enqueue_extraction", "finalize")
     builder.add_edge("finalize", END)
-    return builder.compile(checkpointer=checkpointer)
+    return builder.compile(checkpointer=checkpointer, store=store)
 
 
 def get_chat_graph() -> CompiledStateGraph:
     global _graph
     if _graph is None:
-        _graph = build_chat_graph(get_checkpointer())
+        from config import ENVIRONMENT
+
+        store = None
+        if not ENVIRONMENT.is_test:
+            from agent.memory.session.bootstrap import open_hot, open_long_term_store
+
+            open_hot()
+            store = open_long_term_store()
+        _graph = build_chat_graph(get_checkpointer(), store=store)
     return _graph
 
 

@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import TurnKind
+from agent.memory.session.follow_up import FrameClass
 from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
@@ -27,6 +28,16 @@ DOMAIN_FALLBACK = DomainRoute(
     confidence=0.3,
     rationale="Domain router output was invalid.",
 )
+
+FRAME_CLASS_SYSTEM = """Classify this follow-up against the current query frame. Do not answer the user.
+
+kind is one of:
+- refine: same search, with a change to filters, sort, projection, or a row reference
+- pivot: same place or property, different subject
+- new: unrelated request
+"""
+
+FRAME_FALLBACK = FrameClass(kind="new")
 
 
 def invoke_structured(
@@ -91,6 +102,9 @@ class AnthropicRouterModels:
             DomainRoute, method="json_schema", include_raw=True
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
+        self._frame = router_llm.with_structured_output(
+            FrameClass, method="json_schema", include_raw=True
+        ).with_config({"run_name": "memory.frame"})
 
     def route_query(
         self,
@@ -99,6 +113,7 @@ class AnthropicRouterModels:
         history: str,
         last_need_db: LastNeedDb | None,
         domain_blurbs: str,
+        memory_context: str = "",
         config: RunnableConfig | None = None,
     ) -> QueryRoute:
         payload = {
@@ -106,6 +121,7 @@ class AnthropicRouterModels:
             "history": history,
             "last_need_db": last_need_db.model_dump() if last_need_db else None,
             "domain_blurbs": domain_blurbs,
+            "memory_context": memory_context,
         }
         messages = [
             SystemMessage(content=QUERY_ROUTER_SYSTEM),
@@ -149,6 +165,7 @@ class AnthropicRouterModels:
         *,
         message: str,
         history: str,
+        memory_block: str = "",
         config: RunnableConfig | None = None,
     ) -> str:
         result = self._answer.invoke(
@@ -156,7 +173,8 @@ class AnthropicRouterModels:
                 SystemMessage(content=DIRECT_ANSWER_SYSTEM),
                 HumanMessage(
                     content=json.dumps(
-                        {"history": history, "message": message}, ensure_ascii=False
+                        {"history": history, "message": message, "memory_block": memory_block},
+                        ensure_ascii=False,
                     )
                 ),
             ],
@@ -183,6 +201,26 @@ class AnthropicRouterModels:
             config=config,
         )
         return _message_text(result)
+
+    def classify_frame(
+        self,
+        *,
+        message: str,
+        frame: dict,
+        config: RunnableConfig | None = None,
+    ) -> str:
+        payload = {"message": message, "query_frame": {key: value for key, value in frame.items() if key != "sql"}}
+        parsed = invoke_structured(
+            self._frame,
+            [
+                SystemMessage(content=FRAME_CLASS_SYSTEM),
+                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+            ],
+            config,
+            FRAME_FALLBACK,
+        )
+        kind = parsed.kind if isinstance(parsed, FrameClass) else FrameClass.model_validate(parsed).kind
+        return kind
 
 
 def _message_text(result) -> str:

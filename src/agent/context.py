@@ -19,6 +19,7 @@ class RouterModels(Protocol):
         history: str,
         last_need_db: LastNeedDb | None,
         domain_blurbs: str,
+        memory_context: str = "",
         config: RunnableConfig | None = None,
     ) -> QueryRoute: ...
 
@@ -37,6 +38,7 @@ class RouterModels(Protocol):
         *,
         message: str,
         history: str,
+        memory_block: str = "",
         config: RunnableConfig | None = None,
     ) -> str: ...
 

@@ -4,14 +4,14 @@ import uuid
 
 import pytest
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.checkpointer import close_checkpointer, delete_thread, get_checkpointer
+from agent.checkpointer import delete_thread
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graphs.chat import build_chat_graph
 from agent.schemas.routes import QueryRoute
-from common.db import chat_conninfo, get_pool
+from config import ActiveConfig
 
 
 class _DirectModels:
@@ -33,30 +33,6 @@ class _DirectModels:
         return "unavailable"
 
 
-def _postgres_ready() -> bool:
-    try:
-        import psycopg
-
-        with psycopg.connect(chat_conninfo(), connect_timeout=2) as conn:
-            conn.execute("SELECT 1")
-    except Exception:
-        return False
-    return True
-
-
-def test_delete_thread_requires_an_id():
-    with pytest.raises(ValueError):
-        delete_thread("  ")
-
-
-@pytest.fixture
-def thread_id():
-    identifier = f"test-{uuid.uuid4()}"
-    yield identifier
-    delete_thread(identifier)
-    close_checkpointer()
-
-
 def _invoke(graph, message: str, thread_id: str) -> dict:
     result = graph.invoke(
         {"messages": [HumanMessage(content=message)]},
@@ -68,25 +44,70 @@ def _invoke(graph, message: str, thread_id: str) -> dict:
     return value if isinstance(value, dict) else dict(value)
 
 
-@pytest.mark.skipif(not _postgres_ready(), reason="local chatbot postgres is not running")
-def test_a_turn_is_written_reloaded_updated_and_deleted(thread_id):
-    graph = build_chat_graph(get_checkpointer())
+def test_delete_thread_requires_an_id():
+    with pytest.raises(ValueError):
+        delete_thread("  ")
+
+
+def test_a_turn_is_written_reloaded_updated_and_deleted():
+    thread_id = f"test-{uuid.uuid4()}"
+    saver = InMemorySaver()
+    graph = build_chat_graph(saver)
     first = _invoke(graph, "Hi", thread_id)
 
     assert first["user_id"] == "user-1"
     assert [message.content for message in first["messages"]] == ["Hi", "hello"]
     assert first.get("catalog_context", "") == ""
 
-    # A second saver on the same pool reads the row Postgres stored.
-    fresh = PostgresSaver(get_pool("checkpointer"))
-    reloaded = build_chat_graph(fresh)
-    stored = reloaded.get_state({"configurable": {"thread_id": thread_id}})
+    stored = graph.get_state({"configurable": {"thread_id": thread_id}})
     assert [message.content for message in stored.values["messages"]] == ["Hi", "hello"]
 
-    updated = _invoke(reloaded, "Thanks", thread_id)
+    updated = _invoke(graph, "Thanks", thread_id)
     assert [message.content for message in updated["messages"]] == ["Hi", "hello", "Thanks", "hello"]
-    assert fresh.get_tuple({"configurable": {"thread_id": f"{thread_id}-other"}}) is None
+    assert graph.get_state({"configurable": {"thread_id": f"{thread_id}-other"}}).values.get("messages") in (
+        None,
+        [],
+    )
 
-    delete_thread(thread_id)
-    assert fresh.get_tuple({"configurable": {"thread_id": thread_id}}) is None
-    assert get_pool("checkpointer") is get_pool("checkpointer")
+    saver.delete_thread(thread_id)
+    assert graph.get_state({"configurable": {"thread_id": thread_id}}).values.get("messages") in (None, [])
+
+
+def _redis_saver():
+    if not ActiveConfig.REDIS_URL:
+        return None
+    try:
+        from langgraph.checkpoint.redis import RedisSaver
+
+        saver = RedisSaver(
+            redis_url=ActiveConfig.REDIS_URL,
+            ttl={"default_ttl": 60 * 24, "refresh_on_read": True},
+        )
+        saver.setup()
+    except Exception:
+        return None
+    return saver
+
+
+def test_redis_checkpoint_roundtrip_when_redis_is_up():
+    saver = _redis_saver()
+    if saver is None:
+        pytest.skip("Redis with RediSearch is not available")
+    thread_id = f"test-{uuid.uuid4()}"
+    try:
+        graph = build_chat_graph(saver)
+        _invoke(graph, "Hi", thread_id)
+        from langgraph.checkpoint.redis import RedisSaver
+
+        fresh = build_chat_graph(RedisSaver(redis_url=ActiveConfig.REDIS_URL))
+        stored = fresh.get_state({"configurable": {"thread_id": thread_id}})
+        assert [message.content for message in stored.values["messages"]] == ["Hi", "hello"]
+        saver.delete_thread(thread_id)
+        assert fresh.get_state({"configurable": {"thread_id": thread_id}}).values.get("messages") in (
+            None,
+            [],
+        )
+    finally:
+        client = getattr(saver, "_redis", None)
+        if client is not None:
+            client.close()

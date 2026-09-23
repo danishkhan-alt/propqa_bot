@@ -231,7 +231,7 @@ def test_catalog_yaml_is_loaded_for_the_turn_and_not_kept():
     loaded = catalog_load(state)
     assert "real_estate_transactions" in loaded["catalog_context"]
     assert "# join: locations" in loaded["catalog_context"]
-    final = finalize({**state, **loaded})
+    final = finalize({**state, **loaded}, {"configurable": {"thread_id": "t-catalog"}})
     assert final["catalog_context"] == ""
     assert final["loaded_domains"] == []
     assert final["last_need_db"].domain_ids == ["transactions"]

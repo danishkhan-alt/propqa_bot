@@ -26,6 +26,8 @@ purpose, limit, and order are yours to set from this message and from last_need_
 
 Do not invent a purpose or a row count. If it was not said and the previous lookup does not carry it, leave that field null.
 
+memory_context is background about this user. Do not copy it into purpose, limit, or order unless this message says the same thing.
+
 confidence is from 0 to 1.
 rationale is one sentence.
 
