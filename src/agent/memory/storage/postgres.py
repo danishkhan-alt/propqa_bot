@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS memory_column_map (
     value_type   text NOT NULL,
     filter_key   text,
     slot         text,
+    cluster      text,
     exclusive    bool NOT NULL DEFAULT false
 );
 """
@@ -109,6 +110,7 @@ CREATE TABLE IF NOT EXISTS memory_column_map (
 COLUMN_MAP_UPGRADE = """
 ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS filter_key text;
 ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS slot text;
+ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS cluster text;
 ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS exclusive bool NOT NULL DEFAULT false;
 """
 
@@ -125,12 +127,14 @@ class PostgresMemoryRepository:
                 cur.executemany(
                     """
                     INSERT INTO memory_column_map (
-                        logical_col, physical_col, domain, value_type, filter_key, slot, exclusive
+                        logical_col, physical_col, domain, value_type,
+                        filter_key, slot, cluster, exclusive
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (logical_col) DO UPDATE SET
                         filter_key = EXCLUDED.filter_key,
                         slot = EXCLUDED.slot,
+                        cluster = EXCLUDED.cluster,
                         exclusive = EXCLUDED.exclusive
                     """,
                     [
@@ -140,7 +144,8 @@ class PostgresMemoryRepository:
                             spec.domain,
                             spec.value_type,
                             spec.filter_key,
-                            spec.slot,
+                            spec.slot.value if spec.slot else None,
+                            spec.cluster.value if spec.cluster else None,
                             spec.exclusive,
                         )
                         for spec in SEED
@@ -162,9 +167,12 @@ class PostgresMemoryRepository:
                     _conn.reset(token)
 
     def columns(self) -> dict[str, ColumnSpec]:
+        from agent.memory.models.column_map import parse_cluster, parse_slot
+
         rows = self._fetch(
             """
-            SELECT logical_col, physical_col, domain, value_type, filter_key, slot, exclusive
+            SELECT logical_col, physical_col, domain, value_type,
+                   filter_key, slot, cluster, exclusive
             FROM memory_column_map
             """
         )
@@ -175,7 +183,8 @@ class PostgresMemoryRepository:
                 domain=row["domain"],
                 value_type=row["value_type"],
                 filter_key=row.get("filter_key"),
-                slot=row.get("slot"),
+                slot=parse_slot(row.get("slot")),
+                cluster=parse_cluster(row.get("cluster")),
                 exclusive=bool(row.get("exclusive")),
             )
             for row in rows

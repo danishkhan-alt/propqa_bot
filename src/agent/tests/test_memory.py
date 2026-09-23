@@ -96,9 +96,7 @@ def test_budget_does_not_leak_into_rta():
     )
     assert kept["predicates"]["price"] == {"lte": 2_000_000}
     assert labels == ["≤ AED 2M"]
-    assert disclosure_line(labels) == (
-        "Using your usual ≤ AED 2M filter — say 'ignore my defaults' to search wide."
-    )
+    assert disclosure_line(labels) == "Searched for ≤ AED 2M."
 
 
 def test_ignore_defaults_skips_saved_filters():

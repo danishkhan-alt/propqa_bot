@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.memory.models.column_map import FILTER_COLUMNS, PROJECTION_DOMAINS, columns_for_domains
+from agent.memory.models.column_map import (
+    FILTER_COLUMNS,
+    PROJECTION_DOMAINS,
+    columns_for_domains,
+    gate_column_for_cluster,
+)
+from agent.enums.memory import MemoryType
 from agent.memory.write.filters import to_filter
 from agent.memory.read.prompt_text import default_label, render_memory_block
 from agent.memory.models.types import clone_frame
-
-_CLUSTER_COLUMN = {
-    "budget": "properties.price",
-    "property_prefs": "properties.bedrooms",
-    "location": "properties.location_id_v2",
-}
 
 
 def apply_saved_preferences(
@@ -37,7 +37,8 @@ def apply_saved_preferences(
     slotted = [
         item
         for item in visible
-        if (item.get("structured") or {}).get("col") and item.get("type") != "episodic"
+        if (item.get("structured") or {}).get("col")
+        and item.get("type") != MemoryType.EPISODIC
     ]
     slotted.sort(key=lambda item: float(item.get("confidence") or 0), reverse=True)
     for item in slotted:
@@ -48,7 +49,9 @@ def apply_saved_preferences(
         if key in predicates:
             continue
         predicates[key] = value
-        labels.append(default_label(item.get("slot"), structured, str(item.get("content") or key)))
+        labels.append(
+            default_label(item.get("slot"), structured, str(item.get("content") or key))
+        )
     for key, value in (profile or {}).get("structured", {}).items():
         if key in predicates:
             continue
@@ -70,7 +73,9 @@ def apply_saved_preferences(
     return current, labels, block
 
 
-def visible_memories(memories: list[dict[str, Any]], domains: list[str]) -> list[dict[str, Any]]:
+def visible_memories(
+    memories: list[dict[str, Any]], domains: list[str]
+) -> list[dict[str, Any]]:
     allowed = columns_for_domains(domains)
     if not domains:
         return list(memories)
@@ -79,8 +84,12 @@ def visible_memories(memories: list[dict[str, Any]], domains: list[str]) -> list
         column = (item.get("structured") or {}).get("col")
         if column and column not in allowed:
             continue
-        required = _CLUSTER_COLUMN.get(str(item.get("cluster") or ""))
-        if required and required not in allowed and item.get("type") != "goal":
+        required = gate_column_for_cluster(item.get("cluster"))
+        if (
+            required
+            and required not in allowed
+            and item.get("type") != MemoryType.GOAL
+        ):
             continue
         kept.append(item)
     return kept

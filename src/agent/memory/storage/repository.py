@@ -68,6 +68,7 @@ class InMemoryRepository:
                 value_type=spec.value_type,
                 filter_key=spec.filter_key,
                 slot=spec.slot,
+                cluster=spec.cluster,
                 exclusive=spec.exclusive,
             )
 

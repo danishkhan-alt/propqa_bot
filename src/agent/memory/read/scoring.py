@@ -5,13 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from agent.enums.memory import MemoryType
+
 HALF_LIFE_DAYS = {
-    "profile": 365,
-    "preference": 90,
-    "semantic": 120,
-    "episodic": 30,
-    "goal": 45,
-    "ephemeral": 3,
+    MemoryType.PROFILE: 365,
+    MemoryType.PREFERENCE: 90,
+    MemoryType.SEMANTIC: 120,
+    MemoryType.EPISODIC: 30,
+    MemoryType.GOAL: 45,
+    MemoryType.EPHEMERAL: 3,
 }
 
 
@@ -32,7 +34,12 @@ def as_datetime(value: datetime | str | None, *, fallback: datetime) -> datetime
 def score_memory(memory: dict[str, Any], *, now: datetime) -> float:
     updated = as_datetime(memory.get("updated_at"), fallback=now)
     days = max(0, (now - updated).days)
-    half_life = HALF_LIFE_DAYS.get(str(memory.get("type") or "preference"), 90)
+    raw_type = memory.get("type") or MemoryType.PREFERENCE
+    try:
+        memory_type = raw_type if isinstance(raw_type, MemoryType) else MemoryType(str(raw_type))
+    except ValueError:
+        memory_type = MemoryType.PREFERENCE
+    half_life = HALF_LIFE_DAYS.get(memory_type, 90)
     recency = 0.5 ** (days / half_life)
     similarity = float(memory.get("similarity") or 0)
     confidence = float(memory.get("confidence") or 0)

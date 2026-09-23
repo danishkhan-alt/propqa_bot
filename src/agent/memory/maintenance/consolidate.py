@@ -8,7 +8,7 @@ from typing import Any
 
 from agent.memory.write.filters import to_filter
 from agent.memory.models.column_map import logical_for_filter_key, slot_for_filter_key
-from agent.memory.models.enums import MemoryProvenance, MemoryStatus, MemoryType
+from agent.enums.memory import MemoryProvenance, MemoryStatus, MemoryType
 from agent.memory.storage.repository import new_id
 from agent.memory.session.bootstrap import invalidate
 from agent.memory.models.types import MemoryRecord, utcnow

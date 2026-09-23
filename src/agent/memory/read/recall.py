@@ -9,23 +9,47 @@ from typing import Any
 from agent.memory.storage.cache import RECALL_TTL_SECONDS
 from agent.memory.read.prompt_text import render_memory_block
 from agent.memory.read.scoring import score_memory
+from agent.enums.memory import MemoryCluster, MemoryStatus
 from agent.memory.models.types import DEFAULT_CLUSTERS, utcnow
 
-_CLUSTER_WORDS = (
-    ("budget", ("budget", "aed", "million", "cheap", "cheaper", "price", "afford")),
-    ("location", ("marina", "downtown", "community", "area", "near", "neighbourhood", "neighborhood")),
-    ("property_prefs", ("bed", "apartment", "villa", "furnished", "balcony", "sqft", "bedroom")),
-    ("persona", ("invest", "yield", "roi", "tenant", "end user", "end-user")),
-    ("goal", ("looking for", "searching for", "want to buy", "want to rent")),
+_CLUSTER_WORDS: tuple[tuple[MemoryCluster, tuple[str, ...]], ...] = (
+    (
+        MemoryCluster.BUDGET,
+        ("budget", "aed", "million", "cheap", "cheaper", "price", "afford"),
+    ),
+    (
+        MemoryCluster.LOCATION,
+        (
+            "marina",
+            "downtown",
+            "community",
+            "area",
+            "near",
+            "neighbourhood",
+            "neighborhood",
+        ),
+    ),
+    (
+        MemoryCluster.PROPERTY_PREFS,
+        ("bed", "apartment", "villa", "furnished", "balcony", "sqft", "bedroom"),
+    ),
+    (
+        MemoryCluster.PERSONA,
+        ("invest", "yield", "roi", "tenant", "end user", "end-user"),
+    ),
+    (
+        MemoryCluster.GOAL,
+        ("looking for", "searching for", "want to buy", "want to rent"),
+    ),
 )
 
 
 def classify_clusters(text: str) -> list[str]:
     lowered = (text or "").lower()
-    found = []
+    found: list[str] = []
     for cluster, words in _CLUSTER_WORDS:
         if any(word in lowered for word in words):
-            found.append(cluster)
+            found.append(cluster.value)
     return found
 
 
@@ -60,7 +84,7 @@ def recall_for_user(
         hits = store.search(
             ("users", user_id),
             query=query,
-            filter={"status": "active", "cluster": clusters},
+            filter={"status": MemoryStatus.ACTIVE.value, "cluster": clusters},
             limit=12,
         )
         candidates = []
@@ -70,7 +94,14 @@ def recall_for_user(
             value["similarity"] = float(item.score or 0)
             candidates.append(value)
     else:
-        pairs = repository.search(user_id, query=query, clusters=clusters, status="active", limit=12, now=moment)
+        pairs = repository.search(
+            user_id,
+            query=query,
+            clusters=clusters,
+            status=MemoryStatus.ACTIVE.value,
+            limit=12,
+            now=moment,
+        )
         candidates = []
         for record, score in pairs:
             from agent.memory.models.types import public_record

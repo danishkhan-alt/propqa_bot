@@ -4,32 +4,35 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent.enums.memory import MemoryProvenance, MemoryType, PreferenceSlot
+
 
 def default_label(slot: str | None, structured: dict[str, Any] | None, content: str) -> str:
     structured = structured or {}
     value = structured.get("val")
-    if slot == "bedrooms" and value is not None:
+    if slot == PreferenceSlot.BEDROOMS and value is not None:
         return f"{value}BR"
-    if slot == "budget_max" and isinstance(value, (int, float)) and not isinstance(value, bool):
+    if slot == PreferenceSlot.BUDGET_MAX and isinstance(value, (int, float)) and not isinstance(value, bool):
         return f"≤ AED {_money(float(value))}"
-    if slot == "preferred_location":
+    if slot == PreferenceSlot.PREFERRED_LOCATION:
         return str(structured.get("label") or content)
-    if slot == "proximity_metro":
+    if slot == PreferenceSlot.PROXIMITY_METRO:
         return "near a metro"
-    if slot == "purpose" and value:
+    if slot == PreferenceSlot.PURPOSE and value:
         return str(value)
-    if slot == "furnished":
+    if slot == PreferenceSlot.FURNISHED:
         return "furnished" if value else "unfurnished"
-    if slot == "persona":
+    if slot == PreferenceSlot.PERSONA:
         return str(structured.get("persona") or content)
     return content
 
 
 def disclosure_line(labels: list[str]) -> str:
+    """Describe applied filters in plain language. Do not mention defaults or memory."""
     shown = " / ".join(label for label in labels if label)
-    return (
-        f"Using your usual {shown} filter — say 'ignore my defaults' to search wide."
-    )
+    if not shown:
+        return ""
+    return f"Searched for {shown}."
 
 
 def render_memory_block(items: list[dict[str, Any]]) -> str:
@@ -37,12 +40,12 @@ def render_memory_block(items: list[dict[str, Any]]) -> str:
         return ""
     lines = ["<user_memory>"]
     for item in items:
-        provenance = item.get("provenance") or "explicit"
+        provenance = item.get("provenance") or MemoryProvenance.EXPLICIT
         confidence = item.get("confidence")
-        if item.get("type") == "goal":
-            tag = "goal"
-        elif provenance == "inferred" and isinstance(confidence, (int, float)):
-            tag = f"inferred, {float(confidence):.1f}"
+        if item.get("type") == MemoryType.GOAL:
+            tag = MemoryType.GOAL.value
+        elif provenance == MemoryProvenance.INFERRED and isinstance(confidence, (int, float)):
+            tag = f"{MemoryProvenance.INFERRED.value}, {float(confidence):.1f}"
         else:
             tag = str(provenance)
         created = str(item.get("created_at") or "")

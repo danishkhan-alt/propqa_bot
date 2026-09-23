@@ -1,4 +1,4 @@
-"""Fixed vocabularies for memory rows and clusters."""
+"""Fixed vocabularies for memory rows, clusters, and preference slots."""
 
 from __future__ import annotations
 
@@ -40,6 +40,18 @@ class MemoryCluster(str, Enum):
     TRAVEL = "travel"
 
 
+class PreferenceSlot(str, Enum):
+    BEDROOMS = "bedrooms"
+    BUDGET_MAX = "budget_max"
+    PREFERRED_LOCATION = "preferred_location"
+    PROXIMITY_METRO = "proximity_metro"
+    PURPOSE = "purpose"
+    FURNISHED = "furnished"
+    PERSONA = "persona"
+    PROJECTION_PREF = "projection_pref"
+    ACTIVE_GOAL = "active_goal"
+
+
 DEFAULT_CLUSTERS: tuple[MemoryCluster, ...] = (
     MemoryCluster.PROPERTY_PREFS,
     MemoryCluster.BUDGET,
@@ -49,3 +61,11 @@ DEFAULT_CLUSTERS: tuple[MemoryCluster, ...] = (
 )
 
 ALL_CLUSTERS: frozenset[MemoryCluster] = frozenset(MemoryCluster)
+
+NON_COLUMN_EXCLUSIVE_SLOTS: frozenset[PreferenceSlot] = frozenset(
+    {
+        PreferenceSlot.PERSONA,
+        PreferenceSlot.PROJECTION_PREF,
+        PreferenceSlot.ACTIVE_GOAL,
+    }
+)

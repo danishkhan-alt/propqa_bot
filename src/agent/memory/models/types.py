@@ -6,13 +6,14 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any
 
-from agent.memory.models.enums import (
+from agent.enums.memory import (
     ALL_CLUSTERS,
     DEFAULT_CLUSTERS,
     MemoryCluster,
     MemoryProvenance,
     MemoryStatus,
     MemoryType,
+    PreferenceSlot,
 )
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "MemorySettings",
     "MemoryStatus",
     "MemoryType",
+    "PreferenceSlot",
     "clone_frame",
     "copy_record",
     "empty_frame",

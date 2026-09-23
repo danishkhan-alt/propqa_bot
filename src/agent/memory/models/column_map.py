@@ -1,13 +1,19 @@
 """Logical columns, filter keys, preference slots, and domain whitelists.
 
 `properties.price` is a property/market fact. An RTA question must not inherit it.
-Slots and filter keys live here so consolidate / extract / personalize share one map.
+Slots, filter keys, and cluster gates live here so consolidate / extract / personalize
+share one map.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from agent.enums.memory import (
+    MemoryCluster,
+    NON_COLUMN_EXCLUSIVE_SLOTS,
+    PreferenceSlot,
+)
 from agent.schemas.routes import DomainRoute, as_domain_route
 
 
@@ -18,7 +24,8 @@ class ColumnSpec:
     domain: str
     value_type: str
     filter_key: str | None = None
-    slot: str | None = None
+    slot: PreferenceSlot | None = None
+    cluster: MemoryCluster | None = None
     exclusive: bool = False
 
 
@@ -29,7 +36,8 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "int",
         filter_key="bedrooms",
-        slot="bedrooms",
+        slot=PreferenceSlot.BEDROOMS,
+        cluster=MemoryCluster.PROPERTY_PREFS,
         exclusive=False,
     ),
     ColumnSpec(
@@ -38,7 +46,8 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "id_list",
         filter_key="location_id_v2",
-        slot="preferred_location",
+        slot=PreferenceSlot.PREFERRED_LOCATION,
+        cluster=MemoryCluster.LOCATION,
         exclusive=True,
     ),
     ColumnSpec(
@@ -47,7 +56,8 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "numeric",
         filter_key="price",
-        slot="budget_max",
+        slot=PreferenceSlot.BUDGET_MAX,
+        cluster=MemoryCluster.BUDGET,
         exclusive=True,
     ),
     ColumnSpec(
@@ -56,7 +66,8 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "int",
         filter_key="metro_distance_m",
-        slot="proximity_metro",
+        slot=PreferenceSlot.PROXIMITY_METRO,
+        cluster=MemoryCluster.PROPERTY_PREFS,
         exclusive=True,
     ),
     ColumnSpec(
@@ -65,7 +76,7 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "text",
         filter_key="purpose",
-        slot="purpose",
+        slot=PreferenceSlot.PURPOSE,
         exclusive=True,
     ),
     ColumnSpec(
@@ -74,13 +85,11 @@ SEED: tuple[ColumnSpec, ...] = (
         "property_search",
         "bool",
         filter_key="is_furnished",
-        slot="furnished",
+        slot=PreferenceSlot.FURNISHED,
+        cluster=MemoryCluster.PROPERTY_PREFS,
         exclusive=True,
     ),
 )
-
-# Slots with no warehouse column (persona / goal / projection prefs).
-NON_COLUMN_EXCLUSIVE_SLOTS = frozenset({"persona", "projection_pref", "active_goal"})
 
 # A column's owner is one domain. Several domains may still inject it.
 DOMAIN_COLUMNS: dict[str, frozenset[str]] = {
@@ -114,10 +123,39 @@ FILTER_COLUMNS = {
 }
 
 EXCLUSIVE_SLOTS = frozenset(
-    {spec.slot for spec in SEED if spec.slot and spec.exclusive} | NON_COLUMN_EXCLUSIVE_SLOTS
+    {spec.slot.value for spec in SEED if spec.slot and spec.exclusive}
+    | {slot.value for slot in NON_COLUMN_EXCLUSIVE_SLOTS}
 )
 
+# One representative column per cluster — used to hide whole clusters off-domain.
+CLUSTER_GATE_COLUMN: dict[MemoryCluster, str] = {}
+for _spec in SEED:
+    if _spec.cluster and _spec.cluster not in CLUSTER_GATE_COLUMN:
+        CLUSTER_GATE_COLUMN[_spec.cluster] = _spec.logical_col
+
 PROJECTION_DOMAINS = frozenset({"property_search", "market_intel"})
+
+
+def parse_slot(value: str | PreferenceSlot | None) -> PreferenceSlot | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, PreferenceSlot):
+        return value
+    try:
+        return PreferenceSlot(value)
+    except ValueError:
+        return None
+
+
+def parse_cluster(value: str | MemoryCluster | None) -> MemoryCluster | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, MemoryCluster):
+        return value
+    try:
+        return MemoryCluster(value)
+    except ValueError:
+        return None
 
 
 def seed_map() -> dict[str, ColumnSpec]:
@@ -129,8 +167,8 @@ def slot_for_filter_key(
 ) -> str | None:
     """Map a QueryFrame predicate key (e.g. price) to its preference slot (budget_max)."""
     for spec in (columns or seed_map()).values():
-        if spec.filter_key == filter_key:
-            return spec.slot
+        if spec.filter_key == filter_key and spec.slot is not None:
+            return spec.slot.value
     return None
 
 
@@ -142,6 +180,18 @@ def logical_for_filter_key(
         if spec.filter_key == filter_key:
             return spec.logical_col
     return FILTER_COLUMNS.get(filter_key)
+
+
+def gate_column_for_cluster(cluster: str | MemoryCluster | None) -> str | None:
+    """Column that must be allowed in-domain for this cluster's memories to show."""
+    if cluster is None or cluster == "":
+        return None
+    if isinstance(cluster, MemoryCluster):
+        return CLUSTER_GATE_COLUMN.get(cluster)
+    try:
+        return CLUSTER_GATE_COLUMN.get(MemoryCluster(cluster))
+    except ValueError:
+        return None
 
 
 def columns_for_domains(domains: list[str] | set[str]) -> frozenset[str]:
