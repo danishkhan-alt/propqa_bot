@@ -8,6 +8,7 @@ from typing import Any
 
 from agent.memory.write.filters import to_filter
 from agent.memory.models.column_map import logical_for_filter_key, slot_for_filter_key
+from agent.memory.models.enums import MemoryProvenance, MemoryStatus, MemoryType
 from agent.memory.storage.repository import new_id
 from agent.memory.session.bootstrap import invalidate
 from agent.memory.models.types import MemoryRecord, utcnow
@@ -33,9 +34,9 @@ def consolidate_user(repository, user_id: str, *, now: datetime | None = None, s
 
 def _expire(repository, user_id: str, now: datetime) -> None:
     for row in repository.list_all(user_id):
-        if row.status != "active" or row.expires_at is None or row.expires_at > now:
+        if row.status != MemoryStatus.ACTIVE or row.expires_at is None or row.expires_at > now:
             continue
-        row.status = "expired"
+        row.status = MemoryStatus.EXPIRED
         row.updated_at = now
         repository.update(row)
         repository.add_event(user_id, row.id, "expired", "worker", {}, now)
@@ -43,7 +44,7 @@ def _expire(repository, user_id: str, now: datetime) -> None:
 
 def _decay(repository, user_id: str, now: datetime) -> None:
     for row in repository.list_active(user_id, now=now):
-        if row.provenance != "inferred":
+        if row.provenance != MemoryProvenance.INFERRED:
             continue
         anchor = row.last_accessed_at or row.updated_at
         if (now - anchor).days < 7:
@@ -52,7 +53,7 @@ def _decay(repository, user_id: str, now: datetime) -> None:
             continue
         row.confidence = row.confidence * 0.97
         if row.confidence < 0.3:
-            row.status = "expired"
+            row.status = MemoryStatus.EXPIRED
             row.updated_at = now
             repository.update(row)
             repository.add_event(user_id, row.id, "expired", "worker", {"decay": True}, now)
@@ -64,7 +65,7 @@ def _decay(repository, user_id: str, now: datetime) -> None:
 def _infer(repository, user_id: str, now: datetime) -> None:
     groups: dict[str, list[MemoryRecord]] = {}
     for row in repository.list_active(user_id, now=now):
-        if row.type != "episodic":
+        if row.type != MemoryType.EPISODIC:
             continue
         key = _predicate_key(row.structured)
         if not key:
@@ -83,14 +84,14 @@ def _infer(repository, user_id: str, now: datetime) -> None:
         record = MemoryRecord(
             id=new_id(),
             user_id=user_id,
-            type="semantic",
+            type=MemoryType.SEMANTIC,
             cluster=rows[0].cluster,
             slot=_single_slot(predicates, columns),
             content=_semantic_sentence(predicates),
-            structured={"predicates": predicates, "source": "episodic", **structured},
+            structured={"predicates": predicates, "source": MemoryType.EPISODIC.value, **structured},
             confidence=0.6,
             importance=0.55,
-            provenance="inferred",
+            provenance=MemoryProvenance.INFERRED,
             created_at=now,
             updated_at=now,
             valid_from=now,
@@ -110,7 +111,7 @@ def _summarise(repository, user_id: str, now: datetime, summarize) -> None:
     if summarize is not None:
         summary, structured = summarize(active)
     else:
-        text = " ".join(row.content for row in active if row.type != "episodic")
+        text = " ".join(row.content for row in active if row.type != MemoryType.EPISODIC)
         summary = clip_words(text, 150) or "No saved preferences yet."
         structured = _profile_structured(active)
     repository.save_profile(user_id, summary, structured, now=now)
@@ -122,12 +123,14 @@ def _retain(repository, user_id: str, settings, now: datetime) -> None:
     if settings.retention_days:
         cutoff = now - timedelta(days=int(settings.retention_days))
         for row in repository.list_all(user_id):
-            if row.status == "active" and row.created_at < cutoff:
-                row.status = "expired"
+            if row.status == MemoryStatus.ACTIVE and row.created_at < cutoff:
+                row.status = MemoryStatus.EXPIRED
                 row.updated_at = now
                 repository.update(row)
                 repository.add_event(user_id, row.id, "expired", "worker", {"retention": True}, now)
-    repository.hard_delete_status(status="deleted", older_than=now - timedelta(days=30))
+    repository.hard_delete_status(
+        status=MemoryStatus.DELETED.value, older_than=now - timedelta(days=30)
+    )
 
 
 def _predicate_key(structured: dict[str, Any] | None) -> str:
@@ -144,16 +147,18 @@ def _explicit_covers(repository, user_id: str, predicates: dict) -> bool:
         if not slot:
             continue
         existing = repository.get_active_slot(user_id, slot)
-        if existing is not None and existing.provenance == "explicit":
+        if existing is not None and existing.provenance == MemoryProvenance.EXPLICIT:
             return True
     return False
 
 
 def _semantic_exists(repository, user_id: str, key: str) -> bool:
     for row in repository.list_active(user_id):
-        if row.type == "semantic" and _predicate_key(row.structured) == key:
+        if row.type != MemoryType.SEMANTIC:
+            continue
+        if _predicate_key(row.structured) == key:
             return True
-        if row.type == "semantic" and json.dumps((row.structured or {}).get("predicates") or {}, sort_keys=True, default=str) == key:
+        if json.dumps((row.structured or {}).get("predicates") or {}, sort_keys=True, default=str) == key:
             return True
     return False
 
@@ -193,7 +198,7 @@ def _profile_structured(rows: list[MemoryRecord]) -> dict[str, Any]:
     structured: dict[str, Any] = {}
     for row in ordered:
         body = row.structured or {}
-        if "col" not in body or row.type == "episodic":
+        if "col" not in body or row.type == MemoryType.EPISODIC:
             continue
         try:
             key, value = to_filter(body)
@@ -208,12 +213,12 @@ def _retire_episodic(repository, user_id: str, rows: list[MemoryRecord], now: da
     semantic_keys = {
         json.dumps((row.structured or {}).get("predicates") or {}, sort_keys=True, default=str)
         for row in rows
-        if row.type == "semantic"
+        if row.type == MemoryType.SEMANTIC
     }
     semantic_keys.discard("")
     grouped: dict[str, list[MemoryRecord]] = {}
     for row in rows:
-        if row.type != "episodic":
+        if row.type != MemoryType.EPISODIC:
             continue
         key = _predicate_key(row.structured)
         if key in semantic_keys:
@@ -221,7 +226,7 @@ def _retire_episodic(repository, user_id: str, rows: list[MemoryRecord], now: da
     for group in grouped.values():
         group.sort(key=lambda row: row.created_at, reverse=True)
         for row in group[1:]:
-            row.status = "superseded"
+            row.status = MemoryStatus.SUPERSEDED
             row.updated_at = now
             repository.update(row)
             repository.add_event(user_id, row.id, "superseded", "worker", {"redundant": True}, now)
