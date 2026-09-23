@@ -24,9 +24,10 @@ from agent.graphs.nodes import (
     route_after_domain,
     route_after_query,
 )
+from agent.graphs.sql import sql_lookup
+from agent.services.tracing import langfuse_client
 from agent.states.chat import ChatInput, ChatState
 from common.logger import get_logger
-from config import ActiveConfig
 
 logger = get_logger("agent.router")
 
@@ -34,11 +35,10 @@ _graph: CompiledStateGraph | None = None
 
 
 def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
-    """Query router, then domain router and catalog load when the turn needs the warehouse.
+    """Query router, then domain router, catalog load, and a read-only SQL lookup.
 
     Memory runs around that path: load working state, recall long-term items, refine the
-    query frame, then queue extraction after the answer. The SQL agent is not in this
-    graph yet.
+    query frame, then queue extraction after the answer.
     """
     builder = StateGraph(ChatState, context_schema=AgentContext, input_schema=ChatInput)
     builder.add_node("load_context", load_context)
@@ -49,6 +49,7 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_node("domain_router", domain_router)
     builder.add_node("apply_defaults", apply_defaults)
     builder.add_node("catalog_load", catalog_load)
+    builder.add_node("sql_lookup", sql_lookup)
     builder.add_node("answer", answer)
     builder.add_node("enqueue_extraction", enqueue_extraction)
     builder.add_node("finalize", finalize)
@@ -61,7 +62,8 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_conditional_edges("query_router", route_after_query, ["domain_router", "answer"])
     builder.add_conditional_edges("domain_router", route_after_domain, ["apply_defaults", "answer"])
     builder.add_edge("apply_defaults", "catalog_load")
-    builder.add_edge("catalog_load", "answer")
+    builder.add_edge("catalog_load", "sql_lookup")
+    builder.add_edge("sql_lookup", "answer")
     builder.add_edge("answer", "enqueue_extraction")
     builder.add_edge("enqueue_extraction", "finalize")
     builder.add_edge("finalize", END)
@@ -91,22 +93,35 @@ def run_turn(
     models: RouterModels | None = None,
 ) -> dict:
     """Run one user turn. `thread_id` reloads and updates that chat."""
-    result = get_chat_graph().invoke(
-        {"messages": [HumanMessage(content=message)]},
-        config={
-            "configurable": {"thread_id": thread_id, "user_id": user_id},
-            "callbacks": _tracing_callbacks(),
-            "metadata": {"user_id": user_id, "session_id": thread_id},
-        },
-        context=AgentContext(user_id=user_id, models=models),
-        version="v2",
-    )
-    value = getattr(result, "value", result)
-    return value if isinstance(value, dict) else dict(value)
+    client = langfuse_client()
+    callbacks = _tracing_callbacks(client)
+
+    def invoke() -> dict:
+        result = get_chat_graph().invoke(
+            {"messages": [HumanMessage(content=message)]},
+            config={
+                "configurable": {"thread_id": thread_id, "user_id": user_id},
+                "callbacks": callbacks,
+                "metadata": {"user_id": user_id, "session_id": thread_id},
+            },
+            context=AgentContext(user_id=user_id, models=models),
+            version="v2",
+        )
+        value = getattr(result, "value", result)
+        return value if isinstance(value, dict) else dict(value)
+
+    if client is None:
+        return invoke()
+    from langfuse import propagate_attributes
+
+    with propagate_attributes(user_id=user_id, session_id=thread_id):
+        result = invoke()
+    client.flush()
+    return result
 
 
-def _tracing_callbacks() -> list:
-    if not ActiveConfig.LANGFUSE_PUBLIC_KEY or not ActiveConfig.LANGFUSE_SECRET_KEY:
+def _tracing_callbacks(client) -> list:
+    if client is None:
         return []
     try:
         from langfuse.langchain import CallbackHandler

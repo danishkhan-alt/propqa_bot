@@ -31,6 +31,7 @@ class ChatState(TypedDict, total=False):
     pending_forget: dict | None
     behaviour_events: list
     sql_rows: list
+    sql_result: dict | None
 
 
 class ChatInput(TypedDict):

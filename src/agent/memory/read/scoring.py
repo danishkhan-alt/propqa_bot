@@ -45,3 +45,4 @@ def score_memory(memory: dict[str, Any], *, now: datetime) -> float:
     confidence = float(memory.get("confidence") or 0)
     importance = float(memory.get("importance") or 0)
     return 0.45 * similarity + 0.25 * confidence + 0.20 * importance + 0.10 * recency
+    

@@ -1,4 +1,11 @@
-from common.db.postgres import build_conninfo, chat_conninfo, close_pool, close_pools, get_pool
+from common.db.postgres import (
+    build_conninfo,
+    chat_conninfo,
+    close_pool,
+    close_pools,
+    get_pool,
+    warehouse_conninfo,
+)
 
 __all__ = [
     "build_conninfo",
@@ -6,4 +13,5 @@ __all__ = [
     "close_pool",
     "close_pools",
     "get_pool",
+    "warehouse_conninfo",
 ]

@@ -41,6 +41,20 @@ def build_conninfo(
     return make_conninfo(**params)
 
 
+def warehouse_conninfo() -> str:
+    """Connection string for the read-only warehouse. Not the chatbot database."""
+    from config import ActiveConfig
+
+    return build_conninfo(
+        host=ActiveConfig.AUDIT_DB_HOST,
+        port=ActiveConfig.AUDIT_DB_PORT,
+        dbname=ActiveConfig.AUDIT_DB_DATABASE,
+        user=ActiveConfig.AUDIT_DB_USERNAME,
+        password=ActiveConfig.AUDIT_DB_PASSWORD,
+        sslmode=ActiveConfig.AUDIT_DB_SSLMODE,
+    )
+
+
 def chat_conninfo() -> str:
     """Connection string for the chatbot database, never the warehouse."""
     from config import ActiveConfig

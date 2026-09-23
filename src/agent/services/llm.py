@@ -10,7 +10,9 @@ from agent.memory.session.follow_up import FrameClass
 from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
+from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
+from agent.schemas.sql import SqlDraft
 from common.logger import get_logger
 
 logger = get_logger("agent.router")
@@ -38,6 +40,8 @@ kind is one of:
 """
 
 FRAME_FALLBACK = FrameClass(kind="new")
+
+SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
 
 
 def invoke_structured(
@@ -79,7 +83,7 @@ def invoke_structured(
 
 
 class AnthropicRouterModels:
-    """Fast Claude for routing, main model for direct answers. No tools."""
+    """Fast Claude for routing. The main model drafts SQL and writes the answer."""
 
     def __init__(self) -> None:
         from langchain_anthropic import ChatAnthropic
@@ -102,6 +106,15 @@ class AnthropicRouterModels:
             DomainRoute, method="json_schema", include_raw=True
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
+        self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
+        sql_llm = ChatAnthropic(
+            model=ActiveConfig.AI_MODEL,
+            api_key=api_key,
+            max_tokens=min(ActiveConfig.ANTHROPIC_MAX_OUTPUT_TOKENS, 2048),
+        )
+        self._sql = sql_llm.with_structured_output(
+            SqlDraft, method="json_schema", include_raw=True
+        ).with_config({"run_name": "sql.generate"})
         self._frame = router_llm.with_structured_output(
             FrameClass, method="json_schema", include_raw=True
         ).with_config({"run_name": "memory.frame"})
@@ -197,6 +210,72 @@ class AnthropicRouterModels:
                         {"history": history, "message": message}, ensure_ascii=False
                     )
                 ),
+            ],
+            config=config,
+        )
+        return _message_text(result)
+
+    def draft_sql(
+        self,
+        *,
+        message: str,
+        history: str,
+        catalog: str,
+        allowed_tables: list[str],
+        assumptions: dict | None,
+        query_frame: dict | None,
+        previous_error: str | None,
+        config: RunnableConfig | None = None,
+    ) -> SqlDraft:
+        payload = {
+            "message": message,
+            "history": history,
+            "catalog": catalog,
+            "allowed_tables": allowed_tables,
+            "assumptions": assumptions,
+            "query_frame": query_frame,
+            "previous_error": previous_error,
+        }
+        parsed = invoke_structured(
+            self._sql,
+            [
+                SystemMessage(content=SQL_DRAFT_SYSTEM),
+                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+            ],
+            config,
+            SQL_DRAFT_FALLBACK,
+        )
+        return parsed if isinstance(parsed, SqlDraft) else SqlDraft.model_validate(parsed)
+
+    def answer_from_sql(
+        self,
+        *,
+        message: str,
+        history: str,
+        rows: list[dict],
+        columns: list[str],
+        row_count: int,
+        truncated: bool,
+        purpose: str,
+        assumptions: dict | None,
+        memory_block: str = "",
+        config: RunnableConfig | None = None,
+    ) -> str:
+        payload = {
+            "message": message,
+            "history": history,
+            "purpose": purpose,
+            "assumptions": assumptions,
+            "columns": columns,
+            "rows": rows,
+            "row_count": row_count,
+            "truncated": truncated,
+            "memory_block": memory_block,
+        }
+        result = self._sql_answer.invoke(
+            [
+                SystemMessage(content=SQL_ANSWER_SYSTEM),
+                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
             ],
             config=config,
         )

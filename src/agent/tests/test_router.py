@@ -18,6 +18,8 @@ from agent.schemas.routes import (
     as_last_need_db,
     as_query_route,
 )
+from agent.schemas.sql import SqlDraft
+from agent.sql.execute import SqlPage
 from agent.services.llm import invoke_structured
 from agent.validator import apply_query_policy, sanitize_domain_route
 
@@ -107,12 +109,40 @@ class ScriptedModels:
         asked = kwargs["message"].strip()
         return f"I don't have enough information about {asked}. If you want, we can look at the area around it."
 
+    def draft_sql(self, **kwargs) -> SqlDraft:
+        bare = [name for name in kwargs.get("allowed_tables") or [] if "." not in name]
+        table = bare[0] if bare else "real_estate_transactions"
+        return SqlDraft(sql=f"SELECT * FROM {table}", purpose="lookup")
 
-def _turn(graph, message: str, thread_id: str, models: ScriptedModels) -> dict:
+    def answer_from_sql(self, **kwargs) -> str:
+        self.answer_calls += 1
+        self.last_sql_rows = list(kwargs["rows"])
+        value = next(iter(kwargs["rows"][0].values()))
+        return f"The average sale price is {value} AED."
+
+
+def _fixture_sql():
+    def run(sql: str) -> SqlPage:
+        del sql
+        return SqlPage(
+            columns=["average_price"],
+            rows=[{"average_price": "1650000"}],
+            truncated=False,
+            duration_ms=1,
+        )
+
+    return run
+
+
+def _turn(graph, message: str, thread_id: str, models: ScriptedModels, runner=None) -> dict:
     result = graph.invoke(
         {"messages": [HumanMessage(content=message)]},
         config={"configurable": {"thread_id": thread_id}},
-        context=AgentContext(user_id="user-1", models=models),
+        context=AgentContext(
+            user_id="user-1",
+            models=models,
+            sql_runner=runner or _fixture_sql(),
+        ),
         version="v2",
     )
     value = getattr(result, "value", result)
@@ -149,10 +179,13 @@ def test_price_question_follows_the_model_into_a_lookup():
     assert domain is not None
     assert domain.domain_ids == ["transactions"]
     assert domain.join_ids == ["locations"]
-    assert state["awaiting_sql"] is True
+    assert state["awaiting_sql"] is False
     assert state["catalog_context"] == ""
+    assert state.get("sql_result") is None
+    assert "1650000" in state["messages"][-1].content
     assert as_last_need_db(state["last_need_db"]).domain_ids == ["transactions"]
-    assert models.answer_calls == 0
+    assert models.answer_calls == 1
+    assert models.last_sql_rows == [{"average_price": "1650000"}]
 
 
 def test_refine_reuses_domains_when_the_model_says_refine():

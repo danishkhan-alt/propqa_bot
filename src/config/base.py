@@ -73,6 +73,12 @@ class Config:
     AUDIT_DB_PASSWORD = os.getenv("AUDIT_DB_PASSWORD", "")
     AUDIT_DB_SCHEMA = os.getenv("AUDIT_DB_SCHEMA", "public")
     DB_SEARCH_PATH = os.getenv("DB_SEARCH_PATH", "public")
+    AUDIT_DB_SSLMODE = os.getenv(
+        "AUDIT_DB_SSLMODE",
+        "require" if ENVIRONMENT.is_deployed else "disable",
+    )
+    SQL_ROW_CAP = _int("SQL_ROW_CAP", 100)
+    SQL_TIMEOUT_MS = _int("SQL_TIMEOUT_MS", 15_000)
 
     # Chatbot database on this machine's Postgres. The socket uses peer auth, so
     # the role matches the OS user and there is no password. Not the warehouse.

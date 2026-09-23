@@ -7,6 +7,8 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
+from agent.schemas.sql import SqlDraft
+from agent.sql.execute import SqlPage
 
 
 class RouterModels(Protocol):
@@ -50,6 +52,40 @@ class RouterModels(Protocol):
         config: RunnableConfig | None = None,
     ) -> str: ...
 
+    def draft_sql(
+        self,
+        *,
+        message: str,
+        history: str,
+        catalog: str,
+        allowed_tables: list[str],
+        assumptions: dict | None,
+        query_frame: dict | None,
+        previous_error: str | None,
+        config: RunnableConfig | None = None,
+    ) -> SqlDraft: ...
+
+    def answer_from_sql(
+        self,
+        *,
+        message: str,
+        history: str,
+        rows: list[dict],
+        columns: list[str],
+        row_count: int,
+        truncated: bool,
+        purpose: str,
+        assumptions: dict | None,
+        memory_block: str = "",
+        config: RunnableConfig | None = None,
+    ) -> str: ...
+
+
+class SqlRunner(Protocol):
+    """Runs one already-guarded SELECT and returns the page of rows."""
+
+    def __call__(self, sql: str) -> SqlPage: ...
+
 
 @dataclass
 class AgentContext:
@@ -57,3 +93,4 @@ class AgentContext:
 
     user_id: str
     models: RouterModels | None = None
+    sql_runner: SqlRunner | None = None

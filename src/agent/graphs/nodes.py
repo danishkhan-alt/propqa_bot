@@ -25,7 +25,9 @@ from agent.services.catalog_index import (
 from agent.services.llm import default_models
 from agent.graphs.memory import persist_working, read_context
 from agent.memory.read.prompt_text import append_memory_notes
+from agent.memory.session.search_results import summarize_search_results
 from agent.services.transcript import history_summary, latest_user_text
+from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
 from common.logger import get_logger
@@ -184,8 +186,7 @@ def answer(
     if domain is None or not domain.domain_ids:
         return _unavailable(state, runtime, message, messages, config)
 
-    # SQL agent will run between catalog_load and this node. Until then, do not invent numbers.
-    return {"awaiting_sql": True}
+    return _answer_from_lookup(state, runtime, message, messages, config)
 
 
 def finalize(state: ChatState, config: RunnableConfig) -> dict:
@@ -201,13 +202,22 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
     ):
         message = latest_user_text(state.get("messages") or [])
         assumptions = as_assumptions(state.get("assumptions"))
+        rows = list(state.get("sql_rows") or [])
+        sql_result = state.get("sql_result") or {}
+        meta = assumptions.model_dump() if assumptions else {}
+        if rows:
+            meta.update(summarize_search_results(rows))
+        if sql_result:
+            meta["row_count"] = sql_result.get("row_count", meta.get("row_count"))
+            meta["truncated"] = bool(sql_result.get("truncated"))
         update["last_need_db"] = LastNeedDb(
             domain_ids=list(domain.domain_ids),
             join_ids=list(domain.join_ids),
             intent_summary=message.strip()[:240],
-            result_meta=assumptions.model_dump() if assumptions else {},
+            result_meta=meta,
         )
-        update["awaiting_sql"] = True
+        update["awaiting_sql"] = False
+        update["sql_result"] = None
         logger.info(
             "catalog.unload",
             extra={
@@ -235,6 +245,49 @@ def route_after_domain(state: ChatState) -> str:
     if domain is not None and domain.domain_ids:
         return "apply_defaults"
     return "answer"
+
+
+def _answer_from_lookup(
+    state: ChatState,
+    runtime: Runtime[AgentContext],
+    message: str,
+    messages: list,
+    config: RunnableConfig,
+) -> dict:
+    result = state.get("sql_result") or {}
+    status = result.get("status")
+    assumptions = as_assumptions(state.get("assumptions"))
+    if status == "rows":
+        text = _models(runtime).answer_from_sql(
+            message=message,
+            history=history_summary(messages),
+            rows=list(result.get("rows") or []),
+            columns=list(result.get("columns") or []),
+            row_count=int(result.get("row_count") or 0),
+            truncated=bool(result.get("truncated")),
+            purpose=str(result.get("purpose") or ""),
+            assumptions=assumptions.model_dump() if assumptions else None,
+            memory_block=state.get("memory_block") or "",
+            config=config,
+        )
+    elif status == "empty":
+        text = EMPTY_LOOKUP_REPLY
+    else:
+        text = FAILED_LOOKUP_REPLY
+    text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
+    logger.info(
+        "answer.synthesize",
+        extra={
+            "extra_data": {
+                "status": status,
+                "row_count": result.get("row_count"),
+                "truncated": result.get("truncated"),
+                "columns": result.get("columns"),
+                "user_id": runtime.context.user_id,
+            }
+        },
+    )
+    return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
 
 def _unavailable(

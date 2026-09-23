@@ -20,6 +20,7 @@ from langgraph.types import Command
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graphs.chat import build_chat_graph
+from agent.sql.execute import SqlPage
 from agent.memory.write.upsert import write_memories
 from agent.memory.maintenance.consolidate import consolidate_user
 from agent.memory.read.personalize import apply_saved_preferences
@@ -437,7 +438,16 @@ def test_graph_cheaper_narrows_the_saved_frame_and_forget_asks_first():
     result = graph.invoke(
         {"messages": [HumanMessage(content="cheaper")]},
         config=config,
-        context=AgentContext(user_id="user-1", models=models),
+        context=AgentContext(
+            user_id="user-1",
+            models=models,
+            sql_runner=lambda sql: SqlPage(
+                columns=["average_price"],
+                rows=[{"average_price": "1650000"}],
+                truncated=False,
+                duration_ms=1,
+            ),
+        ),
         version="v2",
     )
     value = getattr(result, "value", result)
