@@ -14,7 +14,8 @@ def summarize_search_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(row.get("price"), (int, float))
         and not isinstance(row.get("price"), bool)
     )
-    ids = [row["id"] for row in rows if row.get("id") is not None][:50]
+    ids = [_result_id(row) for row in rows]
+    ids = [item for item in ids if item is not None][:50]
 
     def percentile(fraction: float) -> float | None:
         if not prices:
@@ -30,3 +31,10 @@ def summarize_search_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "max_price": prices[-1] if prices else None,
         "ids": ids,
     }
+
+
+def _result_id(row: dict[str, Any]) -> Any:
+    for key in ("property_id", "building_id", "id"):
+        if row.get(key) is not None:
+            return row[key]
+    return None

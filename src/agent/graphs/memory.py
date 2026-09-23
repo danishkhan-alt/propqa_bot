@@ -18,6 +18,7 @@ from agent.memory.maintenance.privacy import forget_memory
 from agent.memory.read.recall import recall_for_user
 from agent.memory.session.follow_up import update_search_from_message
 from agent.memory.session.bootstrap import get_hot, get_repository, load_profile, load_working, save_working
+from agent.services.events import publish
 from agent.memory.models.types import clone_frame
 from agent.schemas.routes import as_query_route
 from agent.services.transcript import latest_user_text
@@ -90,6 +91,7 @@ def confirm_forget(
         text = "Forgot that."
     else:
         text = "Kept your saved preferences."
+    publish("text", delta=text)
     return {"pending_forget": None, "messages": [AIMessage(content=text)]}
 
 

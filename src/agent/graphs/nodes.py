@@ -22,6 +22,7 @@ from agent.services.catalog_index import (
     render_catalog,
     table_count,
 )
+from agent.services.events import publish
 from agent.services.llm import default_models
 from agent.graphs.memory import persist_working, read_context
 from agent.memory.read.prompt_text import append_memory_notes
@@ -173,13 +174,15 @@ def answer(
         return _unavailable(state, runtime, message, messages, config)
 
     if query.route is Route.DIRECT_ANSWER:
-        text = _models(runtime).answer_direct(
+        text = _speak(
+            _models(runtime),
+            "answer_direct",
             message=message,
             history=history_summary(messages),
             memory_block=state.get("memory_block") or "",
             config=config,
         )
-        text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
+        text = _with_memory_notes(text, state)
         return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
     domain = as_domain_route(state.get("domain_route"))
@@ -191,7 +194,7 @@ def answer(
 
 def finalize(state: ChatState, config: RunnableConfig) -> dict:
     """Drop catalog YAML so the checkpointer does not keep schema packs."""
-    update: dict = {"catalog_context": "", "loaded_domains": []}
+    update: dict = {"catalog_context": "", "loaded_domains": [], "listing_ids": []}
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
     if (
@@ -210,6 +213,9 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
         if sql_result:
             meta["row_count"] = sql_result.get("row_count", meta.get("row_count"))
             meta["truncated"] = bool(sql_result.get("truncated"))
+        listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
+        if listing_ids:
+            meta["ids"] = listing_ids
         update["last_need_db"] = LastNeedDb(
             domain_ids=list(domain.domain_ids),
             join_ids=list(domain.join_ids),
@@ -257,24 +263,35 @@ def _answer_from_lookup(
     result = state.get("sql_result") or {}
     status = result.get("status")
     assumptions = as_assumptions(state.get("assumptions"))
+    listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
     if status == "rows":
-        text = _models(runtime).answer_from_sql(
+        rows = list(result.get("rows") or [])
+        columns = list(result.get("columns") or [])
+        if listing_ids:
+            rows = [{"property_id": item} for item in listing_ids]
+            columns = ["property_id"]
+        text = _speak(
+            _models(runtime),
+            "answer_from_sql",
             message=message,
             history=history_summary(messages),
-            rows=list(result.get("rows") or []),
-            columns=list(result.get("columns") or []),
+            rows=rows,
+            columns=columns,
             row_count=int(result.get("row_count") or 0),
             truncated=bool(result.get("truncated")),
             purpose=str(result.get("purpose") or ""),
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
+            listing_ids=listing_ids or None,
             config=config,
         )
     elif status == "empty":
         text = EMPTY_LOOKUP_REPLY
+        publish("text", delta=text)
     else:
         text = FAILED_LOOKUP_REPLY
-    text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
+        publish("text", delta=text)
+    text = _with_memory_notes(text, state)
     logger.info(
         "answer.synthesize",
         extra={
@@ -297,12 +314,14 @@ def _unavailable(
     messages: list,
     config: RunnableConfig,
 ) -> dict:
-    text = _models(runtime).answer_unavailable(
+    text = _speak(
+        _models(runtime),
+        "answer_unavailable",
         message=message,
         history=history_summary(messages),
         config=config,
     )
-    text = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
+    text = _with_memory_notes(text, state)
     return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
 
@@ -317,6 +336,32 @@ def _assumptions(route: QueryRoute) -> Assumptions:
         order=route.order,
         page=window.page,
     )
+
+
+def _speak(models: RouterModels, name: str, **kwargs) -> str:
+    """Stream each text piece as the model produces it, and return the reply."""
+    stream = getattr(models, f"stream_{name}", None)
+    if callable(stream):
+        parts: list[str] = []
+        for delta in stream(**kwargs):
+            piece = delta if isinstance(delta, str) else str(delta or "")
+            if not piece:
+                continue
+            parts.append(piece)
+            publish("text", delta=piece)
+        return "".join(parts).strip()
+    text = str(getattr(models, name)(**kwargs) or "").strip()
+    if text:
+        publish("text", delta=text)
+    return text
+
+
+def _with_memory_notes(text: str, state: ChatState) -> str:
+    noted = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
+    extra = noted[len(text):] if noted.startswith(text) else ""
+    if extra.strip():
+        publish("text", delta=extra)
+    return noted
 
 
 def _models(runtime: Runtime[AgentContext]) -> RouterModels:

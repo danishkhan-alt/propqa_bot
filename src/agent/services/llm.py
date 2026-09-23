@@ -173,15 +173,16 @@ class AnthropicRouterModels:
             else DomainRoute.model_validate(parsed)
         )
 
-    def answer_direct(
+    def stream_answer_direct(
         self,
         *,
         message: str,
         history: str,
         memory_block: str = "",
         config: RunnableConfig | None = None,
-    ) -> str:
-        result = self._answer.invoke(
+    ):
+        yield from _llm_deltas(
+            self._answer,
             [
                 SystemMessage(content=DIRECT_ANSWER_SYSTEM),
                 HumanMessage(
@@ -191,18 +192,35 @@ class AnthropicRouterModels:
                     )
                 ),
             ],
-            config=config,
+            config,
         )
-        return _message_text(result)
 
-    def answer_unavailable(
+    def answer_direct(
+        self,
+        *,
+        message: str,
+        history: str,
+        memory_block: str = "",
+        config: RunnableConfig | None = None,
+    ) -> str:
+        return "".join(
+            self.stream_answer_direct(
+                message=message,
+                history=history,
+                memory_block=memory_block,
+                config=config,
+            )
+        ).strip()
+
+    def stream_answer_unavailable(
         self,
         *,
         message: str,
         history: str,
         config: RunnableConfig | None = None,
-    ) -> str:
-        result = self._answer.invoke(
+    ):
+        yield from _llm_deltas(
+            self._answer,
             [
                 SystemMessage(content=UNAVAILABLE_SYSTEM),
                 HumanMessage(
@@ -211,9 +229,19 @@ class AnthropicRouterModels:
                     )
                 ),
             ],
-            config=config,
+            config,
         )
-        return _message_text(result)
+
+    def answer_unavailable(
+        self,
+        *,
+        message: str,
+        history: str,
+        config: RunnableConfig | None = None,
+    ) -> str:
+        return "".join(
+            self.stream_answer_unavailable(message=message, history=history, config=config)
+        ).strip()
 
     def draft_sql(
         self,
@@ -225,6 +253,7 @@ class AnthropicRouterModels:
         assumptions: dict | None,
         query_frame: dict | None,
         previous_error: str | None,
+        listing_ids_only: bool = False,
         config: RunnableConfig | None = None,
     ) -> SqlDraft:
         payload = {
@@ -235,6 +264,7 @@ class AnthropicRouterModels:
             "assumptions": assumptions,
             "query_frame": query_frame,
             "previous_error": previous_error,
+            "listing_ids_only": listing_ids_only,
         }
         parsed = invoke_structured(
             self._sql,
@@ -246,6 +276,42 @@ class AnthropicRouterModels:
             SQL_DRAFT_FALLBACK,
         )
         return parsed if isinstance(parsed, SqlDraft) else SqlDraft.model_validate(parsed)
+
+    def stream_answer_from_sql(
+        self,
+        *,
+        message: str,
+        history: str,
+        rows: list[dict],
+        columns: list[str],
+        row_count: int,
+        truncated: bool,
+        purpose: str,
+        assumptions: dict | None,
+        memory_block: str = "",
+        listing_ids: list[str] | None = None,
+        config: RunnableConfig | None = None,
+    ):
+        payload = {
+            "message": message,
+            "history": history,
+            "purpose": purpose,
+            "assumptions": assumptions,
+            "columns": columns,
+            "rows": rows,
+            "row_count": row_count,
+            "truncated": truncated,
+            "memory_block": memory_block,
+            "listing_ids": listing_ids,
+        }
+        yield from _llm_deltas(
+            self._sql_answer,
+            [
+                SystemMessage(content=SQL_ANSWER_SYSTEM),
+                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+            ],
+            config,
+        )
 
     def answer_from_sql(
         self,
@@ -259,27 +325,24 @@ class AnthropicRouterModels:
         purpose: str,
         assumptions: dict | None,
         memory_block: str = "",
+        listing_ids: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> str:
-        payload = {
-            "message": message,
-            "history": history,
-            "purpose": purpose,
-            "assumptions": assumptions,
-            "columns": columns,
-            "rows": rows,
-            "row_count": row_count,
-            "truncated": truncated,
-            "memory_block": memory_block,
-        }
-        result = self._sql_answer.invoke(
-            [
-                SystemMessage(content=SQL_ANSWER_SYSTEM),
-                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
-            ],
-            config=config,
-        )
-        return _message_text(result)
+        return "".join(
+            self.stream_answer_from_sql(
+                message=message,
+                history=history,
+                rows=rows,
+                columns=columns,
+                row_count=row_count,
+                truncated=truncated,
+                purpose=purpose,
+                assumptions=assumptions,
+                memory_block=memory_block,
+                listing_ids=listing_ids,
+                config=config,
+            )
+        ).strip()
 
     def classify_frame(
         self,
@@ -300,6 +363,28 @@ class AnthropicRouterModels:
         )
         kind = parsed.kind if isinstance(parsed, FrameClass) else FrameClass.model_validate(parsed).kind
         return kind
+
+
+def _llm_deltas(runnable, messages: list, config: RunnableConfig | None):
+    for chunk in runnable.stream(messages, config=config):
+        text = _chunk_text(chunk)
+        if text:
+            yield text
+
+
+def _chunk_text(chunk) -> str:
+    content = getattr(chunk, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+        return "".join(parts)
+    return ""
 
 
 def _message_text(result) -> str:

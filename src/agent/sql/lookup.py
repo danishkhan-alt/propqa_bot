@@ -10,6 +10,7 @@ from agent.schemas.routes import as_assumptions, as_domain_route
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage
 from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
+from agent.sql.listings import is_listing_list, listing_ids_from
 from agent.sql.trace import trace_sql_attempt
 from agent.states.chat import ChatState
 from common.logger import get_logger
@@ -42,6 +43,7 @@ def run_sql_lookup(
     message = _message(state)
     history = _history(state)
 
+    listing_ids_only = is_listing_list(state)
     previous_error: str | None = None
     last: dict[str, Any] = _empty_result(domain_ids)
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -54,6 +56,7 @@ def run_sql_lookup(
             assumptions=assumptions.model_dump() if assumptions else None,
             query_frame=frame,
             previous_error=previous_error,
+            listing_ids_only=listing_ids_only,
             config=config,
         )
         logger.info(
@@ -121,7 +124,11 @@ def run_sql_lookup(
         previous_error = "The query returned no rows."
 
     rows = list(last["rows"]) if last["status"] == "rows" else []
-    return {"sql_result": last, "sql_rows": rows}
+    return {
+        "sql_result": last,
+        "sql_rows": rows,
+        "listing_ids": listing_ids_from(state, rows),
+    }
 
 
 def _draft(models, **kwargs) -> SqlDraft:

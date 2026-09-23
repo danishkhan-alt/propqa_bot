@@ -32,6 +32,7 @@ class ChatState(TypedDict, total=False):
     behaviour_events: list
     sql_rows: list
     sql_result: dict | None
+    listing_ids: list
 
 
 class ChatInput(TypedDict):

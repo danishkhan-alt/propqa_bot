@@ -1,10 +1,13 @@
+"""Who is calling, without holding the response body."""
+
 from __future__ import annotations
 
 import uuid
+from http.cookies import SimpleCookie
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from common.context import subject_id_var, user_kind_var
 from common.enums.user_kind import UserKind
@@ -42,33 +45,49 @@ def _usable_id(value: str) -> bool:
     return bool(cleaned) and (is_valid_uuid(cleaned) or cleaned.isalnum())
 
 
-class CallerMiddleware(BaseHTTPMiddleware):
+def _visitor_cookie(caller: Caller) -> str:
+    cookie = SimpleCookie()
+    cookie[ActiveConfig.VISITOR_COOKIE_NAME] = caller.subject_id
+    morsel = cookie[ActiveConfig.VISITOR_COOKIE_NAME]
+    morsel["path"] = "/"
+    morsel["httponly"] = True
+    morsel["samesite"] = "lax"
+    morsel["max-age"] = str(ActiveConfig.VISITOR_COOKIE_MAX_AGE)
+    return morsel.OutputString()
+
+
+class CallerMiddleware:
     """Publish who is calling: registered user or visitor.
 
     Auth middleware (when it exists) should run first and set
     ``request.state.user_id``. This layer then either promotes that to a
     registered caller or mints/reuses a visitor id and sets the cookie.
+
+    Raw ASGI so chat tokens are not buffered until the turn ends.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
         caller = resolve_caller(request)
         request.state.caller = caller
-
         kind_token = user_kind_var.set(caller.kind)
         subject_token = subject_id_var.set(caller.subject_id)
+
+        async def send_with_visitor(message: Message) -> None:
+            if message["type"] == "http.response.start" and caller.is_visitor:
+                headers = MutableHeaders(raw=message["headers"])
+                headers.append("set-cookie", _visitor_cookie(caller))
+                headers[VISITOR_HEADER] = caller.subject_id
+            await send(message)
+
         try:
-            response = await call_next(request)
+            await self.app(scope, receive, send_with_visitor)
         finally:
             user_kind_var.reset(kind_token)
             subject_id_var.reset(subject_token)
-
-        if caller.is_visitor:
-            response.set_cookie(
-                ActiveConfig.VISITOR_COOKIE_NAME,
-                caller.subject_id,
-                max_age=ActiveConfig.VISITOR_COOKIE_MAX_AGE,
-                httponly=True,
-                samesite="lax",
-            )
-            response.headers[VISITOR_HEADER] = caller.subject_id
-        return response

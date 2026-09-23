@@ -62,6 +62,7 @@ class RouterModels(Protocol):
         assumptions: dict | None,
         query_frame: dict | None,
         previous_error: str | None,
+        listing_ids_only: bool = False,
         config: RunnableConfig | None = None,
     ) -> SqlDraft: ...
 
@@ -77,6 +78,7 @@ class RouterModels(Protocol):
         purpose: str,
         assumptions: dict | None,
         memory_block: str = "",
+        listing_ids: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> str: ...
 

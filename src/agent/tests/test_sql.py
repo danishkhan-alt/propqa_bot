@@ -11,12 +11,13 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
-from agent.enums.routing import Route, TurnKind
+from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.chat import build_chat_graph
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage, json_ready
 from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
+from agent.sql.listings import listing_ids_from
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY, run_sql_lookup
 from agent.sql.trace import trace_sql_attempt
 
@@ -283,6 +284,38 @@ class _FakeLangfuse:
         record = dict(kwargs)
         self.observations.append(record)
         return _FakeObservation(record)
+
+
+def test_a_listing_list_keeps_only_property_ids():
+    state = _state("Show me apartments")
+    state["query_route"] = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        confidence=1,
+        rationale="Show apartments.",
+    )
+    state["domain_route"] = DomainRoute(
+        domain_ids=["listings"],
+        join_ids=["locations"],
+        confidence=1,
+        rationale="Inventory.",
+    )
+    rows = [
+        {"property_id": Decimal("15802.0"), "project_name_en": "Marina Gate"},
+        {"property_id": 19806, "project_name_en": "Creek Tower"},
+        {"building_id": 589050, "community_name_english": "Al Murar"},
+    ]
+    assert listing_ids_from(state, rows) == ["15802", "19806", "589050"]
+
+    state["query_route"] = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.AGGREGATE,
+        confidence=1,
+        rationale="Average price.",
+    )
+    assert listing_ids_from(state, rows) == []
 
 
 def test_trace_survives_a_langfuse_outage():
