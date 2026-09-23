@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from psycopg.rows import dict_row
+
+from agent.memory.storage.postgres import PostgresMemoryRepository
+from agent.memory.storage.langgraph_store import PropQAMemoryStore
+from common.db import close_pool, get_pool
+from config import ActiveConfig
+
 from agent.memory.storage.cache import WorkingMemoryCache, RedisMemoryCache
 from agent.memory.storage.repository import InMemoryRepository
 
@@ -50,12 +57,6 @@ def open_hot() -> WorkingMemoryCache | RedisMemoryCache:
 
 def open_long_term_store():
     """Create the pgvector schema and the store the chat graph compiles with."""
-    from psycopg.rows import dict_row
-
-    from agent.memory.storage.postgres import PostgresMemoryRepository
-    from agent.memory.storage.langgraph_store import PropQAMemoryStore
-    from common.db import close_pool, get_pool
-    from config import ActiveConfig
 
     pool = get_pool(
         "memory",

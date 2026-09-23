@@ -1,1 +1,1 @@
-"""Consolidation, privacy delete/export, and HTTP routes."""
+"""Consolidation and privacy delete/export helpers."""

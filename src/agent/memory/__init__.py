@@ -7,7 +7,9 @@ Layout:
   write/        — extract, upsert, filter merge, worker
   read/         — recall, scoring, personalization, prompt text
   session/      — follow-ups, search-result summary, bootstrap
-  maintenance/  — consolidate, privacy, HTTP routes
+  maintenance/  — consolidate, privacy
+  routes/       — HTTP path wiring
+  views/        — HTTP handlers
 """
 
 from agent.memory.storage.langgraph_store import PropQAMemoryStore

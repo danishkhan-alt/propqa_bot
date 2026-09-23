@@ -32,7 +32,7 @@ from agent.memory.maintenance.privacy import export_user_memory, forget_memory, 
 from agent.memory.read.recall import classify_clusters, recall_for_user
 from agent.memory.session.follow_up import update_search_from_message
 from agent.memory.storage.repository import InMemoryRepository
-from agent.memory.maintenance.routes import router
+from agent.memory.routes import router
 from agent.memory.session.bootstrap import set_hot, set_repository
 from agent.memory.read.scoring import score_memory
 from agent.memory.storage.langgraph_store import PropQAMemoryStore
