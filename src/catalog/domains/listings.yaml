@@ -1,8 +1,8 @@
 id: listings
 name: Properties, units, and buildings
 schema: chatbot_ai
-description: DLD-registered plots, freehold units, and buildings. Use this for what exists in an area
-  (type, size, freehold, building status). This is inventory, not classified asking prices.
+description: Live asking-price listings in public.properties, plus DLD-registered plots, freehold units,
+  and buildings. Use public.properties for beds, price, sale or rent, and what is on the market.
 synonyms:
 - listings
 - units
@@ -13,7 +13,10 @@ synonyms:
 - title deed
 - plot
 - land registry
-grain: one row is a property unit, plot, or building
+- for sale
+- for rent
+- asking price
+grain: one row is a listing, a DLD unit, a plot, or a building
 joins:
 - domain: locations
   keys:
@@ -26,12 +29,263 @@ joins:
   - project_id
   - project_name_en
   - master_project_en
+enums:
+- name: PropertyCategory
+  source: public.categories
+  note: Closed set of active property types. properties.type is empty. Join category_property on these ids. Do not query public.categories.
+  values:
+  - id: 1
+    slug: residential
+    name: Residential
+    parent: null
+  - id: 50
+    slug: apartments
+    name: Apartment
+    parent: residential
+  - id: 3
+    slug: villas
+    name: Villa
+    parent: residential
+  - id: 24
+    slug: townhouses
+    name: Townhouse
+    parent: residential
+  - id: 22
+    slug: hotel-apartments
+    name: Hotel Apartment
+    parent: residential
+  - id: 33
+    slug: penthouse
+    name: Penthouse
+    parent: residential
+  - id: 19
+    slug: villa-compound
+    name: Villa Compound
+    parent: residential
+  - id: 4
+    slug: commercial
+    name: Commercial
+    parent: null
+  - id: 5
+    slug: offices
+    name: Office
+    parent: commercial
+  - id: 10
+    slug: shops
+    name: Shop
+    parent: commercial
+  - id: 13
+    slug: warehouses
+    name: Warehouse
+    parent: commercial
+  - id: 8
+    slug: commercial-plots
+    name: Plot
+    parent: commercial
+  - id: 37
+    slug: labour-camps
+    name: Labour Camp
+    parent: commercial
+  - id: 76
+    slug: business-centers
+    name: Business Center
+    parent: commercial
+  - id: 77
+    slug: co-working-spaces
+    name: Co-working Space
+    parent: commercial
 pitfalls:
-- There are no Bayut/Property Finder asking-price listing tables here.
+- public.properties is the live listing table. Use it for asking price, beds, baths, furnished, and for sale or for rent.
+- A visible listing is status = 'active' AND deleted_at IS NULL. Leave out is_sold and is_rented unless the user asked for them.
+- properties.type is empty. Filter type with category_property.category_id and the PropertyCategory ids.
+- price_min is the asking sale price. For rent, use yearly_price, monthly_price, weekly_price, or daily_price according to rental_period. area is square feet.
+- When listing ids are required, SELECT properties.id AS property_id.
+- DLD tables (building_property_records, registered_freehold_real_estate_units, land_registry) are registered inventory, not asking prices.
 - Use transactions for sold prices and rent_contracts for contracted rents.
-- building_property_records and registered_freehold_real_estate_units overlap; prefer freehold units for
-  apartments.
+- public.buildings is a facility summary (pools, parking, floors). It is not the DLD unit register.
+- Qualify public tables as public.<table>.
 tables:
+- name: properties
+  description: Live property listings with asking price, size, and sale or rent. This is the table for what is on the market.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Listing identifier. Select it as property_id when the user wants to see properties.
+  - name: title_en
+    type: text
+    meaning: Listing title in English
+  - name: ref_number
+    type: character varying(191)
+    meaning: Listing reference number
+  - name: rooms
+    type: integer
+    meaning: Bedrooms
+  - name: baths
+    type: integer
+    meaning: Bathrooms
+  - name: area
+    type: numeric(10,2)
+    meaning: Built-up area in square feet
+  - name: plot_area
+    type: numeric(12,2)
+    meaning: Plot area
+  - name: purpose
+    type: character varying(191)
+    meaning: Sale or rent
+    examples:
+    - for_sale
+    - for_rent
+  - name: price_min
+    type: numeric(15,4)
+    meaning: Asking sale price in AED
+  - name: price_max
+    type: numeric(15,4)
+    meaning: Upper asking price in AED, when a range is set
+  - name: yearly_price
+    type: numeric(15,4)
+    meaning: Yearly rent in AED
+  - name: monthly_price
+    type: numeric(15,4)
+    meaning: Monthly rent in AED
+  - name: weekly_price
+    type: numeric(15,4)
+    meaning: Weekly rent in AED
+  - name: daily_price
+    type: numeric(15,4)
+    meaning: Daily rent in AED
+  - name: rental_period
+    type: character varying(191)
+    meaning: Which rent price applies
+    examples:
+    - yearly
+    - monthly
+    - weekly
+    - daily
+  - name: completion_status
+    type: character varying(191)
+    meaning: Ready or off-plan
+    examples:
+    - ready
+    - off_plan
+  - name: furnished
+    type: character varying(191)
+    meaning: Furnishing
+    examples:
+    - furnished
+    - unfurnished
+    - semi-furnished
+  - name: status
+    type: character varying(191)
+    meaning: Listing status. Only active rows are on the market.
+    examples:
+    - active
+    - pending
+    - draft
+  - name: is_sold
+    type: boolean
+    meaning: True when the listing was marked sold
+  - name: is_rented
+    type: boolean
+    meaning: True when the listing was marked rented
+  - name: deleted_at
+    type: timestamp(0) without time zone
+    meaning: Set when the listing is deleted. Exclude these rows.
+  - name: is_free_hold
+    type: boolean
+    meaning: True when the property is freehold
+  - name: ownership
+    type: character varying(191)
+    meaning: Ownership type
+    examples:
+    - freehold
+  - name: developer
+    type: character varying(191)
+    meaning: Developer name
+  - name: permit_number
+    type: character varying(191)
+    meaning: Trakheesi permit number
+  - name: permit_status
+    type: character varying(191)
+    meaning: Permit status
+    examples:
+    - valid
+    - expired
+  - name: project_number
+    type: character varying(191)
+    meaning: Project number
+  - name: unit_number
+    type: character varying(191)
+    meaning: Unit number
+  - name: floors
+    type: character varying(191)
+    meaning: Floor
+  - name: no_of_parkings
+    type: integer
+    meaning: Parking spaces
+  - name: property_age
+    type: integer
+    meaning: Property age in years
+  - name: lat
+    type: character varying(255)
+    meaning: Latitude
+  - name: lng
+    type: character varying(255)
+    meaning: Longitude
+  - name: location_master_project_id
+    type: bigint
+    meaning: Master project on public.locations
+  - name: location_project_id
+    type: bigint
+    meaning: Project on public.locations
+  - name: location_building_id
+    type: bigint
+    meaning: Building on public.locations
+  - name: location_v2_id
+    type: bigint
+    meaning: Location on public.locations_v2
+  - name: address_en
+    type: text
+    meaning: Address in English
+  - name: is_distress
+    type: boolean
+    meaning: True when the listing is a distress sale
+  foreign_keys:
+  - columns:
+    - location_master_project_id
+    references: public.locations
+    referenced_columns:
+    - id
+  - columns:
+    - location_project_id
+    references: public.locations
+    referenced_columns:
+    - id
+  - columns:
+    - location_building_id
+    references: public.locations
+    referenced_columns:
+    - id
+  qualified_name: public.properties
+- name: category_property
+  description: Links a listing to a PropertyCategory id. properties.type is empty, so this is how to filter apartment, villa, or office.
+  primary_key:
+  - id
+  columns:
+  - name: property_id
+    type: bigint
+    meaning: Listing id on public.properties
+  - name: category_id
+    type: bigint
+    meaning: PropertyCategory id, such as 50 for apartments or 3 for villas
+  foreign_keys:
+  - columns:
+    - property_id
+    references: public.properties
+    referenced_columns:
+    - id
+  qualified_name: public.category_property
 - name: building_property_records
   description: Dubai Land Department building and property project records
   primary_key:
@@ -1162,3 +1416,125 @@ tables:
     referenced_columns:
     - subcommunity_id
   qualified_name: chatbot_ai.ps_buildings
+- name: buildings
+  description: Building facility summary (floors, pools, parking, elevators). Not a unit listing.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Building identifier
+  - name: name_en
+    type: character varying(191)
+    meaning: Building name in English
+  - name: name_ar
+    type: character varying(191)
+    meaning: Building name in Arabic
+  - name: year_of_completion
+    type: integer
+    meaning: Year the building was completed
+  - name: total_floors
+    type: integer
+    meaning: Number of floors
+  - name: retail_centers
+    type: character varying(191)
+    meaning: Retail centers in the building
+  - name: swimming_pools
+    type: integer
+    meaning: Count of swimming pools. 0 means none recorded.
+  - name: parking_spaces
+    type: integer
+    meaning: Count of parking spaces
+  - name: elevators
+    type: integer
+    meaning: Count of elevators
+  - name: building_number
+    type: character varying(191)
+    meaning: Building number
+  qualified_name: public.buildings
+- name: dda_plots
+  description: Dubai Development Authority site-plan plots. Area, height, coverage, land use, and coordinates.
+  primary_key:
+  - plot_number
+  columns:
+  - name: plot_number
+    type: bigint
+    meaning: DDA plot number
+    examples:
+    - 6310137
+    - 6310139
+  - name: project_name
+    type: text
+    meaning: Project name on the site plan
+    examples:
+    - DUBAI HILLS
+  - name: community_name
+    type: text
+    meaning: Community name on the site plan
+    examples:
+    - HADAEQ SHEIKH MOHAMMED BIN RASHID
+  - name: master_developer
+    type: text
+    meaning: Master developer
+    examples:
+    - DUBAI HILLS ESTATE L.L.C
+  - name: plot_area_m2
+    type: numeric
+    meaning: Plot area in square metres
+  - name: plot_area_ft2
+    type: numeric
+    meaning: Plot area in square feet
+  - name: maximum_gfa_m2
+    type: numeric
+    meaning: Maximum gross floor area in square metres
+  - name: maximum_gfa_ft2
+    type: numeric
+    meaning: Maximum gross floor area in square feet
+  - name: maximum_height
+    type: text
+    meaning: Maximum height, as written on the site plan
+    examples:
+    - 30m
+    - G+4P+10
+  - name: maximum_coverage
+    type: text
+    meaning: Maximum site coverage
+  - name: site_plan_issue_date
+    type: date
+    meaning: Site plan issue date
+  - name: site_plan_expiry_date
+    type: date
+    meaning: Site plan expiry date
+  - name: land_use
+    type: text
+    meaning: Permitted land use
+    examples:
+    - UTILITIES: SUBSTATION 132 KV
+  - name: land_use_type
+    type: text
+    meaning: Land use type
+  - name: land_use_status
+    type: text
+    meaning: Land use status
+  - name: plot_type_classification
+    type: text
+    meaning: Plot type classification
+  - name: orientation_front
+    type: text
+    meaning: Front orientation
+    examples:
+    - Northeast
+    - South
+  - name: orientation_back
+    type: text
+    meaning: Rear orientation
+  - name: latitude
+    type: double precision
+    meaning: Plot latitude
+  - name: longitude
+    type: double precision
+    meaning: Plot longitude
+  - name: general_notes
+    type: text
+    meaning: Site-plan notes, including parking rules
+  qualified_name: public.dda_plots

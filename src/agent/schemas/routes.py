@@ -111,12 +111,24 @@ class LastNeedDb(BaseModel):
     result_meta: dict[str, Any] = Field(default_factory=dict)
 
 
+def _checkpoint_payload(value: dict[str, Any]) -> dict[str, Any]:
+    """Redis stores these models as LangChain constructor envelopes.
+
+    The fields live under ``kwargs``. A plain dict is already the payload.
+    """
+    if value.get("lc") in (1, 2) and value.get("type") == "constructor":
+        kwargs = value.get("kwargs")
+        if isinstance(kwargs, dict):
+            return kwargs
+    return value
+
+
 def as_query_route(value: QueryRoute | dict[str, Any] | None) -> QueryRoute | None:
     if value is None:
         return None
     if isinstance(value, QueryRoute):
         return value
-    return QueryRoute.model_validate(value)
+    return QueryRoute.model_validate(_checkpoint_payload(value))
 
 
 def as_domain_route(value: DomainRoute | dict[str, Any] | None) -> DomainRoute | None:
@@ -124,7 +136,7 @@ def as_domain_route(value: DomainRoute | dict[str, Any] | None) -> DomainRoute |
         return None
     if isinstance(value, DomainRoute):
         return value
-    return DomainRoute.model_validate(value)
+    return DomainRoute.model_validate(_checkpoint_payload(value))
 
 
 def as_assumptions(value: Assumptions | dict[str, Any] | None) -> Assumptions | None:
@@ -132,7 +144,7 @@ def as_assumptions(value: Assumptions | dict[str, Any] | None) -> Assumptions | 
         return None
     if isinstance(value, Assumptions):
         return value
-    return Assumptions.model_validate(value)
+    return Assumptions.model_validate(_checkpoint_payload(value))
 
 
 def as_last_need_db(value: LastNeedDb | dict[str, Any] | None) -> LastNeedDb | None:
@@ -140,4 +152,4 @@ def as_last_need_db(value: LastNeedDb | dict[str, Any] | None) -> LastNeedDb | N
         return None
     if isinstance(value, LastNeedDb):
         return value
-    return LastNeedDb.model_validate(value)
+    return LastNeedDb.model_validate(_checkpoint_payload(value))

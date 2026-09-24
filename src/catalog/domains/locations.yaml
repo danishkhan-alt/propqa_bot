@@ -31,6 +31,9 @@ pitfalls:
 - Community names are not always spelled the same across DLD vs Property Share vs RTA tables.
 - area_insights_communities.location_id points at public.locations_v2, not chatbot_ai.
 - Prefer ps_communities / dubai_community_areas for names; use dmgisnet_enterances for Makani coordinates.
+- public.community_info is one JSON payload per master project and data_type. Filter data_type, then read data.
+- public.locations type is building, project, or master_project. parent_id points at the parent location.
+- Qualify public tables as public.<table>.
 tables:
 - name: dubai_community_areas
   description: DLD lookup of Dubai community areas
@@ -728,3 +731,100 @@ tables:
     referenced_columns:
     - subcommunity_id
   qualified_name: chatbot_ai.ps_nearby_neighbourhoods
+- name: community_info
+  description: Nearby facilities and market notes for a master project, stored as JSON by data_type.
+  primary_key: []
+  columns:
+  - name: master_project_en
+    type: text
+    meaning: Master project / community name. Join to DLD master_project_en.
+  - name: data_type
+    type: text
+    meaning: Which payload is in data
+    examples:
+    - parks
+    - malls
+    - hospitals
+    - clinics
+    - pharmacies
+    - private_schools
+    - early_childhood_centers
+    - universities
+    - gyms
+    - yoga
+    - mosques
+    - supermarkets
+    - restaurants
+    - cafes
+    - hotels
+    - commute_times
+    - major_road_connection
+    - attraction_points
+    - real_estate_trend
+  - name: data
+    type: jsonb
+    meaning: Payload keyed by the same topic as data_type. Places usually include name and distance_km.
+  qualified_name: public.community_info
+- name: locations
+  description: Location tree of master projects, projects, and buildings.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Location identifier
+  - name: type
+    type: character varying(191)
+    meaning: Level in the tree
+    examples:
+    - master_project
+    - project
+    - building
+  - name: parent_id
+    type: bigint
+    meaning: Parent location. A building's parent is the project; a project's parent is the master project.
+  - name: name_en
+    type: character varying(191)
+    meaning: Location name in English
+  - name: name_ar
+    type: character varying(191)
+    meaning: Location name in Arabic
+  - name: parent_name_en
+    type: character varying(191)
+    meaning: Parent name in English
+  - name: lat
+    type: numeric(10,8)
+    meaning: Latitude
+  - name: lng
+    type: numeric(11,8)
+    meaning: Longitude
+  - name: area_id
+    type: bigint
+    meaning: DLD area identifier
+  - name: slug_en
+    type: character varying(191)
+    meaning: English slug
+  - name: is_free_zone
+    type: boolean
+    meaning: True when the location is a free zone
+  qualified_name: public.locations
+- name: dld_community_lookup
+  description: Alternate names for a community (area name and master project).
+  primary_key:
+  - community_name
+  - lookup_field
+  - lookup_value
+  columns:
+  - name: community_name
+    type: text
+    meaning: Canonical community name
+  - name: lookup_field
+    type: text
+    meaning: Which name this alias is
+    examples:
+    - area_name_en
+    - master_project_en
+  - name: lookup_value
+    type: text
+    meaning: The alias to match in DLD tables
+  qualified_name: public.dld_community_lookup

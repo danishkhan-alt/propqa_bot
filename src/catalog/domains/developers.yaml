@@ -28,6 +28,9 @@ joins:
 pitfalls:
 - real_estate_projects is the DLD project register; projects_information is municipality permit workflow.
 - percent_completed is a project-level figure, not a unit handover date.
+- public.developers is a developer profile (sold, delivered, HQ). It is not the DLD license register.
+- public.offplan_projects_new is the current off-plan project card, including starting price and amenity JSON.
+- Qualify public tables as public.<table>.
 tables:
 - name: real_estate_projects
   description: Real estate projects from Dubai Land Department
@@ -962,3 +965,126 @@ tables:
     type: character varying(200)
     meaning: Service type name
   qualified_name: chatbot_ai.mrhe_land_grants
+- name: developers
+  description: Developer profiles with delivery history and headquarters.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Developer identifier
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: name_en
+    type: text
+    meaning: Developer name
+  - name: name_en_aliases
+    type: jsonb
+    meaning: Alternate English names
+  - name: established_year
+    type: integer
+    meaning: Year the developer was established
+  - name: description_en
+    type: text
+    meaning: English description
+  - name: hq_city
+    type: text
+    meaning: Headquarters city
+  - name: hq_country
+    type: text
+    meaning: Headquarters country
+  - name: office_address_en
+    type: text
+    meaning: Office address
+  - name: units_sold
+    type: integer
+    meaning: Units sold
+  - name: units_delivered
+    type: integer
+    meaning: Units delivered
+  - name: projects_completed
+    type: integer
+    meaning: Projects completed
+  - name: project_count
+    type: integer
+    meaning: Project count
+  - name: is_verified
+    type: boolean
+    meaning: True when the profile is verified
+  qualified_name: public.developers
+- name: offplan_projects_new
+  description: Current off-plan projects with price, handover, unit types, and amenity lists.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Project identifier
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: project_name_en
+    type: text
+    meaning: Project name
+  - name: project_name_dld_en
+    type: text
+    meaning: DLD project name, when matched
+  - name: developer_name_en
+    type: text
+    meaning: Developer name
+  - name: developer_id
+    type: bigint
+    meaning: Developer identifier on public.developers
+  - name: project_lat
+    type: numeric
+    meaning: Latitude
+  - name: project_lng
+    type: numeric
+    meaning: Longitude
+  - name: starting_price
+    type: numeric
+    meaning: Starting price
+  - name: starting_price_currency
+    type: text
+    meaning: Currency of starting_price
+  - name: area_min
+    type: numeric
+    meaning: Smallest unit area
+  - name: area_max
+    type: numeric
+    meaning: Largest unit area
+  - name: handover_date
+    type: date
+    meaning: Handover date
+  - name: handover_qtr
+    type: text
+    meaning: Handover quarter label
+  - name: project_status
+    type: text
+    meaning: Project status
+  - name: payment_plan_summary
+    type: text
+    meaning: Payment plan summary
+  - name: down_payment_percentage
+    type: numeric
+    meaning: Down payment percentage
+  - name: bedroom_types
+    type: jsonb
+    meaning: Bedroom types offered
+  - name: project_amenities
+    type: jsonb
+    meaning: Amenities inside the project
+  - name: community_amenities
+    type: jsonb
+    meaning: Amenities in the surrounding community
+  - name: area_en
+    type: text
+    meaning: Area name
+  - name: community_id
+    type: bigint
+    meaning: Community identifier
+  - name: locations_v2_id
+    type: bigint
+    meaning: Location identifier
+  qualified_name: public.offplan_projects_new

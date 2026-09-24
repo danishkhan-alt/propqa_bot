@@ -8,6 +8,7 @@ from agent.enums.memory import (
     NON_COLUMN_EXCLUSIVE_SLOTS,
     PreferenceSlot,
 )
+from agent.enums.property import PropertyCategory
 from agent.enums.routing import Intent, Route, TurnKind
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "MemoryType",
     "NON_COLUMN_EXCLUSIVE_SLOTS",
     "PreferenceSlot",
+    "PropertyCategory",
     "Route",
     "TurnKind",
 ]

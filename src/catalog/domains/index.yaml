@@ -5,8 +5,8 @@ domains:
 - id: listings
   file: listings.yaml
   name: Properties, units, and buildings
-  description: DLD-registered plots, freehold units, and buildings. Use this for what exists in an area
-    (type, size, freehold, building status). This is inventory, not classified asking prices.
+  description: Live asking-price listings in public.properties, plus DLD plots, freehold units, and buildings.
+    Use this for beds, price, and what is for sale or rent.
   synonyms:
   - listings
   - units
@@ -17,7 +17,10 @@ domains:
   - title deed
   - plot
   - land registry
-  table_count: 14
+  - for sale
+  - for rent
+  - asking price
+  table_count: 18
 - id: transactions
   file: transactions.yaml
   name: Sales, rents, and valuations
@@ -38,8 +41,8 @@ domains:
 - id: locations
   file: locations.yaml
   name: Communities, areas, and geo hierarchy
-  description: Dubai communities, subcommunities, Makani entrances, population, and area insights. This
-    is the usual join bridge for other domains.
+  description: Dubai communities, subcommunities, the public location tree, community facility JSON, Makani
+    entrances, and population. This is the usual join bridge for other domains.
   synonyms:
   - community
   - area
@@ -49,12 +52,12 @@ domains:
   - makani
   - sector
   - where is
-  table_count: 12
+  table_count: 15
 - id: developers
   file: developers.yaml
   name: Developers, projects, and construction
-  description: Off-plan and master projects, consultants, contractors, building permits, and MRHE housing
-    projects. Use for handover, completion, and who is building what.
+  description: Off-plan and master projects, developer profiles, consultants, contractors, building permits,
+    and MRHE housing projects. Use for handover, completion, and who is building what.
   synonyms:
   - developer
   - project
@@ -65,7 +68,7 @@ domains:
   - contractor
   - consultant
   - escrow
-  table_count: 14
+  table_count: 16
 - id: schools
   file: schools.yaml
   name: Schools, nurseries, and universities
@@ -99,8 +102,8 @@ domains:
 - id: amenities
   file: amenities.yaml
   name: Parks, healthcare, and lifestyle
-  description: Parks and beaches, hospitals/clinics, and community things-to-do. Use for lifestyle and
-    nearby facilities, not school or metro lookups.
+  description: Parks, healthcare, things-to-do, and named building or project amenities such as pool and
+    gym. Use for lifestyle and facilities, not school or metro lookups.
   synonyms:
   - park
   - beach
@@ -110,7 +113,7 @@ domains:
   - things to do
   - healthcare
   - pool
-  table_count: 4
+  table_count: 6
 - id: agencies
   file: agencies.yaml
   name: Brokers, agencies, and valuators
@@ -138,8 +141,8 @@ domains:
 - id: market
   file: market.yaml
   name: Price indices and construction statistics
-  description: Official DSC price indices, rent indices, construction-cost series, and building-stock
-    aggregates. Use for market movement, not individual deals.
+  description: Official DSC price indices, construction-cost series, and community average sale and rent
+    prices. Use for market movement, not a single deal.
   synonyms:
   - price index
   - rent index
@@ -147,4 +150,4 @@ domains:
   - market trend
   - inflation
   - stock of buildings
-  table_count: 23
+  table_count: 28

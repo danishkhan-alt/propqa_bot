@@ -11,7 +11,16 @@ from agent.checkpointer import RedisCheckpoint, delete_thread
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graphs.chat import build_chat_graph
-from agent.schemas.routes import QueryRoute
+from agent.schemas.routes import (
+    Assumptions,
+    DomainRoute,
+    LastNeedDb,
+    QueryRoute,
+    as_assumptions,
+    as_domain_route,
+    as_last_need_db,
+    as_query_route,
+)
 from config import ActiveConfig
 
 
@@ -86,6 +95,61 @@ def test_async_checkpoint_calls_run_on_the_sync_saver():
     assert ("writes", "task", "path", [("channel", 1)]) in calls
     assert ("delete", "thread-1") in calls
     assert ("list", 2) in calls
+
+
+def test_a_redis_constructor_envelope_reads_back_as_the_model():
+    route = as_query_route(
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["agent", "schemas", "routes", "QueryRoute"],
+            "kwargs": {
+                "route": "direct_answer",
+                "turn_kind": "new",
+                "confidence": 0.99,
+                "rationale": "A greeting requires no database lookup.",
+            },
+        }
+    )
+    domain = as_domain_route(
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["agent", "schemas", "routes", "DomainRoute"],
+            "kwargs": {
+                "domain_ids": ["listings"],
+                "join_ids": ["locations"],
+                "confidence": 0.9,
+                "rationale": "units",
+            },
+        }
+    )
+    assumptions = as_assumptions(
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["agent", "schemas", "routes", "Assumptions"],
+            "kwargs": {"purpose": "sale", "limit": 10},
+        }
+    )
+    last = as_last_need_db(
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["agent", "schemas", "routes", "LastNeedDb"],
+            "kwargs": {"domain_ids": ["listings"], "intent_summary": "flats"},
+        }
+    )
+
+    assert isinstance(route, QueryRoute)
+    assert route.route is Route.DIRECT_ANSWER
+    assert route.rationale == "A greeting requires no database lookup."
+    assert isinstance(domain, DomainRoute)
+    assert domain.domain_ids == ["listings"]
+    assert isinstance(assumptions, Assumptions)
+    assert assumptions.purpose == "sale" and assumptions.limit == 10
+    assert isinstance(last, LastNeedDb)
+    assert last.intent_summary == "flats"
 
 
 def test_delete_thread_requires_an_id():

@@ -1,8 +1,8 @@
 id: amenities
 name: Parks, healthcare, and lifestyle
 schema: chatbot_ai
-description: Parks and beaches, hospitals/clinics, and community things-to-do. Use for lifestyle and nearby
-  facilities, not school or metro lookups.
+description: Parks and beaches, hospitals/clinics, community things-to-do, and named building or project
+  amenities (pool, gym). Use for lifestyle and facilities, not school or metro lookups.
 synonyms:
 - park
 - beach
@@ -22,9 +22,11 @@ joins:
   - longitude
   - area_id
 pitfalls:
-- Building-level amenities (pool/gym inside a tower) are not in these tables; those live on listings if
-  present.
+- public.amenities is the amenity name list (pool, gym, spa). Match title_en. It does not say which building has it.
+- reelly_project_amenities links an off-plan project to amenity_name via reelly_project_id.
+- Nearby parks, malls, and clinics per community are in public.community_info (locations), not in these tables.
 - sheryan_health_facilities is DHA licensed facilities, not a distance-to-listing index.
+- Qualify public tables as public.<table>.
 tables:
 - name: dubai_parks_and_beaches_coordinates
   description: Dubai parks and beaches X and Y coordinates
@@ -385,3 +387,54 @@ tables:
     - AL BARSHA FIRST
     - Al Manara
   qualified_name: chatbot_ai.sheryan_facility_detail
+- name: amenities
+  description: Amenity names used on buildings and projects. One row is one amenity, not a place.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Amenity identifier
+  - name: title_en
+    type: character varying
+    meaning: Amenity name in English
+    examples:
+    - Swimming Pool
+    - Gym
+    - Yoga Studio / Meditation Room
+    - Kids Play Area
+  - name: title_ar
+    type: character varying
+    meaning: Amenity name in Arabic
+  qualified_name: public.amenities
+- name: reelly_project_amenities
+  description: Amenities attached to an off-plan project.
+  primary_key:
+  - reelly_project_id
+  - project_amenity_id
+  columns:
+  - name: reelly_project_id
+    type: bigint
+    meaning: Off-plan project identifier
+  - name: project_amenity_id
+    type: bigint
+    meaning: Project amenity row identifier
+  - name: amenity_id
+    type: bigint
+    meaning: Amenity identifier
+  - name: amenity_name
+    type: text
+    meaning: Amenity name. Spellings vary (Gym vs Gymnasium, Bbq Area vs BBQ Area).
+    examples:
+    - Swimming Pool
+    - Gym
+    - Kids Play Area
+    - Infinity Pool
+    - Padel Court
+  foreign_keys:
+  - columns:
+    - reelly_project_id
+    references: public.reelly_projects
+    referenced_columns:
+    - reelly_project_id
+  qualified_name: public.reelly_project_amenities

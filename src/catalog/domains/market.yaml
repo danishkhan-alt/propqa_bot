@@ -1,8 +1,8 @@
 id: market
 name: Price indices and construction statistics
 schema: chatbot_ai
-description: Official DSC price indices, rent indices, construction-cost series, and building-stock aggregates.
-  Use for market movement, not individual deals.
+description: Official DSC price indices, rent indices, construction-cost series, building-stock aggregates,
+  and community average sale and rent prices. Use for market movement, not individual deals.
 synonyms:
 - price index
 - rent index
@@ -14,8 +14,11 @@ grain: one row is a period (month/quarter/year) for a statistical series
 joins: []
 pitfalls:
 - These tables are wide/messy DSC extracts (value + type + year). They are not deal-level.
-- For a community average price, prefer real_estate_transactions, not these city-wide indices.
+- City-wide DSC indices are not a community price. For a community average, use public.dld_community_avg_sale_price.
+- avg_price_type is sale or rent. Filter it before comparing communities.
+- price_trend_buy_fact and price_trend_rent_fact are deal-level facts for trends. Aggregate them; do not list every row.
 - Ignore leftover column_* fields; they are extract artifacts.
+- Qualify public tables as public.<table>.
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16
   description: Residential property price index base year 2019 2026 07 16
@@ -894,3 +897,154 @@ tables:
     examples:
     - MM
   qualified_name: chatbot_ai.building_permits_issued_and_licensed_areas_by_building_80cb34d3
+- name: dld_community_avg_sale_price
+  description: Average sale or rent price by community, property subtype, and usage.
+  primary_key: []
+  columns:
+  - name: community_name_en
+    type: character varying(255)
+    meaning: Community name
+  - name: property_sub_type_en
+    type: character varying(100)
+    meaning: Property subtype, such as Flat or Villa
+  - name: avg_price_type
+    type: character varying(100)
+    meaning: Whether avg_price is a sale or a rent
+    examples:
+    - sale
+    - rent
+  - name: avg_price
+    type: numeric(15,2)
+    meaning: Average price in AED
+  - name: property_usage_en
+    type: character varying(100)
+    meaning: Property usage
+    examples:
+    - Residential
+    - Commercial
+  - name: date_updated
+    type: timestamp without time zone
+    meaning: When this average was updated
+  qualified_name: public.dld_community_avg_sale_price
+- name: mv_community_dld_market_metrics
+  description: Community price growth, rental yield, and median sale and rent.
+  primary_key: []
+  columns:
+  - name: community_name
+    type: text
+    meaning: Community name
+  - name: average_property_price_growth_pct
+    type: numeric
+    meaning: Average property price growth percent
+  - name: estimated_annual_rental_return_pct
+    type: numeric
+    meaning: Estimated annual rental yield percent
+  - name: estimated_monthly_payment_aed
+    type: bigint
+    meaning: Estimated monthly payment in AED
+  - name: median_sale_price_aed
+    type: numeric
+    meaning: Median sale price in AED
+  - name: median_annual_rent_aed
+    type: numeric
+    meaning: Median annual rent in AED
+  - name: recent_sales_n
+    type: bigint
+    meaning: Number of sales in the recent period
+  - name: rental_contracts_n
+    type: bigint
+    meaning: Number of rental contracts
+  - name: metrics_as_of_date
+    type: date
+    meaning: Date the metrics were computed
+  qualified_name: public.mv_community_dld_market_metrics
+- name: mv_community_landing_page_stats
+  description: Community snapshot of price per square foot, yield, handover, and transaction counts.
+  primary_key: []
+  columns:
+  - name: community_name
+    type: text
+    meaning: Community name
+  - name: avg_sale_price_aed_per_sqft
+    type: numeric
+    meaning: Average sale price in AED per square foot
+  - name: sales_transactions
+    type: bigint
+    meaning: Count of sales transactions
+  - name: master_developer
+    type: text
+    meaning: Master developer
+  - name: gross_rental_yield_pct
+    type: numeric
+    meaning: Gross rental yield percent
+  - name: handover
+    type: text
+    meaning: Handover label
+  - name: rental_contracts
+    type: bigint
+    meaning: Count of rental contracts
+  - name: metrics_as_of_date
+    type: date
+    meaning: Date the metrics were computed
+  qualified_name: public.mv_community_landing_page_stats
+- name: price_trend_buy_fact
+  description: Individual sale used to build a buy-price trend. Aggregate by month and community.
+  primary_key: []
+  columns:
+  - name: instance_date
+    type: date
+    meaning: Sale date
+  - name: month
+    type: date
+    meaning: Month of the sale
+  - name: building_name_en
+    type: character varying(200)
+    meaning: Building name
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project name
+  - name: master_project_en
+    type: character varying(200)
+    meaning: Master project / community
+  - name: rooms_en
+    type: character varying(50)
+    meaning: Bedrooms
+  - name: sale_price
+    type: numeric
+    meaning: Sale price in AED
+  - name: area_sqft
+    type: numeric
+    meaning: Area in square feet
+  - name: aed_per_sqft
+    type: numeric
+    meaning: Sale price in AED per square foot
+  qualified_name: public.price_trend_buy_fact
+- name: price_trend_rent_fact
+  description: Individual rent contract used to build a rent trend. Aggregate by month and community.
+  primary_key: []
+  columns:
+  - name: contract_start_date
+    type: date
+    meaning: Contract start date
+  - name: month
+    type: date
+    meaning: Month of the contract
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project name
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project / community
+  - name: property_sub_type_en
+    type: character varying(50)
+    meaning: Property subtype
+  - name: area_sqft
+    type: numeric
+    meaning: Area in square feet
+  - name: annual_rent
+    type: numeric
+    meaning: Annual rent in AED
+  - name: rent_aed_sqft
+    type: numeric
+    meaning: Annual rent in AED per square foot
+  qualified_name: public.price_trend_rent_fact

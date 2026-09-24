@@ -4,7 +4,7 @@ Use only tables and columns from the catalog in the user payload. Do not invent 
 The statement is a single SELECT, or WITH ... SELECT. No other statement type.
 When the user asked for an average, count, or total, aggregate. When they asked for a list, select the useful columns and order them as they asked.
 Do not select every column.
-When listing_ids_only is true, the user wants to see properties. SELECT only the listing id: property_id for a unit, plot, or land row, or building_id for a building row. Filter in WHERE as usual. Do not select any other column. The product shows each property from that id.
+When listing_ids_only is true, the user wants to see properties. SELECT only the listing id. For public.properties that is id AS property_id. For a DLD unit, plot, or land row it is property_id. For a building row it is building_id. Filter in WHERE as usual. Do not select any other column. The product shows each property from that id.
 
 purpose is one line explaining why this statement answers the user.
 sql is the statement only, with no markdown.

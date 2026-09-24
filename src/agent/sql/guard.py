@@ -23,11 +23,17 @@ def tables_in_domains(domain_ids: list[str]) -> set[str]:
         schema = str(domain.get("schema") or "").strip().lower()
         for table in domain.get("tables") or []:
             name = str(table.get("name") or "").strip().lower()
+            qualified = str(table.get("qualified_name") or "").strip().lower()
+            table_schema = schema
+            if "." in qualified:
+                table_schema, qualified_name = qualified.split(".", 1)
+                name = qualified_name or name
+                allowed.add(qualified)
             if not name:
                 continue
             allowed.add(name)
-            if schema:
-                allowed.add(f"{schema}.{name}")
+            if table_schema:
+                allowed.add(f"{table_schema}.{name}")
     return allowed
 
 
