@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     thread_id: str | None = Field(default=None, max_length=64)
     session_id: str | None = Field(default=None, max_length=64)
     user_id: str | None = Field(default=None, max_length=80)
+    session_profile: dict | None = None
 
     @field_validator("message")
     @classmethod
@@ -86,6 +87,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
                 models=models,
                 sql_runner=sql_runner,
                 graph=graph,
+                session_profile=body.session_profile,
             ):
                 yield _sse(event)
         except Exception:

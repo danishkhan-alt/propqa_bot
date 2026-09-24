@@ -33,9 +33,11 @@ class ChatState(TypedDict, total=False):
     sql_rows: list
     sql_result: dict | None
     listing_ids: list
+    session_profile: dict
 
 
-class ChatInput(TypedDict):
+class ChatInput(TypedDict, total=False):
     """What a caller sends. Prior fields come from the checkpointer."""
 
     messages: Annotated[list, add_messages]
+    session_profile: dict

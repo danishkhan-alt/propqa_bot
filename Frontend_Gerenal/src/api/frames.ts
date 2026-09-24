@@ -6,6 +6,7 @@
 import { randomUUID } from "@/lib/uuid";
 
 export interface TokenFrame { type: "token"; token: string; }
+export interface ReplyFrame { type: "reply"; reply: Record<string, unknown>; }
 export interface StepFrame {
   type: "step";
   step: string;
@@ -79,7 +80,7 @@ export interface LeadCaptureHitlFrame extends HitlFrame {
   };
 }
 
-export type ServerFrame = TokenFrame | StepFrame | CardsFrame | HitlFrame | ResultFrame | DoneFrame | CancelledFrame | ErrorFrame | AgentContactsFrame;
+export type ServerFrame = TokenFrame | StepFrame | CardsFrame | HitlFrame | ResultFrame | DoneFrame | CancelledFrame | ErrorFrame | AgentContactsFrame | ReplyFrame;
 
 export function isAgentContactsFrame(f: unknown): f is AgentContactsFrame {
   return !!f && typeof f === "object" && (f as AgentContactsFrame).type === "agent_contacts";
@@ -96,6 +97,10 @@ export function isLeadCaptureHitlFrame(f: unknown): f is LeadCaptureHitlFrame {
 
 export function isCancelledFrame(f: unknown): f is CancelledFrame {
   return !!f && typeof f === "object" && (f as CancelledFrame).type === "cancelled";
+}
+
+export function isReplyFrame(f: unknown): f is ReplyFrame {
+  return !!f && typeof f === "object" && (f as ReplyFrame).type === "reply" && typeof (f as ReplyFrame).reply === "object";
 }
 
 export function isTokenFrame(f: unknown): f is TokenFrame {
@@ -199,6 +204,11 @@ export function parseFrame(raw: string): ServerFrame | null {
 export function legacyEventToFrames(event: Record<string, unknown>): ServerFrame[] {
   if (!event || typeof event !== "object") return [];
   const frames: ServerFrame[] = [];
+
+  if (event.type === "reply" && event.reply && typeof event.reply === "object") {
+    frames.push({ type: "reply", reply: event.reply as Record<string, unknown> });
+    return frames;
+  }
 
   // ── Cancelled frame (Stop) — before generic done ─────────────────────────
   if (

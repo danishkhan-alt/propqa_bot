@@ -132,6 +132,7 @@ async def stream_turn(
     models: RouterModels | None = None,
     sql_runner=None,
     graph: CompiledStateGraph | None = None,
+    session_profile: dict | None = None,
 ) -> AsyncIterator[dict]:
     """Yield listing ids and text deltas as the turn runs, then a done event."""
     compiled = graph or get_chat_graph()
@@ -150,6 +151,8 @@ async def stream_turn(
             if paused_at_start
             else {"messages": [HumanMessage(content=message)]}
         )
+        if session_profile and not paused_at_start:
+            graph_input["session_profile"] = session_profile
         async for item in compiled.astream(
             graph_input,
             config=config,

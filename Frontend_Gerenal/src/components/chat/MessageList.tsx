@@ -17,7 +17,7 @@ import type { AgentContact, AgentCoverage } from "@/components/leads";
 import { LeadActions, type LeadStatus, type LeadSubmitData } from "@/components/leads";
 import type { FollowUpSuggestion } from "@/lib/followUpSuggestions";
 import type { StepFrame } from "@/store/chatStore";
-import { isVisibleStep } from "@/lib/pipelineLabels";
+import { StructuredAnswer } from "./StructuredAnswer";
 
 export interface Message {
   id: string;
@@ -44,6 +44,8 @@ export interface Message {
   /** Persisted thumbs feedback — undefined/null until the user votes */
   thumbsUp?: boolean | null;
   thumbsDown?: boolean | null;
+  /** Structured cards, chips, and follow-ups for this reply */
+  structured?: import("@/components/chat/StructuredAnswer").StructuredReply;
   /** Pipeline step timeline for THIS turn — drives the collapsible thinking panel */
   steps?: StepFrame[];
 }
@@ -67,6 +69,8 @@ interface MessageListProps {
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   /** Re-send a follow-up suggestion query */
   onSuggestionClick?: (query: string) => void;
+  /** Chip answers for a structured reply */
+  onClarify?: (answers: Record<string, string>) => void;
   /** Property IDs selected in the sidebar for bulk agent contact */
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
@@ -87,6 +91,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     onDismissGuestBanner,
     onSubmitLead,
     onSuggestionClick,
+    onClarify,
     selectedInquiryPropertyIds = [],
     onSelectedInquiryPropertyIdsChange,
     sessionId = "",
@@ -156,6 +161,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
               onRetry={onRetry}
               onSubmitLead={onSubmitLead}
               onSuggestionClick={onSuggestionClick}
+              onClarify={onClarify}
               selectedInquiryPropertyIds={selectedInquiryPropertyIds}
               onSelectedInquiryPropertyIdsChange={onSelectedInquiryPropertyIdsChange}
             />
@@ -209,6 +215,7 @@ interface MessageBubbleProps {
   onRetry?: (prompt: string) => void;
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   onSuggestionClick?: (query: string) => void;
+  onClarify?: (answers: Record<string, string>) => void;
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
 }
@@ -220,6 +227,7 @@ function MessageBubble({
   onRetry,
   onSubmitLead,
   onSuggestionClick,
+  onClarify,
   selectedInquiryPropertyIds = [],
   onSelectedInquiryPropertyIdsChange,
 }: MessageBubbleProps) {
@@ -272,6 +280,12 @@ function MessageBubble({
         >
           {isUser ? (
             <p className="whitespace-pre-wrap break-words text-[#141B34]">{message.content}</p>
+          ) : message.structured ? (
+            <StructuredAnswer
+              reply={message.structured}
+              onFollowup={onSuggestionClick}
+              onClarify={onClarify}
+            />
           ) : (
             <div
               className="prose-chat min-w-0 max-w-full text-[#141B34]"

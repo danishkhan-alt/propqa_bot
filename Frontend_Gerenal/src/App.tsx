@@ -17,11 +17,13 @@ import { PropertiesSidebar } from "@/components/chat/PropertiesSidebar";
 import type { CardGroup } from "@/components/chat/CardsPanel";
 import { HitlPrompt } from "@/components/chat/HitlPrompt";
 import { Composer } from "@/components/chat/Composer";
+import { SessionStrip } from "@/components/chat/SessionStrip";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useChat } from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { usePrefsStore } from "@/store/prefsStore";
+import { continuationFromProfile, useSessionProfileStore } from "@/store/sessionProfileStore";
 import { RecommendationPanel } from "@/components/recommendations/RecommendationPanel";
 import { PrefsPanel } from "@/components/recommendations/PrefsPanel";
 import { UserDashboard } from "@/components/admin/AdminDashboard";
@@ -185,6 +187,15 @@ export default function App() {
       });
     },
     [sendMessage],
+  );
+
+  const submitClarifying = useCallback(
+    (answers: Record<string, string>) => {
+      useSessionProfileStore.getState().merge(answers);
+      const text = continuationFromProfile(useSessionProfileStore.getState().profile);
+      void sendWithFocusedIds(text, { skipUserAppend: true });
+    },
+    [sendWithFocusedIds],
   );
 
   const { isGuest, isAuthenticated, isLoading: authLoading, initialize } = useAuthStore();
@@ -369,6 +380,7 @@ export default function App() {
                 onDismissGuestBanner={dismissGuestBanner}
                 onSubmitLead={submitLeadForMessage}
                 onSuggestionClick={(q) => void sendWithFocusedIds(q)}
+                onClarify={submitClarifying}
                 selectedInquiryPropertyIds={inquiryPropertyIds}
                 onSelectedInquiryPropertyIdsChange={setInquiryPropertyIds}
                 className="min-h-0 min-w-0 flex-1 basis-0 overflow-y-auto"
@@ -387,6 +399,7 @@ export default function App() {
                 </div>
               )}
 
+              <SessionStrip />
               <Composer
                 className="shrink-0"
                 sessionId={sessionId}

@@ -10,7 +10,9 @@ from agent.memory.session.follow_up import FrameClass
 from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
+from agent.prompts.reply import STRUCTURED_REPLY_SYSTEM
 from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
+from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
 from common.logger import get_logger
@@ -42,6 +44,7 @@ kind is one of:
 FRAME_FALLBACK = FrameClass(kind="new")
 
 SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
+REPLY_FALLBACK = StructuredReply(intro_text="I couldn't shape that reply. Ask me again with an area or a budget.")
 
 
 def invoke_structured(
@@ -107,6 +110,9 @@ class AnthropicRouterModels:
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
         self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
+        self._reply = answer_llm.with_structured_output(
+            StructuredReply, method="json_schema", include_raw=True
+        ).with_config({"run_name": "answer.structured"})
         sql_llm = ChatAnthropic(
             model=ActiveConfig.AI_MODEL,
             api_key=api_key,
@@ -347,6 +353,48 @@ class AnthropicRouterModels:
                 config=config,
             )
         ).strip()
+
+    def draft_reply(
+        self,
+        *,
+        message: str,
+        history: str,
+        rows: list[dict] | None = None,
+        columns: list[str] | None = None,
+        row_count: int = 0,
+        truncated: bool = False,
+        purpose: str = "",
+        assumptions: dict | None = None,
+        memory_block: str = "",
+        listing_ids: list[str] | None = None,
+        data_note: str = "",
+        session_profile: dict | None = None,
+        config: RunnableConfig | None = None,
+    ) -> StructuredReply:
+        payload = {
+            "message": message,
+            "history": history,
+            "purpose": purpose,
+            "assumptions": assumptions,
+            "columns": columns or [],
+            "rows": rows or [],
+            "row_count": row_count,
+            "truncated": truncated,
+            "memory_block": memory_block,
+            "listing_ids": listing_ids,
+            "data_note": data_note,
+            "session_profile": session_profile or {},
+        }
+        parsed = invoke_structured(
+            self._reply,
+            [
+                SystemMessage(content=STRUCTURED_REPLY_SYSTEM),
+                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+            ],
+            config,
+            REPLY_FALLBACK,
+        )
+        return parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
 
     def classify_frame(
         self,

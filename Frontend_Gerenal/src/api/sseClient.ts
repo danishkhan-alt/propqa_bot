@@ -16,6 +16,7 @@ interface SendSSEOpts {
   personaContext?: Record<string, unknown> | null;
   /** Listing-scoped FAQ: property IDs attached in the composer. */
   focusedPropertyIds?: number[] | null;
+  sessionProfile?: Record<string, unknown> | null;
   signal?: AbortSignal | null;
   onFrame: (frame: ServerFrame) => void;
   onError?: (err: Error) => void;
@@ -132,6 +133,9 @@ export async function sendSSE(opts: SendSSEOpts): Promise<void> {
     body.persona_context = opts.personaContext;
   } else if (opts.persona) {
     body.persona = opts.persona;
+  }
+  if (opts.sessionProfile && Object.keys(opts.sessionProfile).length > 0) {
+    body.session_profile = opts.sessionProfile;
   }
   if (Array.isArray(opts.focusedPropertyIds) && opts.focusedPropertyIds.length > 0) {
     body.focused_property_ids = opts.focusedPropertyIds;

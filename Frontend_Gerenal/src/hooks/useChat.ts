@@ -18,7 +18,7 @@ import { openWs, type WsHandle } from "@/api/wsClient";
 import { newChat as newChatApi, getSessionRestore, forgetSession, forgetAll } from "@/api/sessionApi";
 import { getPreferences } from "@/api/preferencesApi";
 import { syncFlowsRegistry, useChatStore, FLOWS_REGISTRY, type PropertyCard, type StepFrame, type ResultEnvelope } from "@/store/chatStore";
-import { useAuthStore } from "@/store/authStore";
+import { useSessionProfileStore } from "@/store/sessionProfileStore";
 import { randomUUID } from "@/lib/uuid";
 import {
   isTokenFrame,
@@ -31,6 +31,7 @@ import {
   isCancelledFrame,
   isAgentContactsFrame,
   isLeadCaptureHitlFrame,
+  isReplyFrame,
   type ServerFrame,
   type AgentContact,
 } from "@/api/frames";
@@ -711,6 +712,39 @@ export function useChat() {
       return;
     }
 
+    if (isReplyFrame(frame)) {
+      const turn = currentTurnRef.current;
+      if (!turn) return;
+      const reply = frame.reply;
+      const intro = typeof reply.intro_text === "string" ? reply.intro_text : "";
+      const profile = reply.session_profile;
+      if (profile && typeof profile === "object") {
+        useSessionProfileStore.getState().merge(profile as Record<string, unknown>);
+      }
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === turn.msgId);
+        const next = {
+          content: intro,
+          structured: reply,
+          isStreaming: true,
+        };
+        if (idx === -1) {
+          return [
+            ...prev,
+            {
+              id: turn.msgId,
+              role: "assistant" as const,
+              userPrompt: turn.prompt,
+              timestamp: new Date(),
+              ...next,
+            },
+          ];
+        }
+        return prev.map((m, i) => (i === idx ? { ...m, ...next } : m));
+      });
+      return;
+    }
+
     if (isTokenFrame(frame)) {
       const turn = currentTurnRef.current;
       if (!turn) return;
@@ -967,6 +1001,7 @@ export function useChat() {
           userId,
           accessToken,
           buyerPreferences: buyerPrefs,
+          sessionProfile: useSessionProfileStore.getState().profile,
           focusedPropertyIds: focusedIds,
           signal: abort.signal,
           onFrame: handleFrame,
