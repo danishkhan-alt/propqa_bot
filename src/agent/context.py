@@ -8,6 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
+from agent.sql.cards import ListingLoader
 from agent.sql.execute import SqlPage
 
 
@@ -97,3 +98,4 @@ class AgentContext:
     user_id: str
     models: RouterModels | None = None
     sql_runner: SqlRunner | None = None
+    listing_loader: ListingLoader | None = None

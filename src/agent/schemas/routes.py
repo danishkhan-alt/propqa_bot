@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from agent.enums.routing import Intent, Route, TurnKind
+from agent.schemas.profile import ProfileSignals
 
 
 class QueryRoute(BaseModel):
@@ -30,6 +31,17 @@ class QueryRoute(BaseModel):
     order: str | None = Field(
         default=None,
         description="How to order rows, in the user's words. Null when they did not say.",
+    )
+    seeking_advice: bool = Field(
+        default=False,
+        description=(
+            "True when the user is choosing what or where to buy, or whether to buy, "
+            "and their goal, budget, or timeline would change the answer."
+        ),
+    )
+    profile: ProfileSignals = Field(
+        default_factory=ProfileSignals,
+        description="Buyer facts stated in this message only.",
     )
     confidence: float = Field(ge=0, le=1, description="0 to 1. How sure this route is.")
     rationale: str = Field(description="One sentence explaining the route. No user data beyond the ask.")

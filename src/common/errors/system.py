@@ -30,6 +30,14 @@ class RouteNotFound(AppError):
     message = "This endpoint does not exist."
 
 
+class ResourceNotFound(AppError):
+    error_code = APIErrorCode.SYSTEM
+    error_subcode = APIErrorSubCode.NOT_FOUND
+    status = HttpStatus.NOT_FOUND
+    title = "Not found"
+    message = "That record does not exist."
+
+
 class Forbidden(AppError):
     error_code = APIErrorCode.AUTH
     error_subcode = APIErrorSubCode.FORBIDDEN

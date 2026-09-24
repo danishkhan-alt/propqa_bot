@@ -131,10 +131,11 @@ async def stream_turn(
     user_id: str,
     models: RouterModels | None = None,
     sql_runner=None,
+    listing_loader=None,
     graph: CompiledStateGraph | None = None,
     session_profile: dict | None = None,
 ) -> AsyncIterator[dict]:
-    """Yield listing ids and text deltas as the turn runs, then a done event."""
+    """Yield listing cards and text deltas as the turn runs, then a done event."""
     compiled = graph or get_chat_graph()
     client = langfuse_client()
     config = {
@@ -142,7 +143,9 @@ async def stream_turn(
         "callbacks": _tracing_callbacks(client),
         "metadata": {"user_id": user_id, "session_id": thread_id},
     }
-    context = AgentContext(user_id=user_id, models=models, sql_runner=sql_runner)
+    context = AgentContext(
+        user_id=user_id, models=models, sql_runner=sql_runner, listing_loader=listing_loader
+    )
 
     async def events() -> AsyncIterator[dict]:
         paused_at_start = await _is_paused(compiled, config)
@@ -151,7 +154,7 @@ async def stream_turn(
             if paused_at_start
             else {"messages": [HumanMessage(content=message)]}
         )
-        if session_profile and not paused_at_start:
+        if session_profile is not None and not paused_at_start:
             graph_input["session_profile"] = session_profile
         async for item in compiled.astream(
             graph_input,

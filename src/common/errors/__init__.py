@@ -5,6 +5,7 @@ from common.errors.system import (
     DatabaseFailure,
     Forbidden,
     InternalError,
+    ResourceNotFound,
     RouteNotFound,
     Unauthorized,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "InternalError",
     "InvalidRequestBody",
     "RateLimited",
+    "ResourceNotFound",
     "RouteNotFound",
     "Unauthorized",
 ]

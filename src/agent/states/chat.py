@@ -33,6 +33,8 @@ class ChatState(TypedDict, total=False):
     sql_rows: list
     sql_result: dict | None
     listing_ids: list
+    listing_cards: list
+    profile_asked: list
     session_profile: dict
 
 

@@ -16,7 +16,7 @@ from agent.schemas.routes import (
     as_last_need_db,
     as_query_route,
 )
-from agent.reply.clarify import clarifying_questions, merge_profile
+from agent.reply.clarify import Question, merge_profile, next_question
 from agent.schemas.reply import StructuredReply
 from agent.services.catalog_index import (
     domain_blurbs,
@@ -30,6 +30,7 @@ from agent.graphs.memory import persist_working, read_context
 from agent.memory.read.prompt_text import append_memory_notes
 from agent.memory.session.search_results import summarize_search_results
 from agent.services.transcript import ANSWER_HISTORY, history_summary, latest_user_text
+from agent.sql.cards import listing_facts
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
@@ -89,7 +90,11 @@ def query_router(
     assumptions = None
     if route.route is Route.NEED_DB:
         assumptions = _assumptions(route)
-    update: dict = {"query_route": route, "assumptions": assumptions}
+    update: dict = {
+        "query_route": route,
+        "assumptions": assumptions,
+        "session_profile": merge_profile(state.get("session_profile"), route.profile),
+    }
     if route.route is not Route.NEED_DB:
         update["domain_route"] = None
         update["awaiting_sql"] = False
@@ -176,13 +181,14 @@ def answer(
         return _unavailable(state, runtime, message, messages, config)
 
     if query.route is Route.DIRECT_ANSWER:
-        profile = merge_profile(state.get("session_profile"), None, message)
+        question = _question(state, query, has_listings=False)
         structured = _draft_structured(
             _models(runtime),
             message=message,
             messages=messages,
             memory_block=state.get("memory_block") or "",
-            session_profile=profile,
+            session_profile=state.get("session_profile") or {},
+            question=question,
             config=config,
         )
         if structured is None:
@@ -197,7 +203,7 @@ def answer(
         else:
             text = structured
         text = _with_memory_notes(text, state)
-        return {"messages": [AIMessage(content=text)], "awaiting_sql": False, "session_profile": profile}
+        return _reply_update(state, text, question if structured is not None else None)
 
     domain = as_domain_route(state.get("domain_route"))
     if domain is None or not domain.domain_ids:
@@ -208,7 +214,7 @@ def answer(
 
 def finalize(state: ChatState, config: RunnableConfig) -> dict:
     """Drop catalog YAML so the checkpointer does not keep schema packs."""
-    update: dict = {"catalog_context": "", "loaded_domains": [], "listing_ids": []}
+    update: dict = {"catalog_context": "", "loaded_domains": [], "listing_ids": [], "listing_cards": []}
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
     if (
@@ -276,16 +282,18 @@ def _answer_from_lookup(
 ) -> dict:
     result = state.get("sql_result") or {}
     status = result.get("status")
+    query = as_query_route(state.get("query_route"))
     assumptions = as_assumptions(state.get("assumptions"))
     listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
-    profile = merge_profile(state.get("session_profile"), None, message)
-    if status == "rows":
-        rows = list(result.get("rows") or [])
-        columns = list(result.get("columns") or [])
-        if listing_ids:
-            rows = [{"property_id": item} for item in listing_ids]
-            columns = ["property_id"]
-        note = _data_note(result.get("domain_ids") or [])
+    # A listing turn answers from the filled cards, not from the id-only SQL rows.
+    listings = listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
+    rows = [] if listing_ids else list(result.get("rows") or [])
+    columns = [] if listing_ids else list(result.get("columns") or [])
+    note = _data_note(result.get("domain_ids") or [])
+    question = None
+    structured = None
+    if status in ("rows", "empty"):
+        question = _question(state, query, has_listings=bool(listing_ids))
         structured = _draft_structured(
             _models(runtime),
             message=message,
@@ -297,30 +305,33 @@ def _answer_from_lookup(
             purpose=str(result.get("purpose") or ""),
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
-            listing_ids=listing_ids or None,
+            listings=listings,
+            listing_count=len(listing_ids),
+            lookup_status=status,
             data_note=note,
-            session_profile=profile,
+            session_profile=state.get("session_profile") or {},
+            question=question,
             config=config,
         )
-        if structured is None:
-            text = _speak(
-                _models(runtime),
-                "answer_from_sql",
-                message=message,
-                history=history_summary(messages, limit=ANSWER_HISTORY),
-                rows=rows,
-                columns=columns,
-                row_count=int(result.get("row_count") or 0),
-                truncated=bool(result.get("truncated")),
-                purpose=str(result.get("purpose") or ""),
-                assumptions=assumptions.model_dump() if assumptions else None,
-                memory_block=state.get("memory_block") or "",
-                listing_ids=listing_ids or None,
-                data_note=note,
-                config=config,
-            )
-        else:
-            text = structured
+    if structured is not None:
+        text = structured
+    elif status == "rows":
+        text = _speak(
+            _models(runtime),
+            "answer_from_sql",
+            message=message,
+            history=history_summary(messages, limit=ANSWER_HISTORY),
+            rows=listings or rows,
+            columns=columns,
+            row_count=int(result.get("row_count") or 0),
+            truncated=bool(result.get("truncated")),
+            purpose=str(result.get("purpose") or ""),
+            assumptions=assumptions.model_dump() if assumptions else None,
+            memory_block=state.get("memory_block") or "",
+            listing_ids=listing_ids or None,
+            data_note=note,
+            config=config,
+        )
     elif status == "empty":
         text = EMPTY_LOOKUP_REPLY
         publish("text", delta=text)
@@ -336,11 +347,13 @@ def _answer_from_lookup(
                 "row_count": result.get("row_count"),
                 "truncated": result.get("truncated"),
                 "columns": result.get("columns"),
+                "listing_facts": len(listings),
+                "question": question.id if question and structured is not None else None,
                 "user_id": runtime.context.user_id,
             }
         },
     )
-    return {"messages": [AIMessage(content=text)], "awaiting_sql": False, "session_profile": profile}
+    return _reply_update(state, text, question if structured is not None else None)
 
 
 def _unavailable(
@@ -423,8 +436,35 @@ def _data_note(domain_ids: list) -> str:
     return "; ".join(phrases)
 
 
-def _draft_structured(models: RouterModels, *, message: str, messages: list, session_profile: dict, config: RunnableConfig, **fields) -> str | None:
-    """Ask for a structured reply when the model supports it. Otherwise keep streaming prose."""
+def _question(state: ChatState, query: QueryRoute | None, *, has_listings: bool) -> Question | None:
+    return next_question(
+        query,
+        state.get("session_profile") or {},
+        state.get("profile_asked"),
+        has_listings=has_listings,
+    )
+
+
+def _reply_update(state: ChatState, text: str, question: Question | None) -> dict:
+    """Store the question with the reply, so history reads the way the user saw it."""
+    content = f"{text}\n\n{question.prompt}" if question is not None else text
+    update: dict = {"messages": [AIMessage(content=content)], "awaiting_sql": False}
+    if question is not None:
+        update["profile_asked"] = [*(state.get("profile_asked") or []), question.id]
+    return update
+
+
+def _draft_structured(
+    models: RouterModels,
+    *,
+    message: str,
+    messages: list,
+    session_profile: dict,
+    question: Question | None,
+    config: RunnableConfig,
+    **fields,
+) -> str | None:
+    """Stream a structured reply when the model supports it. Otherwise the caller streams prose."""
     draft = getattr(models, "draft_reply", None)
     if not callable(draft):
         return None
@@ -433,6 +473,8 @@ def _draft_structured(models: RouterModels, *, message: str, messages: list, ses
             message=message,
             history=history_summary(messages, limit=ANSWER_HISTORY),
             session_profile=session_profile,
+            follow_up_question=question.prompt if question is not None else None,
+            on_text=lambda delta: publish("text", delta=delta),
             config=config,
             **fields,
         )
@@ -441,16 +483,19 @@ def _draft_structured(models: RouterModels, *, message: str, messages: list, ses
         return None
     reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
     payload = reply.model_dump()
-    questions = clarifying_questions(message, session_profile)
-    payload["clarifying_questions"] = questions
-    if questions:
-        payload["message_type"] = "recommendation" if payload.get("cards") else "clarifying_question"
+    payload["question"] = question.payload() if question is not None else None
+    if question is not None:
+        # The question already has its own tap options; a chip repeating it is noise.
+        asked = question.prompt.casefold()
+        payload["suggested_followups"] = [
+            item for item in reply.suggested_followups if item.casefold() not in asked
+        ]
     note = fields.get("data_note") or ""
     if note and not payload.get("data_source_note"):
         payload["data_source_note"] = note
     payload["session_profile"] = session_profile
     publish("reply", type="reply", reply=payload)
-    return str(payload.get("intro_text") or "").strip()
+    return reply.intro_text.strip()
 
 
 def _models(runtime: Runtime[AgentContext]) -> RouterModels:

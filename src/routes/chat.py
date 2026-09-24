@@ -1,4 +1,4 @@
-"""Streaming chat. Listing results are ids the frontend can render."""
+"""Streaming chat. Listing results arrive as cards the frontend can render."""
 
 from __future__ import annotations
 
@@ -76,6 +76,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
     graph = getattr(request.app.state, "chat_graph", None)
     models = getattr(request.app.state, "chat_models", None)
     sql_runner = getattr(request.app.state, "sql_runner", None)
+    listing_loader = getattr(request.app.state, "listing_loader", None)
 
     async def events() -> AsyncIterator[str]:
         yield ": ok\n\n"
@@ -86,6 +87,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
                 user_id=user_id,
                 models=models,
                 sql_runner=sql_runner,
+                listing_loader=listing_loader,
                 graph=graph,
                 session_profile=body.session_profile,
             ):
@@ -118,10 +120,6 @@ def _client_payload(event: dict) -> tuple[str, dict]:
     payload = {key: value for key, value in event.items() if key != "event"}
     if name == "text" and "delta" in payload and "token" not in payload:
         payload["token"] = payload["delta"]
-    elif name == "listings" and "cards" not in payload:
-        payload["cards"] = [
-            {"id": str(item), "title": f"Property {item}"} for item in (payload.get("ids") or [])
-        ]
     elif name == "done":
         payload["done"] = True
     elif name == "error" and "error" not in payload:

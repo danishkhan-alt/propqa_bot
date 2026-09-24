@@ -23,11 +23,8 @@ import { useChat } from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { usePrefsStore } from "@/store/prefsStore";
-import {
-  continuationFromProfile,
-  useSessionProfileStore,
-  type ContinuationContext,
-} from "@/store/sessionProfileStore";
+import { useSessionProfileStore } from "@/store/sessionProfileStore";
+import type { FollowUpQuestion, QuickReplyOption } from "@/components/chat/QuickReplies";
 import { RecommendationPanel } from "@/components/recommendations/RecommendationPanel";
 import { PrefsPanel } from "@/components/recommendations/PrefsPanel";
 import { UserDashboard } from "@/components/admin/AdminDashboard";
@@ -194,11 +191,11 @@ export default function App() {
     [sendMessage],
   );
 
-  const submitClarifying = useCallback(
-    (answers: Record<string, string>, context?: ContinuationContext) => {
-      useSessionProfileStore.getState().merge(answers);
-      const text = continuationFromProfile(useSessionProfileStore.getState().profile, context);
-      void sendWithFocusedIds(text);
+  // A tapped answer is said in the user's words, and its value rides along as profile.
+  const handleQuickReply = useCallback(
+    (question: FollowUpQuestion, option: QuickReplyOption) => {
+      useSessionProfileStore.getState().merge({ [question.id]: option.id });
+      void sendWithFocusedIds(option.reply);
     },
     [sendWithFocusedIds],
   );
@@ -385,7 +382,9 @@ export default function App() {
                 onDismissGuestBanner={dismissGuestBanner}
                 onSubmitLead={submitLeadForMessage}
                 onSuggestionClick={(q) => void sendWithFocusedIds(q)}
-                onClarify={submitClarifying}
+                onQuickReply={handleQuickReply}
+                canReply={chatStore.pendingHitl.length === 0}
+                onShowProperties={() => setPropertiesPanelOpen(true)}
                 selectedInquiryPropertyIds={inquiryPropertyIds}
                 onSelectedInquiryPropertyIdsChange={setInquiryPropertyIds}
                 className="min-h-0 min-w-0 flex-1 basis-0 overflow-y-auto"

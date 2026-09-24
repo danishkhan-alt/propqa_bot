@@ -29,8 +29,11 @@ class SqlPage:
     duration_ms: int
 
 
-def run_against_warehouse(sql: str) -> SqlPage:
-    """Execute `sql` on the warehouse pool. The caller has already guarded it."""
+def run_against_warehouse(sql: str, params: dict[str, Any] | None = None) -> SqlPage:
+    """Execute `sql` on the warehouse pool. The caller has already guarded it.
+
+    `params` is for fixed statements written in code. Model-drafted SQL never has any.
+    """
     from common.db import get_pool, warehouse_conninfo
     from config import ActiveConfig
 
@@ -45,13 +48,22 @@ def run_against_warehouse(sql: str) -> SqlPage:
         return fetch_readonly(
             connection,
             sql,
+            params=params,
             timeout_ms=ActiveConfig.SQL_TIMEOUT_MS,
             search_path=ActiveConfig.DB_SEARCH_PATH,
             row_cap=ActiveConfig.SQL_ROW_CAP,
         )
 
 
-def fetch_readonly(connection, sql: str, *, timeout_ms: int, search_path: str, row_cap: int) -> SqlPage:
+def fetch_readonly(
+    connection,
+    sql: str,
+    *,
+    timeout_ms: int,
+    search_path: str,
+    row_cap: int,
+    params: dict[str, Any] | None = None,
+) -> SqlPage:
     """One read-only transaction. Returns at most `row_cap` rows."""
     timeout = _timeout_ms(timeout_ms)
     path = _search_path(search_path)
@@ -61,7 +73,7 @@ def fetch_readonly(connection, sql: str, *, timeout_ms: int, search_path: str, r
             connection.execute("SET LOCAL transaction_read_only = on")
             connection.execute(f"SET LOCAL statement_timeout = {timeout}")
             connection.execute(f"SET LOCAL search_path TO {path}")
-            cursor = connection.execute(sql)
+            cursor = connection.execute(sql, params) if params else connection.execute(sql)
             fetched = cursor.fetchall()
             columns = [column.name for column in cursor.description] if cursor.description else []
     except Exception as exc:

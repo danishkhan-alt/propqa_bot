@@ -19,8 +19,8 @@ import { LeadActions, type LeadStatus, type LeadSubmitData } from "@/components/
 import type { FollowUpSuggestion } from "@/lib/followUpSuggestions";
 import type { StepFrame } from "@/store/chatStore";
 import { StructuredAnswer } from "./StructuredAnswer";
-import { followupQuery, type ContinuationContext } from "@/store/sessionProfileStore";
-import { PropertyCards } from "./PropertyCards";
+import type { FollowUpQuestion, QuickReplyOption } from "./QuickReplies";
+import { ListingSummary } from "./ListingSummary";
 import type { PropertyCard } from "@/store/chatStore";
 
 export interface Message {
@@ -73,8 +73,12 @@ interface MessageListProps {
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   /** Re-send a follow-up suggestion query */
   onSuggestionClick?: (query: string) => void;
-  /** Chip answers for a structured reply, with the search they belong to */
-  onClarify?: (answers: Record<string, string>, context?: ContinuationContext) => void;
+  /** A tapped answer to the assistant's follow-up question */
+  onQuickReply?: (question: FollowUpQuestion, option: QuickReplyOption) => void;
+  /** False while a reply streams or another prompt is waiting; chips then stay inert */
+  canReply?: boolean;
+  /** Opens the properties panel from a result summary */
+  onShowProperties?: () => void;
   /** Property IDs selected in the sidebar for bulk agent contact */
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
@@ -95,7 +99,9 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     onDismissGuestBanner,
     onSubmitLead,
     onSuggestionClick,
-    onClarify,
+    onQuickReply,
+    canReply = true,
+    onShowProperties,
     selectedInquiryPropertyIds = [],
     onSelectedInquiryPropertyIdsChange,
     sessionId = "",
@@ -120,6 +126,13 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       for (let i = messages.length - 1; i >= 0; i--) {
         const m = messages[i];
         if (m.role === "assistant" && (m.cards?.length ?? 0) > 0) return m.id;
+      }
+      return null;
+    }, [messages]);
+
+    const latestAssistantId = useMemo(() => {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant") return messages[i].id;
       }
       return null;
     }, [messages]);
@@ -156,16 +169,19 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
         {/* Messages */}
         <div className="flex flex-col gap-1 px-2 py-4">
-          {messages.map((msg) => (
+          {messages.map((msg, index) => (
             <MessageBubble
               key={msg.id}
               message={msg}
               sessionId={sessionId}
               isLatestWithCards={msg.id === latestAssistantWithCardsId}
+              interactive={msg.id === latestAssistantId && canReply && !isLoading && !msg.isStreaming}
+              answeredId={answeredOption(msg, messages[index + 1])}
               onRetry={onRetry}
               onSubmitLead={onSubmitLead}
               onSuggestionClick={onSuggestionClick}
-              onClarify={onClarify}
+              onQuickReply={onQuickReply}
+              onShowProperties={onShowProperties}
               selectedInquiryPropertyIds={selectedInquiryPropertyIds}
               onSelectedInquiryPropertyIdsChange={onSelectedInquiryPropertyIdsChange}
             />
@@ -210,18 +226,12 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
 MessageList.displayName = "MessageList";
 
-function replyContext(message: Message): ContinuationContext {
-  const listings = (message.cards ?? []) as PropertyCard[];
-  const areas = message.structured?.cards ?? [];
-  const subjects = (listings.length ? listings : areas)
-    .map((card) => String(("title" in card && card.title) || ("location" in card && card.location) || "").trim())
-    .filter(Boolean)
-    .slice(0, 4);
-  return {
-    priorQuestion: message.userPrompt,
-    subjects,
-    about: listings.length ? "properties" : "areas",
-  };
+/** The option the user tapped, read from the message that followed the question. */
+function answeredOption(message: Message, next: Message | undefined): string | null {
+  const question = message.structured?.question;
+  if (!question || next?.role !== "user") return null;
+  const said = next.content.trim();
+  return question.options.find((option) => option.reply === said)?.id ?? null;
 }
 
 // ── MessageBubble ────────────────────────────────────────────────────────────
@@ -230,10 +240,13 @@ interface MessageBubbleProps {
   message: Message;
   sessionId: string;
   isLatestWithCards?: boolean;
+  interactive?: boolean;
+  answeredId?: string | null;
   onRetry?: (prompt: string) => void;
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   onSuggestionClick?: (query: string) => void;
-  onClarify?: (answers: Record<string, string>, context?: ContinuationContext) => void;
+  onQuickReply?: (question: FollowUpQuestion, option: QuickReplyOption) => void;
+  onShowProperties?: () => void;
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
 }
@@ -242,10 +255,13 @@ function MessageBubble({
   message,
   sessionId,
   isLatestWithCards = false,
+  interactive = false,
+  answeredId = null,
   onRetry,
   onSubmitLead,
   onSuggestionClick,
-  onClarify,
+  onQuickReply,
+  onShowProperties,
   selectedInquiryPropertyIds = [],
   onSelectedInquiryPropertyIdsChange,
 }: MessageBubbleProps) {
@@ -293,7 +309,7 @@ function MessageBubble({
             isUser
               ? "rounded-2xl rounded-br-none bg-[#F0F2F7] px-4 py-3"
               : "bg-white px-2.5 py-0",
-            message.isStreaming && "animate-pulse",
+            message.isStreaming && !message.content && "animate-pulse",
           )}
         >
           {isUser ? (
@@ -301,11 +317,10 @@ function MessageBubble({
           ) : message.structured ? (
             <StructuredAnswer
               reply={message.structured}
-              onFollowup={(label) => {
-                const context = replyContext(message);
-                onSuggestionClick?.(followupQuery(label, context));
-              }}
-              onClarify={(answers) => onClarify?.(answers, replyContext(message))}
+              interactive={interactive}
+              answeredId={answeredId}
+              onFollowup={onSuggestionClick}
+              onQuickReply={onQuickReply}
             />
           ) : (
             <div
@@ -315,16 +330,9 @@ function MessageBubble({
           )}
         </div>
 
-        {/* Status text during streaming */}
+        {/* Full cards live in the properties panel; the chat keeps a pointer to them */}
         {!isUser && (message.cards?.length ?? 0) > 0 && (
-          <PropertyCards
-            cards={message.cards as PropertyCard[]}
-            searchUrl={message.searchUrl}
-            appliedFilters={message.appliedFilters}
-            layout="strip"
-            sessionId={sessionId}
-            className="mt-1"
-          />
+          <ListingSummary cards={message.cards as PropertyCard[]} onOpen={onShowProperties} />
         )}
 
         {message.statusText && (message.isStreaming || message.statusText === "Stopped") && (

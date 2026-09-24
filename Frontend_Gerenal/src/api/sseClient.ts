@@ -16,7 +16,7 @@ interface SendSSEOpts {
   personaContext?: Record<string, unknown> | null;
   /** Listing-scoped FAQ: property IDs attached in the composer. */
   focusedPropertyIds?: number[] | null;
-  sessionProfile?: Record<string, unknown> | null;
+  sessionProfile?: object | null;
   signal?: AbortSignal | null;
   onFrame: (frame: ServerFrame) => void;
   onError?: (err: Error) => void;
@@ -134,7 +134,8 @@ export async function sendSSE(opts: SendSSEOpts): Promise<void> {
   } else if (opts.persona) {
     body.persona = opts.persona;
   }
-  if (opts.sessionProfile && Object.keys(opts.sessionProfile).length > 0) {
+  // An empty profile is sent too: it is how a removed chip clears the server's copy.
+  if (opts.sessionProfile) {
     body.session_profile = opts.sessionProfile;
   }
   if (Array.isArray(opts.focusedPropertyIds) && opts.focusedPropertyIds.length > 0) {

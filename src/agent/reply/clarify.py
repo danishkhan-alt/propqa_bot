@@ -1,159 +1,123 @@
-"""Fixed clarifying questions. The model does not invent new question types."""
+"""Buyer profile: keep what the user told us, and pick at most one question to ask next.
+
+Questions are a fixed catalog so the UI can render tap options and the answers stay a
+closed set. The router reads profile facts from free text; this module only merges them.
+"""
 
 from __future__ import annotations
 
-import re
+from dataclasses import dataclass
 from typing import Any
 
-_PROFILE_KEYS = ("family_size", "purpose", "budget_range", "timeline")
+from agent.enums.routing import Intent, Route
+from agent.schemas.profile import BUDGET_RANGES, GOALS, TIMELINES, ProfileSignals, family_size
+from agent.schemas.routes import QueryRoute
 
-_ADVISORY = (
-    "where should i",
-    "where do i buy",
-    "where to buy",
-    "should i buy",
-    "should i go",
-    "good investment",
-    "which area",
-    "which community",
-    "which neighbourhood",
-    "which neighborhood",
-    "recommend",
-    "best area",
-    "best place",
+PROFILE_KEYS = ("family_size", "goal", "budget_range", "timeline")
+
+_ALLOWED = {"goal": GOALS, "budget_range": BUDGET_RANGES, "timeline": TIMELINES}
+# A shortlist of these shapes gets better when we know the buyer's situation.
+_SHORTLIST_INTENTS = frozenset({Intent.LIST, Intent.RANK, Intent.COMPARE, Intent.ASSESS})
+
+
+@dataclass(frozen=True)
+class Option:
+    id: str
+    label: str
+    reply: str
+
+
+@dataclass(frozen=True)
+class Question:
+    id: str
+    prompt: str
+    options: tuple[Option, ...]
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "prompt": self.prompt,
+            "options": [
+                {"id": option.id, "label": option.label, "reply": option.reply}
+                for option in self.options
+            ],
+        }
+
+
+QUESTIONS: tuple[Question, ...] = (
+    Question(
+        id="goal",
+        prompt="Is this a home for you, or an investment? It changes which of these I'd put first.",
+        options=(
+            Option("live", "A home for me", "It's a home for me to live in."),
+            Option("invest", "An investment", "I'm buying it as an investment."),
+            Option("both", "A bit of both", "A bit of both: I'll live in it, and it should hold its value."),
+        ),
+    ),
+    Question(
+        id="budget_range",
+        prompt="What budget are you working with?",
+        options=(
+            Option("under_1m", "Under AED 1M", "My budget is under AED 1M."),
+            Option("1m_2m", "AED 1M–2M", "My budget is AED 1M to 2M."),
+            Option("2m_4m", "AED 2M–4M", "My budget is AED 2M to 4M."),
+            Option("4m_plus", "AED 4M+", "My budget is above AED 4M."),
+        ),
+    ),
+    Question(
+        id="timeline",
+        prompt="Do you want to move in soon, or are you open to off-plan?",
+        options=(
+            Option("ready", "Ready to move in", "I want something ready to move into."),
+            Option("off_plan", "Open to off-plan", "I'm open to off-plan."),
+        ),
+    ),
 )
 
-_FACTUAL = (
-    "what is the",
-    "what's the",
-    "whats the",
-    "how many",
-    "how much",
-    "average ",
-    "yield in",
-    "price of",
-    "service charge",
-)
 
-PURPOSE = {
-    "id": "purpose",
-    "label": "Living in it, investing, or both?",
-    "type": "single_select",
-    "options": [
-        {"id": "live", "label": "Live in it"},
-        {"id": "invest", "label": "Invest"},
-        {"id": "both", "label": "Both"},
-    ],
-}
-
-BUDGET = {
-    "id": "budget_range",
-    "label": "Roughly what budget, in AED?",
-    "type": "single_select",
-    "options": [
-        {"id": "under_1m", "label": "Under 1M"},
-        {"id": "1m_2m", "label": "1M–2M"},
-        {"id": "2m_4m", "label": "2M–4M"},
-        {"id": "4m_plus", "label": "4M+"},
-    ],
-}
-
-TIMELINE = {
-    "id": "timeline",
-    "label": "Ready to move, or willing to wait on off-plan?",
-    "type": "single_select",
-    "options": [
-        {"id": "ready", "label": "Ready to move"},
-        {"id": "off_plan", "label": "Can wait on off-plan"},
-    ],
-}
-
-_QUESTIONS = (PURPOSE, BUDGET, TIMELINE)
-_BUDGET_IDS = {option["id"] for option in BUDGET["options"]}
-_PURPOSE_IDS = {option["id"] for option in PURPOSE["options"]}
-_TIMELINE_IDS = {option["id"] for option in TIMELINE["options"]}
-
-
-def is_advisory(message: str) -> bool:
-    text = message.lower()
-    advisory = any(phrase in text for phrase in _ADVISORY)
-    factual = any(phrase in text for phrase in _FACTUAL)
-    if factual and not advisory:
-        return False
-    return advisory
-
-
-def merge_profile(existing: dict[str, Any] | None, incoming: dict[str, Any] | None, message: str) -> dict[str, Any]:
-    """Keep known answers, then apply this turn's explicit facts."""
+def clean_profile(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Known keys with valid values only. The UI sends this, so it is not trusted."""
     profile: dict[str, Any] = {}
-    for source in (existing or {}, incoming or {}):
-        for key in _PROFILE_KEYS:
-            value = source.get(key)
-            if value not in (None, ""):
-                profile[key] = value
-    inferred = _infer(message)
-    for key, value in inferred.items():
-        if profile.get(key) in (None, ""):
+    for key, value in (raw or {}).items():
+        if key == "family_size":
+            size = family_size(value)
+            if size is not None:
+                profile[key] = size
+        elif key in _ALLOWED and value in _ALLOWED[key]:
             profile[key] = value
-    return {key: profile[key] for key in _PROFILE_KEYS if key in profile}
+    return profile
 
 
-def clarifying_questions(message: str, profile: dict[str, Any]) -> list[dict[str, Any]]:
-    """At most two, and only for an advisory question with a missing fact."""
-    if not is_advisory(message):
-        return []
-    missing = []
-    if profile.get("purpose") not in _PURPOSE_IDS:
-        missing.append(PURPOSE)
-    if profile.get("budget_range") not in _BUDGET_IDS:
-        missing.append(BUDGET)
-    if len(missing) < 2 and profile.get("timeline") not in _TIMELINE_IDS:
-        missing.append(TIMELINE)
-    return missing[:2]
+def merge_profile(existing: dict[str, Any] | None, signals: ProfileSignals | None) -> dict[str, Any]:
+    """What the user says this turn replaces what we knew."""
+    profile = clean_profile(existing)
+    if signals is not None:
+        profile.update(clean_profile(signals.model_dump(exclude_none=True)))
+    return {key: profile[key] for key in PROFILE_KEYS if key in profile}
 
 
-_NUMBERS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-}
-
-
-def _infer(message: str) -> dict[str, Any]:
-    text = message.lower()
-    found: dict[str, Any] = {}
-    family = re.search(r"family of (\d+|one|two|three|four|five|six|seven|eight)", text)
-    if family:
-        token = family.group(1)
-        found["family_size"] = int(token) if token.isdigit() else _NUMBERS[token]
-    if re.search(r"\b(invest(?:ment|ing)?|rental income)\b", text):
-        found["purpose"] = "invest"
-    elif re.search(r"\b(live in|living in|to live|end[- ]user|relocating)\b", text):
-        found["purpose"] = "live"
-    elif re.search(r"\bboth\b", text) and is_advisory(message):
-        found["purpose"] = "both"
-    budget = _budget(text)
-    if budget:
-        found["budget_range"] = budget
-    if "off-plan" in text or "off plan" in text:
-        found["timeline"] = "off_plan"
-    elif "ready to move" in text or "ready-to-move" in text:
-        found["timeline"] = "ready"
-    return found
-
-
-def _budget(text: str) -> str | None:
-    if "under 1" in text or "below 1" in text:
-        return "under_1m"
-    if "4m+" in text or "over 4" in text or "above 4" in text:
-        return "4m_plus"
-    if "2m" in text and "4m" in text:
-        return "2m_4m"
-    if "1m" in text and "2m" in text:
-        return "1m_2m"
+def next_question(
+    route: QueryRoute | None,
+    profile: dict[str, Any],
+    asked: list[str] | None,
+    *,
+    has_listings: bool,
+) -> Question | None:
+    """At most one question, each asked once per thread, and only where the answer would change."""
+    if route is None or not _wants_context(route, has_listings=has_listings):
+        return None
+    already = set(asked or [])
+    for question in QUESTIONS:
+        if question.id in profile or question.id in already:
+            continue
+        return question
     return None
+
+
+def _wants_context(route: QueryRoute, *, has_listings: bool) -> bool:
+    # The catalog is for buyers. Rent budgets and "live or invest" do not apply to a tenant.
+    if "rent" in str(route.purpose or "").lower():
+        return False
+    if route.seeking_advice:
+        return True
+    return route.route is Route.NEED_DB and route.intent in _SHORTLIST_INTENTS and has_listings

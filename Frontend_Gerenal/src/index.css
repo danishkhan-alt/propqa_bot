@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The HTML `hidden` attribute must win over display utilities (`flex`, `inline-flex`).
+   Tailwind v3's preflight rule loses to them; v4 and the @shadcn/react primitives
+   (Questionnaire hides inactive steps and buttons this way) assume it wins. */
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none !important;
+}
+
 /* ── shadcn Vercel theme (tweakcn) ───────────────────────────────────────── */
 @layer base {
   :root {

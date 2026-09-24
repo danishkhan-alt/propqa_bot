@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -44,7 +45,9 @@ kind is one of:
 FRAME_FALLBACK = FrameClass(kind="new")
 
 SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
-REPLY_FALLBACK = StructuredReply(intro_text="I couldn't shape that reply. Ask me again with an area or a budget.")
+REPLY_FALLBACK = StructuredReply(
+    intro_text="Sorry, I couldn't put that answer together just now. Could you ask me again?"
+)
 
 
 def invoke_structured(
@@ -97,10 +100,14 @@ class AnthropicRouterModels:
         router_llm = ChatAnthropic(
             model=ActiveConfig.ROUTER_MODEL, api_key=api_key, max_tokens=1024
         )
+        # Thinking tokens come out of max_tokens, so each route gets the full output budget
+        # and an explicit effort instead of a small hard cap.
         answer_llm = ChatAnthropic(
             model=ActiveConfig.AI_MODEL,
             api_key=api_key,
-            max_tokens=min(ActiveConfig.ANTHROPIC_MAX_OUTPUT_TOKENS, 1024),
+            max_tokens=ActiveConfig.ANTHROPIC_MAX_OUTPUT_TOKENS,
+            thinking={"type": "adaptive"},
+            effort=ActiveConfig.AI_REPLY_EFFORT,
         )
         self._query = router_llm.with_structured_output(
             QueryRoute, method="json_schema", include_raw=True
@@ -110,13 +117,17 @@ class AnthropicRouterModels:
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
         self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
+        # A JSON-schema dict (not the model class) makes the parser yield partial objects
+        # while streaming, so intro_text reaches the user as it is written.
         self._reply = answer_llm.with_structured_output(
-            StructuredReply, method="json_schema", include_raw=True
+            StructuredReply.model_json_schema(), method="json_schema"
         ).with_config({"run_name": "answer.structured"})
         sql_llm = ChatAnthropic(
             model=ActiveConfig.AI_MODEL,
             api_key=api_key,
-            max_tokens=min(ActiveConfig.ANTHROPIC_MAX_OUTPUT_TOKENS, 2048),
+            max_tokens=ActiveConfig.ANTHROPIC_MAX_OUTPUT_TOKENS,
+            thinking={"type": "adaptive"},
+            effort=ActiveConfig.AI_SQL_EFFORT,
         )
         self._sql = sql_llm.with_structured_output(
             SqlDraft, method="json_schema", include_raw=True
@@ -366,35 +377,37 @@ class AnthropicRouterModels:
         purpose: str = "",
         assumptions: dict | None = None,
         memory_block: str = "",
-        listing_ids: list[str] | None = None,
+        listings: list[dict] | None = None,
+        listing_count: int = 0,
+        lookup_status: str | None = None,
         data_note: str = "",
         session_profile: dict | None = None,
+        follow_up_question: str | None = None,
+        on_text: Callable[[str], None] | None = None,
         config: RunnableConfig | None = None,
     ) -> StructuredReply:
         payload = {
             "message": message,
             "history": history,
+            "session_profile": session_profile or {},
+            "memory_block": memory_block,
+            "lookup_status": lookup_status,
             "purpose": purpose,
             "assumptions": assumptions,
+            "listing_count": listing_count,
+            "listings": listings or [],
             "columns": columns or [],
             "rows": rows or [],
             "row_count": row_count,
             "truncated": truncated,
-            "memory_block": memory_block,
-            "listing_ids": listing_ids,
             "data_note": data_note,
-            "session_profile": session_profile or {},
+            "follow_up_question": follow_up_question,
         }
-        parsed = invoke_structured(
-            self._reply,
-            [
-                SystemMessage(content=STRUCTURED_REPLY_SYSTEM),
-                HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
-            ],
-            config,
-            REPLY_FALLBACK,
-        )
-        return parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
+        messages = [
+            SystemMessage(content=STRUCTURED_REPLY_SYSTEM),
+            HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+        ]
+        return stream_structured_reply(self._reply, messages, config, on_text)
 
     def classify_frame(
         self,
@@ -415,6 +428,45 @@ class AnthropicRouterModels:
         )
         kind = parsed.kind if isinstance(parsed, FrameClass) else FrameClass.model_validate(parsed).kind
         return kind
+
+
+def stream_structured_reply(
+    runnable,
+    messages: list,
+    config: RunnableConfig | None,
+    on_text: Callable[[str], None] | None,
+) -> StructuredReply:
+    """Stream intro_text through `on_text`, then validate the whole reply.
+
+    If the stream breaks after text was shown, keep that text rather than replace it.
+    If it breaks before, fall back to one non-streaming call with a retry.
+    """
+    shown = ""
+    latest: dict = {}
+    try:
+        for partial in runnable.stream(messages, config=config):
+            if not isinstance(partial, dict):
+                continue
+            latest = partial
+            text = partial.get("intro_text")
+            # A partial string only grows. Anything else is a half-parsed escape; wait for more.
+            if isinstance(text, str) and len(text) > len(shown) and text.startswith(shown):
+                delta, shown = text[len(shown):], text
+                if on_text is not None:
+                    on_text(delta)
+        return StructuredReply.model_validate(latest)
+    except Exception as exc:
+        logger.warning(
+            "answer.structured stream failed",
+            extra={"extra_data": {"error": type(exc).__name__, "shown": bool(shown)}},
+        )
+        if shown.strip():
+            return StructuredReply(intro_text=shown)
+    parsed = invoke_structured(runnable, messages, config, REPLY_FALLBACK)
+    reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
+    if on_text is not None and reply.intro_text:
+        on_text(reply.intro_text)
+    return reply
 
 
 def _llm_deltas(runnable, messages: list, config: RunnableConfig | None):

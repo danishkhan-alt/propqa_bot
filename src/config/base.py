@@ -105,6 +105,10 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
     ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-4-5")
+    # AI_MODEL thinks adaptively, and its thinking counts against max_tokens. Effort sets
+    # how much it thinks per route: replies write from facts already fetched, SQL reasons.
+    AI_REPLY_EFFORT = os.getenv("AI_REPLY_EFFORT", "low")
+    AI_SQL_EFFORT = os.getenv("AI_SQL_EFFORT", "medium")
 
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")

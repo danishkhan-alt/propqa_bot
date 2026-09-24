@@ -1,4 +1,4 @@
-"""The chat API streams text, and a listing result is ids only."""
+"""The chat API streams text, and a listing result is cards filled from the listing ids."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.chat import build_chat_graph
 from agent.memory.session.bootstrap import close_memory
+from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlPage
@@ -127,9 +128,29 @@ def _rows(sql: str) -> SqlPage:
     )
 
 
-def _client(models, runner=None):
+def _cards(ids: list[int]) -> list[dict]:
+    known = {
+        15802: {
+            "id": 15802,
+            "title_en": "Marina Gate 2BR",
+            "slug_en": "apartments-for-sale-dubai-marina-15802",
+            "purpose": "for_sale",
+            "show_price": True,
+            "price_min": "1450000.0000",
+            "rooms": 2,
+            "area": "1120.00",
+            "completion_status": "off_plan",
+            "building_name": "Marina Gate 1",
+            "images": ["https://cdn.test/a.jpg", "https://cdn.test/b.jpg"],
+            "agency_company": "Blue Keys",
+        },
+    }
+    return [known[item] for item in ids if item in known]
+
+
+def _client(models, runner=None, loader=_cards):
     graph = build_chat_graph(InMemorySaver())
-    app = create_app(graph=graph, models=models, sql_runner=runner)
+    app = create_app(graph=graph, models=models, sql_runner=runner, listing_loader=loader)
     return TestClient(app), graph
 
 
@@ -234,7 +255,7 @@ def test_the_first_text_piece_is_sent_before_the_reply_finishes():
     assert sent_early.is_set()
 
 
-def test_a_listing_reply_streams_ids_and_not_the_row():
+def test_a_listing_reply_streams_filled_cards_and_not_the_sql_row():
     models = _Listings()
     client, graph = _client(models, _rows)
     with client:
@@ -245,22 +266,25 @@ def test_a_listing_reply_streams_ids_and_not_the_row():
     names = [name for name, _ in events]
     assert names.index("listings") < names.index("text")
     listings = next(payload for name, payload in events if name == "listings")
-    assert listings == {
-        "ids": ["15802", "19806"],
-        "cards": [
-            {"id": "15802", "title": "Property 15802"},
-            {"id": "19806", "title": "Property 19806"},
-        ],
-    }
-    assert "Marina Gate" not in body
+    assert listings["ids"] == ["15802", "19806"]
+    first, second = listings["cards"]
+    assert first["title_en"] == "Marina Gate 2BR"
+    assert first["image_url"] == "https://cdn.test/a.jpg"
+    assert first["agency_name"] == "Blue Keys"
+    assert first["price_min"] == "1450000.0000"
+    assert second == {"id": "19806"}
+    # The drafted SQL row never reaches the client. Only vetted card fields do.
     assert "project_name_en" not in body
     assert models.listing_ids_only is True
-    assert models.answer_rows == [{"property_id": "15802"}, {"property_id": "19806"}]
+    assert models.answer_rows[0]["title"] == "Marina Gate 2BR"
+    assert models.answer_rows[0]["asking_price_aed"] == 1450000
+    assert "images" not in models.answer_rows[0]
     text = "".join(payload["token"] for name, payload in events if name == "text")
     assert text == "Here are 2 apartments in Dubai Marina."
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
     assert state.values["last_need_db"].result_meta["ids"] == ["15802", "19806"]
     assert state.values["listing_ids"] == []
+    assert state.values["listing_cards"] == []
 
 
 def test_a_session_id_continues_the_same_thread():
@@ -357,3 +381,118 @@ def test_chat_uses_the_chat_limit(memory_cache: MemoryCache):
     keys = list(memory_cache._store)
     assert any("chat.visitor" in key for key in keys)
     assert not any("api.visitor" in key for key in keys)
+
+
+class _Advisor(_Listings):
+    """Listing turns with a structured reply that streams its text."""
+
+    def __init__(self, signals: dict | None = None, purpose: str | None = "sale") -> None:
+        super().__init__()
+        self.signals = signals or {}
+        self.purpose = purpose
+        self.drafts: list[dict] = []
+
+    def route_query(self, **kwargs) -> QueryRoute:
+        return QueryRoute(
+            route=Route.NEED_DB,
+            turn_kind=TurnKind.NEW,
+            intent=Intent.LIST,
+            purpose=self.purpose,
+            profile=self.signals,
+            confidence=0.9,
+            rationale="Show apartments.",
+        )
+
+    def draft_reply(self, *, on_text, **kwargs) -> StructuredReply:
+        self.drafts.append(kwargs)
+        on_text("Two homes ")
+        on_text("stand out.")
+        return StructuredReply(
+            intro_text="Two homes stand out.",
+            message_type="listing_results",
+            suggested_followups=["Show ready homes instead"],
+        )
+
+
+def _reply(events: list[tuple[str, dict]]) -> dict:
+    return next(payload for name, payload in events if name == "reply")["reply"]
+
+
+def test_a_structured_reply_streams_its_text_then_the_reply():
+    models = _Advisor()
+    client, graph = _client(models, _rows)
+    with client:
+        _, headers, body = _read(client, "Show me apartments in Dubai Marina")
+        thread_id = _header(headers, "x-thread-id")
+    events = _parse_sse(body)
+    names = [name for name, _ in events]
+    assert names.index("listings") < names.index("text") < names.index("reply")
+    text = "".join(payload["token"] for name, payload in events if name == "text")
+    assert text == "Two homes stand out."
+    reply = _reply(events)
+    assert reply["intro_text"] == "Two homes stand out."
+    assert reply["question"]["id"] == "goal"
+    assert [option["id"] for option in reply["question"]["options"]] == ["live", "invest", "both"]
+    assert models.drafts[0]["listings"][0]["title"] == "Marina Gate 2BR"
+    assert models.drafts[0]["follow_up_question"] == reply["question"]["prompt"]
+    state = graph.get_state({"configurable": {"thread_id": thread_id}})
+    # History keeps the question the user was shown.
+    assert state.values["messages"][-1].content.endswith(reply["question"]["prompt"])
+    assert state.values["profile_asked"] == ["goal"]
+
+
+def test_each_question_is_asked_once_and_known_facts_are_skipped():
+    models = _Advisor(signals={"goal": "invest", "budget_range": "1m_2m"})
+    client, _ = _client(models, _rows)
+    with client:
+        _, headers, first = _read(client, "Investment apartments in Dubai Marina under 2M")
+        thread_id = _header(headers, "x-thread-id")
+        models.signals = {}
+        _, _, second = _read(client, "Any others?", thread_id)
+    first_reply = _reply(_parse_sse(first))
+    assert first_reply["question"]["id"] == "timeline"
+    assert first_reply["session_profile"] == {"goal": "invest", "budget_range": "1m_2m"}
+    second_reply = _reply(_parse_sse(second))
+    assert second_reply["question"] is None
+    assert second_reply["session_profile"] == {"goal": "invest", "budget_range": "1m_2m"}
+
+
+def test_a_rental_search_asks_no_buyer_question():
+    models = _Advisor(purpose="rent")
+    client, _ = _client(models, _rows)
+    with client:
+        _, _, body = _read(client, "Apartments for rent in Dubai Marina")
+    assert _reply(_parse_sse(body))["question"] is None
+
+
+def test_an_invalid_profile_from_the_client_is_dropped():
+    models = _Advisor()
+    client, _ = _client(models, _rows)
+    with client:
+        with client.stream(
+            "POST",
+            "/api/chat",
+            json={
+                "message": "Apartments in Dubai Marina",
+                "session_profile": {"goal": "live", "budget_range": "cheap", "family_size": 99, "x": 1},
+            },
+        ) as response:
+            body = "".join(response.iter_text())
+    reply = _reply(_parse_sse(body))
+    assert reply["session_profile"] == {"goal": "live"}
+    assert reply["question"]["id"] == "budget_range"
+
+
+def test_a_follow_up_chip_never_repeats_the_question():
+    class _Echo(_Advisor):
+        def draft_reply(self, *, on_text, **kwargs) -> StructuredReply:
+            on_text("Here they are.")
+            return StructuredReply(
+                intro_text="Here they are.",
+                suggested_followups=["Is this a home for you, or an investment?", "Compare with JVC"],
+            )
+
+    client, _ = _client(_Echo(), _rows)
+    with client:
+        _, _, body = _read(client, "Apartments in Dubai Marina")
+    assert _reply(_parse_sse(body))["suggested_followups"] == ["Compare with JVC"]

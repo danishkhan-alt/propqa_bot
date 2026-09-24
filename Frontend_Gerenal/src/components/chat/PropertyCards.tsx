@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/pagination";
 import { cn, resolvePropqaUrl } from "@/lib/utils";
 import { usePropertyContact } from "@/hooks/usePropertyContact";
+import { useWorkingImages } from "@/hooks/useWorkingImages";
 import { cardPropertyIds, parsePropertyId } from "@/lib/propertyIds";
 import {
   pickCardTitle,
@@ -382,14 +383,16 @@ function SidebarFigmaCard({
   const agencyLogo = pickAgencyLogoUrl(card);
   // When the agent account is the brokerage (only a logo on file), reuse it as avatar.
   const agentImage = pickAgentImageUrl(card) ?? agencyLogo;
-  const images = useMemo(() => pickCardImages(card), [card]);
+  const cardImages = useMemo(() => pickCardImages(card), [card]);
+  const { images, markFailed } = useWorkingImages(cardImages);
   const [imageIndex, setImageIndex] = useState(0);
 
   useEffect(() => {
     setImageIndex(0);
   }, [card.id]);
 
-  const currentImage = images[imageIndex];
+  // A photo that failed can shrink the list under the current index.
+  const currentImage = images[imageIndex] ?? images[0];
   const hasMultiple = images.length > 1;
   const propertyId = parsePropertyId(card);
   const ctaEnabled = showCtas && propertyId != null && onCtaClick;
@@ -417,6 +420,7 @@ function SidebarFigmaCard({
             <a {...listingLink} aria-label={`Open ${title} on PropQA`} className="block h-full w-full">
               <img
                 key={currentImage}
+                onError={() => markFailed(currentImage)}
                 src={currentImage}
                 alt={`${title} — photo ${imageIndex + 1} of ${images.length}`}
                 className="h-full w-full object-cover"
@@ -426,6 +430,7 @@ function SidebarFigmaCard({
           ) : (
             <img
               key={currentImage}
+              onError={() => markFailed(currentImage)}
               src={currentImage}
               alt={`${title} — photo ${imageIndex + 1} of ${images.length}`}
               className="h-full w-full object-cover"
@@ -754,14 +759,16 @@ function StripCard({
   const completion = humanizeCompletion(card.completion_status ?? card.completion);
   const type = pickCardType(card);
   const addedOn = pickAddedOn(card);
-  const images = useMemo(() => pickCardImages(card), [card]);
+  const cardImages = useMemo(() => pickCardImages(card), [card]);
+  const { images, markFailed } = useWorkingImages(cardImages);
   const [imageIndex, setImageIndex] = useState(0);
 
   useEffect(() => {
     setImageIndex(0);
   }, [card.id]);
 
-  const currentImage = images[imageIndex];
+  // A photo that failed can shrink the list under the current index.
+  const currentImage = images[imageIndex] ?? images[0];
   const hasMultiple = images.length > 1;
 
   const rawPath =
@@ -782,6 +789,7 @@ function StripCard({
         {currentImage ? (
           <img
             key={currentImage}
+            onError={() => markFailed(currentImage)}
             src={currentImage}
             alt={`${title} — photo ${imageIndex + 1} of ${images.length}`}
             className="h-full w-full object-cover transition-opacity duration-200"
