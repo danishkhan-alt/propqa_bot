@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.checkpointer import delete_thread
+from agent.checkpointer import RedisCheckpoint, delete_thread
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graphs.chat import build_chat_graph
@@ -42,6 +43,49 @@ def _invoke(graph, message: str, thread_id: str) -> dict:
     )
     value = getattr(result, "value", result)
     return value if isinstance(value, dict) else dict(value)
+
+
+def test_async_checkpoint_calls_run_on_the_sync_saver():
+    saver = RedisCheckpoint.__new__(RedisCheckpoint)
+    calls: list[tuple] = []
+
+    def get_tuple(config):
+        calls.append(("get", config))
+        return "stored"
+
+    def put(config, checkpoint, metadata, new_versions):
+        calls.append(("put", checkpoint))
+        return {"configurable": {"thread_id": "t"}}
+
+    def put_writes(config, writes, task_id, task_path=""):
+        calls.append(("writes", task_id, task_path, writes))
+
+    def delete_one(thread_id):
+        calls.append(("delete", thread_id))
+
+    def list_rows(config, *, filter=None, before=None, limit=None):
+        calls.append(("list", limit))
+        return iter(["a", "b"])
+
+    saver.get_tuple = get_tuple
+    saver.put = put
+    saver.put_writes = put_writes
+    saver.delete_thread = delete_one
+    saver.list = list_rows
+
+    async def exercise() -> None:
+        assert await saver.aget_tuple({"configurable": {}}) == "stored"
+        stored = await saver.aput({}, "cp", {}, {})
+        assert stored == {"configurable": {"thread_id": "t"}}
+        await saver.aput_writes({}, [("channel", 1)], "task", "path")
+        await saver.adelete_thread("thread-1")
+        assert [item async for item in saver.alist(None, limit=2)] == ["a", "b"]
+
+    asyncio.run(exercise())
+    assert ("get", {"configurable": {}}) in calls
+    assert ("writes", "task", "path", [("channel", 1)]) in calls
+    assert ("delete", "thread-1") in calls
+    assert ("list", 2) in calls
 
 
 def test_delete_thread_requires_an_id():

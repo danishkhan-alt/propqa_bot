@@ -1,15 +1,28 @@
 """Thread persistence for the chat graph.
 
 Each turn writes a checkpoint in Redis and expires after a day. Long-term memory
-lives in Postgres, not in the checkpoint. Tests use an in-memory saver.
+lives in Postgres, not in the checkpoint. The chat API reads those checkpoints
+asynchronously, so the saver runs the same Redis calls from a worker thread.
+Tests use an in-memory saver.
 """
 
 from __future__ import annotations
 
+import asyncio
 import threading
+from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import (
+    BaseCheckpointSaver,
+    ChannelVersions,
+    Checkpoint,
+    CheckpointMetadata,
+    CheckpointTuple,
+)
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis import RedisSaver
 
 from common.db import close_pool
 from common.logger import get_logger
@@ -21,6 +34,48 @@ _CHECKPOINT_TTL_MINUTES = 60 * 24
 
 _saver: BaseCheckpointSaver | None = None
 _lock = threading.Lock()
+
+
+class RedisCheckpoint(RedisSaver):
+    """Redis checkpoints the async chat stream can read and write."""
+
+    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
+        return await asyncio.to_thread(self.get_tuple, config)
+
+    async def aput(
+        self,
+        config: RunnableConfig,
+        checkpoint: Checkpoint,
+        metadata: CheckpointMetadata,
+        new_versions: ChannelVersions,
+    ) -> RunnableConfig:
+        return await asyncio.to_thread(self.put, config, checkpoint, metadata, new_versions)
+
+    async def aput_writes(
+        self,
+        config: RunnableConfig,
+        writes: Sequence[tuple[str, Any]],
+        task_id: str,
+        task_path: str = "",
+    ) -> None:
+        await asyncio.to_thread(self.put_writes, config, writes, task_id, task_path)
+
+    async def alist(
+        self,
+        config: RunnableConfig | None,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: RunnableConfig | None = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[CheckpointTuple]:
+        rows = await asyncio.to_thread(
+            lambda: list(self.list(config, filter=filter, before=before, limit=limit))
+        )
+        for row in rows:
+            yield row
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        await asyncio.to_thread(self.delete_thread, thread_id)
 
 
 def get_checkpointer() -> BaseCheckpointSaver:
@@ -69,9 +124,7 @@ def _open_saver() -> BaseCheckpointSaver:
     if not ActiveConfig.REDIS_URL:
         raise RuntimeError("REDIS_URL is required for chat checkpoints")
 
-    from langgraph.checkpoint.redis import RedisSaver
-
-    saver = RedisSaver(
+    saver = RedisCheckpoint(
         redis_url=ActiveConfig.REDIS_URL,
         ttl={"default_ttl": _CHECKPOINT_TTL_MINUTES, "refresh_on_read": True},
     )

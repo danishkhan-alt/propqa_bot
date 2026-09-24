@@ -190,11 +190,12 @@ def test_a_greeting_streams_each_text_piece_then_done():
         thread_id = _header(headers, "x-thread-id")
     events = _parse_sse(body)
     assert [event for event, _ in events] == ["text", "text", "done"]
-    assert events[0][1] == {"delta": "Hello "}
-    assert events[1][1] == {"delta": "there."}
+    assert events[0][1] == {"delta": "Hello ", "token": "Hello "}
+    assert events[1][1] == {"delta": "there.", "token": "there."}
     assert events[2][1]["thread_id"] == thread_id
     assert events[2][1]["route"] == "direct_answer"
     assert events[2][1]["paused"] is False
+    assert events[2][1]["done"] is True
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
     assert state.values["messages"][-1].content == "Hello there."
 
@@ -244,16 +245,85 @@ def test_a_listing_reply_streams_ids_and_not_the_row():
     names = [name for name, _ in events]
     assert names.index("listings") < names.index("text")
     listings = next(payload for name, payload in events if name == "listings")
-    assert listings == {"ids": ["15802", "19806"]}
+    assert listings == {
+        "ids": ["15802", "19806"],
+        "cards": [
+            {"id": "15802", "title": "Property 15802"},
+            {"id": "19806", "title": "Property 19806"},
+        ],
+    }
     assert "Marina Gate" not in body
     assert "project_name_en" not in body
     assert models.listing_ids_only is True
     assert models.answer_rows == [{"property_id": "15802"}, {"property_id": "19806"}]
-    text = "".join(payload["delta"] for name, payload in events if name == "text")
+    text = "".join(payload["token"] for name, payload in events if name == "text")
     assert text == "Here are 2 apartments in Dubai Marina."
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
     assert state.values["last_need_db"].result_meta["ids"] == ["15802", "19806"]
     assert state.values["listing_ids"] == []
+
+
+def test_a_session_id_continues_the_same_thread():
+    client, graph = _client(_Greeting())
+    session_id = "6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
+    with client:
+        _read_session(client, "Hi", session_id)
+        _read_session(client, "Hello again", session_id)
+    state = graph.get_state({"configurable": {"thread_id": session_id}})
+    human = [message for message in state.values["messages"] if message.type == "human"]
+    assert [message.content for message in human] == ["Hi", "Hello again"]
+
+
+def test_a_session_can_be_listed_and_restored():
+    client, _graph = _client(_Greeting())
+    user_id = "anon-6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
+    session_id = "6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
+    with client:
+        _read_session(client, "Hi", session_id, user_id)
+        listed = client.get("/api/sessions", params={"user_id": user_id})
+        restored = client.get(f"/api/sessions/{session_id}/turns")
+        health = client.get("/api/health")
+    assert listed.status_code == 200
+    sessions = listed.json()["sessions"]
+    assert sessions[0]["session_id"] == session_id
+    assert sessions[0]["title"] == "Hi"
+    assert sessions[0]["user_turns"] == 1
+    assert restored.status_code == 200
+    body = restored.json()
+    assert body["turns"][0]["user_message"] == "Hi"
+    assert body["turns"][0]["assistant_message"] == "Hello there."
+    assert health.json()["flags"]["ws_mounted"] is False
+
+
+def test_preferences_round_trip():
+    client, _graph = _client(_Greeting())
+    user_id = "anon-6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
+    with client:
+        saved = client.post(
+            "/api/preferences",
+            json={"user_id": user_id, "preferences": {"purpose": "buy"}},
+        )
+        loaded = client.get("/api/preferences", params={"user_id": user_id})
+        deleted = client.delete("/api/preferences", params={"user_id": user_id})
+        empty = client.get("/api/preferences", params={"user_id": user_id})
+    assert saved.status_code == 200
+    assert loaded.json()["preferences"]["purpose"] == "buy"
+    assert deleted.status_code == 200
+    assert empty.json()["preferences"] is None
+
+
+def _read_session(
+    client: TestClient,
+    message: str,
+    session_id: str,
+    user_id: str | None = None,
+) -> None:
+    payload = {"message": message, "session_id": session_id}
+    if user_id:
+        payload["user_id"] = user_id
+    with client.stream("POST", "/api/chat", json=payload) as response:
+        assert response.status_code == 200
+        "".join(response.iter_text())
 
 
 def test_a_second_message_continues_the_same_thread():
