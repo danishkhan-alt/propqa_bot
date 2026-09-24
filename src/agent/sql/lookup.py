@@ -152,9 +152,9 @@ def _message(state: ChatState) -> str:
 
 
 def _history(state: ChatState) -> str:
-    from agent.services.transcript import history_summary
+    from agent.services.transcript import ANSWER_HISTORY, history_summary
 
-    return history_summary(state.get("messages") or [])
+    return history_summary(state.get("messages") or [], limit=ANSWER_HISTORY)
 
 
 def _empty_result(domain_ids: list[str]) -> dict[str, Any]:

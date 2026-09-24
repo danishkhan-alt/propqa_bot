@@ -27,8 +27,11 @@ def latest_user_text(messages: list) -> str:
     return message_text(messages[-1])
 
 
+ANSWER_HISTORY = 12
+
+
 def history_summary(messages: list, *, limit: int = 4) -> str:
-    """Short prior-turn text for the routers. Excludes the current message."""
+    """Prior-turn text. Excludes the current message. Routers use the default window."""
     prior = messages[:-1] if messages else []
     lines: list[str] = []
     for message in prior[-limit:]:

@@ -290,6 +290,7 @@ class AnthropicRouterModels:
         assumptions: dict | None,
         memory_block: str = "",
         listing_ids: list[str] | None = None,
+        data_note: str = "",
         config: RunnableConfig | None = None,
     ):
         payload = {
@@ -303,6 +304,7 @@ class AnthropicRouterModels:
             "truncated": truncated,
             "memory_block": memory_block,
             "listing_ids": listing_ids,
+            "data_note": data_note,
         }
         yield from _llm_deltas(
             self._sql_answer,
@@ -326,6 +328,7 @@ class AnthropicRouterModels:
         assumptions: dict | None,
         memory_block: str = "",
         listing_ids: list[str] | None = None,
+        data_note: str = "",
         config: RunnableConfig | None = None,
     ) -> str:
         return "".join(
@@ -340,6 +343,7 @@ class AnthropicRouterModels:
                 assumptions=assumptions,
                 memory_block=memory_block,
                 listing_ids=listing_ids,
+                data_note=data_note,
                 config=config,
             )
         ).strip()

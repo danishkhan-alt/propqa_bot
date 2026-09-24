@@ -27,7 +27,7 @@ from agent.services.llm import default_models
 from agent.graphs.memory import persist_working, read_context
 from agent.memory.read.prompt_text import append_memory_notes
 from agent.memory.session.search_results import summarize_search_results
-from agent.services.transcript import history_summary, latest_user_text
+from agent.services.transcript import ANSWER_HISTORY, history_summary, latest_user_text
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
@@ -178,7 +178,7 @@ def answer(
             _models(runtime),
             "answer_direct",
             message=message,
-            history=history_summary(messages),
+            history=history_summary(messages, limit=ANSWER_HISTORY),
             memory_block=state.get("memory_block") or "",
             config=config,
         )
@@ -274,7 +274,7 @@ def _answer_from_lookup(
             _models(runtime),
             "answer_from_sql",
             message=message,
-            history=history_summary(messages),
+            history=history_summary(messages, limit=ANSWER_HISTORY),
             rows=rows,
             columns=columns,
             row_count=int(result.get("row_count") or 0),
@@ -283,6 +283,7 @@ def _answer_from_lookup(
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
             listing_ids=listing_ids or None,
+            data_note=_data_note(result.get("domain_ids") or []),
             config=config,
         )
     elif status == "empty":
@@ -318,7 +319,7 @@ def _unavailable(
         _models(runtime),
         "answer_unavailable",
         message=message,
-        history=history_summary(messages),
+        history=history_summary(messages, limit=ANSWER_HISTORY),
         config=config,
     )
     text = _with_memory_notes(text, state)
@@ -362,6 +363,29 @@ def _with_memory_notes(text: str, state: ChatState) -> str:
     if extra.strip():
         publish("text", delta=extra)
     return noted
+
+
+_SOURCE_PHRASES = {
+    "listings": "live asking prices and registered property records",
+    "transactions": "registered sales and rent contracts",
+    "market": "official price indices and community averages",
+    "regulations": "owners-association service charges",
+    "developers": "project and developer records",
+    "schools": "school ratings and fees",
+    "amenities": "parks, healthcare, and building amenities",
+    "rta": "metro, roads, and parking",
+    "agencies": "licensed brokers and offices",
+    "locations": "community records",
+}
+
+
+def _data_note(domain_ids: list) -> str:
+    phrases: list[str] = []
+    for domain_id in domain_ids:
+        phrase = _SOURCE_PHRASES.get(str(domain_id))
+        if phrase and phrase not in phrases:
+            phrases.append(phrase)
+    return "; ".join(phrases)
 
 
 def _models(runtime: Runtime[AgentContext]) -> RouterModels:

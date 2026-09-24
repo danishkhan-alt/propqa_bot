@@ -79,6 +79,7 @@ class RouterModels(Protocol):
         assumptions: dict | None,
         memory_block: str = "",
         listing_ids: list[str] | None = None,
+        data_note: str = "",
         config: RunnableConfig | None = None,
     ) -> str: ...
 
