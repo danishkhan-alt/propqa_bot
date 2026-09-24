@@ -23,7 +23,11 @@ import { useChat } from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { usePrefsStore } from "@/store/prefsStore";
-import { continuationFromProfile, useSessionProfileStore } from "@/store/sessionProfileStore";
+import {
+  continuationFromProfile,
+  useSessionProfileStore,
+  type ContinuationContext,
+} from "@/store/sessionProfileStore";
 import { RecommendationPanel } from "@/components/recommendations/RecommendationPanel";
 import { PrefsPanel } from "@/components/recommendations/PrefsPanel";
 import { UserDashboard } from "@/components/admin/AdminDashboard";
@@ -35,6 +39,7 @@ import {
   MAX_ATTACHED_PROPERTY_IDS,
   MAX_INQUIRY_PROPERTY_IDS,
   looksLikeFreshInventorySearch,
+  withListingContext,
   type AttachedListing,
 } from "@/lib/followUpSuggestions";
 import { pickFigmaCardTitle, pickCardImages } from "@/lib/propertyCard";
@@ -190,10 +195,10 @@ export default function App() {
   );
 
   const submitClarifying = useCallback(
-    (answers: Record<string, string>) => {
+    (answers: Record<string, string>, context?: ContinuationContext) => {
       useSessionProfileStore.getState().merge(answers);
-      const text = continuationFromProfile(useSessionProfileStore.getState().profile);
-      void sendWithFocusedIds(text, { skipUserAppend: true });
+      const text = continuationFromProfile(useSessionProfileStore.getState().profile, context);
+      void sendWithFocusedIds(text);
     },
     [sendWithFocusedIds],
   );
@@ -412,7 +417,9 @@ export default function App() {
                     ? LISTING_FAQ_SUGGESTION_CHIPS
                     : WELCOME_SUGGESTION_CHIPS
                 }
-                onSuggestionClick={(q) => void sendWithFocusedIds(q)}
+                onSuggestionClick={(q) =>
+                  void sendWithFocusedIds(withListingContext(q, attachedListings))
+                }
                 attachedListings={attachedListings}
                 onRemoveAttached={removeAttachedProperty}
                 onClearAttached={clearAttachedListings}

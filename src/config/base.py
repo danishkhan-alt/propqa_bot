@@ -114,7 +114,7 @@ class Config:
     )
 
     LOGS_DIR = os.getenv("LOGS_DIR", "logs")
-    LOG_TO_FILE = _bool("LOG_TO_FILE", ENVIRONMENT.is_deployed)
+    LOG_TO_FILE = _bool("LOG_TO_FILE", True)
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_MAX_BYTES = _int("LOG_MAX_BYTES", 100 * 1024 * 1024)
     LOG_BACKUP_COUNT = _int("LOG_BACKUP_COUNT", 10)

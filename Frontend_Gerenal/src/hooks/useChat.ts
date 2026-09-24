@@ -18,6 +18,7 @@ import { openWs, type WsHandle } from "@/api/wsClient";
 import { newChat as newChatApi, getSessionRestore, forgetSession, forgetAll } from "@/api/sessionApi";
 import { getPreferences } from "@/api/preferencesApi";
 import { syncFlowsRegistry, useChatStore, FLOWS_REGISTRY, type PropertyCard, type StepFrame, type ResultEnvelope } from "@/store/chatStore";
+import { useAuthStore } from "@/store/authStore";
 import { useSessionProfileStore } from "@/store/sessionProfileStore";
 import { randomUUID } from "@/lib/uuid";
 import {
@@ -1069,6 +1070,14 @@ export function useChat() {
   const resumeHitl = useCallback(
     async (interruptId: string, decisions: unknown[]) => {
       useChatStore.getState().clearHitl(interruptId);
+      const chosen = decisions
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const decision = item as { query?: string; answer?: string; selected?: string };
+          return (decision.query || decision.answer || decision.selected || "").trim();
+        })
+        .filter(Boolean);
+      if (chosen.length) appendMessage("user", chosen.join(", "));
 
       // Make the resumed continuation stream into a visible assistant bubble.
       // On WS the paused turn is still in-flight (currentTurnRef set), so we

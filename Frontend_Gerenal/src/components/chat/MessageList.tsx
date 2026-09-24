@@ -12,12 +12,16 @@ import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
 import { GuestBanner, type BannerTrigger } from "./GuestBanner";
 import { PropQABrand } from "@/components/brand/PropQABrand";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { isVisibleStep } from "@/lib/pipelineLabels";
 import { useAuthStore } from "@/store/authStore";
 import type { AgentContact, AgentCoverage } from "@/components/leads";
 import { LeadActions, type LeadStatus, type LeadSubmitData } from "@/components/leads";
 import type { FollowUpSuggestion } from "@/lib/followUpSuggestions";
 import type { StepFrame } from "@/store/chatStore";
 import { StructuredAnswer } from "./StructuredAnswer";
+import { followupQuery, type ContinuationContext } from "@/store/sessionProfileStore";
+import { PropertyCards } from "./PropertyCards";
+import type { PropertyCard } from "@/store/chatStore";
 
 export interface Message {
   id: string;
@@ -69,8 +73,8 @@ interface MessageListProps {
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   /** Re-send a follow-up suggestion query */
   onSuggestionClick?: (query: string) => void;
-  /** Chip answers for a structured reply */
-  onClarify?: (answers: Record<string, string>) => void;
+  /** Chip answers for a structured reply, with the search they belong to */
+  onClarify?: (answers: Record<string, string>, context?: ContinuationContext) => void;
   /** Property IDs selected in the sidebar for bulk agent contact */
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
@@ -206,6 +210,20 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
 MessageList.displayName = "MessageList";
 
+function replyContext(message: Message): ContinuationContext {
+  const listings = (message.cards ?? []) as PropertyCard[];
+  const areas = message.structured?.cards ?? [];
+  const subjects = (listings.length ? listings : areas)
+    .map((card) => String(("title" in card && card.title) || ("location" in card && card.location) || "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return {
+    priorQuestion: message.userPrompt,
+    subjects,
+    about: listings.length ? "properties" : "areas",
+  };
+}
+
 // ── MessageBubble ────────────────────────────────────────────────────────────
 
 interface MessageBubbleProps {
@@ -215,7 +233,7 @@ interface MessageBubbleProps {
   onRetry?: (prompt: string) => void;
   onSubmitLead?: (msg: Message, data: LeadSubmitData) => void | Promise<void>;
   onSuggestionClick?: (query: string) => void;
-  onClarify?: (answers: Record<string, string>) => void;
+  onClarify?: (answers: Record<string, string>, context?: ContinuationContext) => void;
   selectedInquiryPropertyIds?: number[];
   onSelectedInquiryPropertyIdsChange?: (ids: number[]) => void;
 }
@@ -259,7 +277,7 @@ function MessageBubble({
     <div className={cn("group flex items-start gap-3 px-2.5 py-1 message-appear", isUser && "flex-row-reverse")}>
       {!isUser && <AssistantAvatar />}
 
-      <div className={cn("flex min-w-0 max-w-[80%] flex-col gap-1", isUser && "items-end")}>
+      <div className={cn("flex min-w-0 max-w-[80%] flex-col gap-1", isUser && "items-end", !isUser && (message.cards?.length ?? 0) > 0 && "max-w-full")}>
         {!isUser && !message.isStreaming && (message.steps?.length ?? 0) > 0 && (
           <ThinkingPanel
             steps={message.steps ?? []}
@@ -283,8 +301,11 @@ function MessageBubble({
           ) : message.structured ? (
             <StructuredAnswer
               reply={message.structured}
-              onFollowup={onSuggestionClick}
-              onClarify={onClarify}
+              onFollowup={(label) => {
+                const context = replyContext(message);
+                onSuggestionClick?.(followupQuery(label, context));
+              }}
+              onClarify={(answers) => onClarify?.(answers, replyContext(message))}
             />
           ) : (
             <div
@@ -295,6 +316,17 @@ function MessageBubble({
         </div>
 
         {/* Status text during streaming */}
+        {!isUser && (message.cards?.length ?? 0) > 0 && (
+          <PropertyCards
+            cards={message.cards as PropertyCard[]}
+            searchUrl={message.searchUrl}
+            appliedFilters={message.appliedFilters}
+            layout="strip"
+            sessionId={sessionId}
+            className="mt-1"
+          />
+        )}
+
         {message.statusText && (message.isStreaming || message.statusText === "Stopped") && (
           <span className="px-1 text-[10px] text-muted-foreground">{message.statusText}</span>
         )}

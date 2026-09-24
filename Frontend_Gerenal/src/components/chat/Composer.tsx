@@ -226,7 +226,7 @@ export function Composer({
   function resetHeight() {
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.style.height = `${MIN_HEIGHT}px`;
+    ta.style.height = isStreaming ? "0px" : `${MIN_HEIGHT}px`;
     ta.style.overflowY = "hidden";
   }
 
@@ -237,12 +237,12 @@ export function Composer({
   }, []);
 
   useLayoutEffect(() => {
-    if (!value) {
+    if (isStreaming || !value) {
       resetHeight();
       return;
     }
     autoResize();
-  }, [value]);
+  }, [value, isStreaming]);
 
   function startWavePulse() {
     const pulse = () => {
@@ -439,10 +439,11 @@ export function Composer({
 
       <div
         className={cn(
-          "flex min-h-[120px] flex-col justify-between gap-4 rounded-2xl bg-white p-4",
+          "flex flex-col justify-between rounded-2xl bg-white",
           "border transition-colors",
+          isStreaming ? "min-h-0 gap-2 p-2" : "min-h-[120px] gap-4 p-4",
           focused || isRecording || isConnecting ? "border-[#979CAE]" : "border-[#D8DDE6]",
-          hasAttached && "pt-6",
+          hasAttached && !isStreaming && "pt-6",
         )}
       >
         <textarea
@@ -452,20 +453,24 @@ export function Composer({
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          disabled={disabled}
-          placeholder={resolvedPlaceholder}
+          disabled={disabled || isStreaming}
+          placeholder={isStreaming ? "" : resolvedPlaceholder}
           rows={1}
           className={cn(
-            "w-full flex-1 resize-none bg-transparent text-sm font-medium leading-[1.5] text-[#141B34]",
-            "placeholder:text-[#747288] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full resize-none bg-transparent text-sm font-medium leading-[1.5] text-[#141B34]",
+            "placeholder:text-[#747288] focus:outline-none disabled:cursor-not-allowed",
+            isStreaming ? "h-0 min-h-0 flex-none overflow-hidden p-0 opacity-0" : "min-h-12 flex-1 disabled:opacity-50",
           )}
-          style={{ minHeight: MIN_HEIGHT, overflowY: "hidden" }}
+          style={isStreaming ? { height: 0, minHeight: 0, overflowY: "hidden" } : { minHeight: MIN_HEIGHT, overflowY: "hidden" }}
           aria-label="Message"
+          aria-hidden={isStreaming}
         />
 
         <div className="flex items-center gap-3">
           {isRecording ? (
             <VoiceWaveform active levels={waveLevels} />
+          ) : isStreaming ? (
+            <p className="min-w-0 flex-1 truncate text-xs text-[#747288]">Answering…</p>
           ) : (
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
               {suggestions?.map((chip) => (

@@ -57,8 +57,36 @@ export function profileChips(profile: SessionProfile): { key: string; label: str
   return chips;
 }
 
-export function continuationFromProfile(profile: SessionProfile): string {
+export interface ContinuationContext {
+  priorQuestion?: string;
+  subjects?: string[];
+  about?: "properties" | "areas";
+}
+
+function namedSubjects(context: ContinuationContext): string {
+  const names = (context.subjects ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 4);
+  if (!names.length) return "";
+  const noun = context.about === "properties" ? "properties" : "areas";
+  return ` The ${noun} already on screen are: ${names.join("; ")}.`;
+}
+
+export function continuationFromProfile(profile: SessionProfile, context: ContinuationContext = {}): string {
   const bits = profileChips(profile).map((chip) => chip.label);
-  if (!bits.length) return "Compare these areas with what you already know about me.";
-  return `Compare these areas using this: ${bits.join(", ")}.`;
+  const prefs = bits.length ? ` What I want: ${bits.join(", ")}.` : "";
+  const named = namedSubjects(context);
+  const prior = context.priorQuestion?.trim();
+  if (prior) {
+    return `Continue this search: ${prior}.${named}${prefs} Keep the location, property type, and anything else I already said.`;
+  }
+  if (named || prefs) {
+    const noun = context.about === "properties" ? "properties" : "areas";
+    return `Suggest ${noun} that fit.${named}${prefs} Keep the location I already asked about.`;
+  }
+  return "Suggest properties that fit what you already know about me, and keep the area I asked about.";
+}
+
+export function followupQuery(label: string, context: ContinuationContext = {}): string {
+  const prior = context.priorQuestion?.trim();
+  const lead = prior ? `Continuing from my question: ${prior}. ` : "";
+  return `${lead}${label.trim()}.${namedSubjects(context)} Keep the location and the listings already in this conversation.`;
 }

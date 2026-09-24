@@ -30,7 +30,16 @@ def configure_logging(
         return
 
     Path(logs_dir).mkdir(parents=True, exist_ok=True)
-    for category in ("app", "agent", "chat", "auth", "common"):
+
+    combined = RotatingFileHandler(
+        Path(logs_dir) / "combined.log",
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+    )
+    combined.setFormatter(JsonFormatter())
+    root.addHandler(combined)
+
+    for category in ("app", "agent", "chat", "sessions", "auth", "common"):
         handler = RotatingFileHandler(
             Path(logs_dir) / f"{category}.log",
             maxBytes=max_bytes,

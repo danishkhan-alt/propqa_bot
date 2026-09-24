@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import ActiveConfig
 from agent.memory.routes import router as memory_router
 from common.http import register_exception_handlers
 from common.middleware import CallerMiddleware, RateLimitMiddleware, RequestIdMiddleware
 from common.middleware.rate_limit import DEFAULT_EXEMPT_PREFIXES
 from routes.chat import router as chat_router
 from routes.sessions import router as session_router
+
+from common.logger import configure_logging
 
 _UI_ORIGINS = (
     "http://localhost:5173",
@@ -27,7 +31,9 @@ def create_app(*, graph=None, models=None, sql_runner=None) -> FastAPI:
     app.include_router(chat_router, prefix="/api")
     app.include_router(session_router, prefix="/api")
     app.include_router(memory_router, prefix="/api")
-    app.add_middleware(RateLimitMiddleware, exempt_prefixes=(*DEFAULT_EXEMPT_PREFIXES, "/api/health"))
+    app.add_middleware(
+        RateLimitMiddleware, exempt_prefixes=(*DEFAULT_EXEMPT_PREFIXES, "/api/health")
+    )
     app.add_middleware(CallerMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
@@ -38,32 +44,10 @@ def create_app(*, graph=None, models=None, sql_runner=None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/health")
-    def health() -> dict:
-        return {"status": "ok"}
-
-    @app.get("/api/health")
-    def api_health() -> dict:
-        return {
-            "status": "ok",
-            "version": "0.1.0",
-            "flags": {
-                "ws_mounted": False,
-                "hitl_transport": "sse",
-                "cognitive_pipeline": False,
-                "ltm_enabled": True,
-            },
-        }
-
     return app
 
 
 def main() -> None:
-    import uvicorn
-
-    from common.logger import configure_logging
-    from config import ActiveConfig
-
     configure_logging(
         level=ActiveConfig.LOG_LEVEL,
         log_to_file=ActiveConfig.LOG_TO_FILE,

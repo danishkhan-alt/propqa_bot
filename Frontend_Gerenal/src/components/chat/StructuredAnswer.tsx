@@ -49,25 +49,44 @@ export function StructuredAnswer({ reply, onFollowup, onClarify }: StructuredAns
       {reply.intro_text && (
         <p className="text-sm font-medium leading-6 text-[#141B34]">{reply.intro_text}</p>
       )}
-      {(reply.cards ?? []).map((card) => (
-        <article key={card.title} className="rounded-xl border border-[#E8ECF3] bg-white px-3 py-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-semibold text-[#141B34]">{card.title}</h3>
-            {card.tag && (
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                  TAG_CLASS[card.tag_color || "info"] || TAG_CLASS.info,
+      {(reply.cards ?? []).length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(reply.cards ?? []).map((card) => (
+            <article
+              key={card.title}
+              className="flex w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border border-[#E8ECF3] bg-white shadow-sm"
+            >
+              {card.image_url && (
+                <img
+                  src={card.image_url}
+                  alt=""
+                  className="h-24 w-full object-cover"
+                  loading="lazy"
+                />
+              )}
+              <div className="flex flex-1 flex-col gap-1 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold leading-5 text-[#141B34]">{card.title}</h3>
+                  {card.tag && (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                        TAG_CLASS[card.tag_color || "info"] || TAG_CLASS.info,
+                      )}
+                    >
+                      {card.tag}
+                    </span>
+                  )}
+                </div>
+                {card.price && <p className="text-xs font-medium text-[#141B34]">{card.price}</p>}
+                {card.description && (
+                  <p className="text-xs leading-5 text-[#494A58]">{card.description}</p>
                 )}
-              >
-                {card.tag}
-              </span>
-            )}
-          </div>
-          {card.price && <p className="mt-1 text-xs font-medium text-[#141B34]">{card.price}</p>}
-          {card.description && <p className="mt-1 text-xs leading-5 text-[#494A58]">{card.description}</p>}
-        </article>
-      ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
       {reply.exclusions_note && (
         <p className="rounded-xl bg-[#F7F8FA] px-3 py-2 text-xs leading-5 text-[#747288]">
           {reply.exclusions_note}
@@ -83,7 +102,7 @@ export function StructuredAnswer({ reply, onFollowup, onClarify }: StructuredAns
               key={label}
               type="button"
               onClick={() => onFollowup?.(label)}
-              className="rounded-full border border-[#E8ECF3] bg-white px-3 py-1 text-xs text-[#141B34] hover:border-[#C9CED8]"
+              className="rounded-full border border-[#E8ECF3] bg-[#F5F7FA] px-3 py-1.5 text-xs font-medium text-[#747288] hover:bg-[#EDF0F5] hover:text-[#494A58]"
             >
               {label}
             </button>
