@@ -347,3 +347,9 @@ def test_a_line_runs_oldest_first_and_skips_a_thin_series():
     assert [series["name"] for series in line["series"]] == ["Apartments"]
     assert line["series"][0]["points"][-1] == {"value": 1300.0, "display": "AED 1,300/sqft"}
     assert build_figures(_spec("line", [("flats", "Apartments", "aed_per_sqft")]), rows, list(rows[0])) is None
+
+
+def test_a_percent_column_named_as_a_change_shows_its_direction():
+    rows = [{"market": "Villa prices", "yearly_change_pct": 13.16, "yield_pct": 5.1}, {"market": "Apartment prices", "yearly_change_pct": -0.4, "yield_pct": 6.2}]
+    spec = _spec("table", [("yearly_change_pct", "Yearly change", "percent"), ("yield_pct", "Yield", "percent")], "market")
+    assert build_figures(spec, rows, list(rows[0]))["rows"] == [["Villa prices", "▲ 13.2%", "5.1%"], ["Apartment prices", "▼ 0.4%", "6.2%"]]

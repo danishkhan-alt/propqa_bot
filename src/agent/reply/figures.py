@@ -18,6 +18,7 @@ MAX_LINE_SERIES = 3
 MIN_LINE_POINTS = 3
 # A column repeating one of these in every row is context, such as the period, not a finding.
 _CAPTION_UNITS = frozenset({"text", "year"})
+_CHANGE_COLUMN = re.compile(r"change|growth", re.IGNORECASE)
 
 
 def build_figures(
@@ -27,7 +28,9 @@ def build_figures(
     if spec is None or spec.layout == "none" or not rows:
         return None
     known = set(columns) or set(rows[0])
-    figures = [item for item in spec.columns if item.column in known and item.column != spec.label_column]
+    figures = [
+        _as_change(item) for item in spec.columns if item.column in known and item.column != spec.label_column
+    ]
     if not figures:
         return None
     label_column = spec.label_column if spec.label_column in known else ""
@@ -40,6 +43,17 @@ def build_figures(
     if spec.layout == "line":
         return _line(figures, label_column, rows)
     return None
+
+
+def _as_change(item: FigureColumn) -> FigureColumn:
+    """A percent column named as a change or growth is a rise or fall, so it shows its direction.
+
+    Lookups name such columns that way (yearly_change_pct), so this does not rest on the
+    answer model picking the right unit.
+    """
+    if item.unit == "percent" and _CHANGE_COLUMN.search(item.column):
+        return item.model_copy(update={"unit": "change"})
+    return item
 
 
 def build_explainer(explainer: Explainer | None) -> dict[str, Any] | None:
