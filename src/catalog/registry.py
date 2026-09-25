@@ -11,6 +11,7 @@ DOMAINS_DIR = CATALOG_DIR / "domains"
 PROFILES_DIR = CATALOG_DIR / "profiles"
 INDEX_PATH = DOMAINS_DIR / "index.yaml"
 NAME_ALIASES_PATH = CATALOG_DIR / "name_aliases.yaml"
+RECIPES_PATH = CATALOG_DIR / "recipes.yaml"
 
 # Keys the grounding code reads. The SQL model never sees them.
 _GROUNDING_KEYS = ("named_values",)
@@ -92,6 +93,13 @@ def named_columns() -> list[dict]:
     for domain in list_domains():
         declared.extend(load_domain(domain["id"]).get("named_values") or [])
     return declared
+
+
+def load_recipes() -> list[dict]:
+    """Fixed lookups the domain router may pick instead of a drafted statement."""
+    if not RECIPES_PATH.exists():
+        return []
+    return list(_read_yaml(RECIPES_PATH).get("recipes") or [])
 
 
 def name_aliases() -> dict[str, list[str]]:

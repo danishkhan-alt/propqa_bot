@@ -107,6 +107,8 @@ pitfalls:
 tables:
 - name: properties
   description: Live property listings with asking price, size, and sale or rent. This is the table for what is on the market.
+  segments: [rooms, category_id]
+  basis: [purpose]
   primary_key:
   - id
   columns:
@@ -288,6 +290,7 @@ tables:
   qualified_name: public.category_property
 - name: building_property_records
   description: Dubai Land Department building and property project records
+  segments: [property_sub_type_en, rooms_en]
   primary_key:
   - property_id
   columns:
@@ -512,6 +515,7 @@ tables:
   qualified_name: chatbot_ai.building_property_records
 - name: registered_freehold_real_estate_units
   description: DLD registered freehold real estate units
+  segments: [property_sub_type_en, rooms_en]
   primary_key:
   - property_id
   columns:
@@ -754,6 +758,7 @@ tables:
   qualified_name: chatbot_ai.registered_freehold_real_estate_units
 - name: land_registry
   description: Dubai Land Department land registry
+  segments: [property_sub_type_en]
   primary_key:
   - property_id
   columns:

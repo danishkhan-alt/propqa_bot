@@ -5,6 +5,7 @@ from catalog.registry import (
     load_domain,
     load_domains,
     load_prompt,
+    load_recipes,
     name_aliases,
     named_columns,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "load_domain",
     "load_domains",
     "load_prompt",
+    "load_recipes",
     "name_aliases",
     "named_columns",
 ]

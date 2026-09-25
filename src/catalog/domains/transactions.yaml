@@ -39,6 +39,8 @@ pitfalls:
 tables:
 - name: real_estate_transactions
   description: Real estate transactions from Dubai Land Department
+  segments: [property_sub_type_en, property_type_en, rooms_en]
+  basis: [trans_group_en]
   primary_key:
   - transaction_id
   columns:
@@ -335,6 +337,7 @@ tables:
   qualified_name: chatbot_ai.real_estate_market_types
 - name: rent_contracts
   description: Dubai Land Department rent contracts
+  segments: [ejari_property_type_en, ejari_property_sub_type_en]
   primary_key:
   - contract_id
   - line_number
@@ -526,6 +529,7 @@ tables:
   qualified_name: chatbot_ai.rent_contracts
 - name: property_valuation_records
   description: Property valuation records from Dubai Land Department
+  segments: [property_sub_type_en, property_type_en]
   primary_key:
   - procedure_year
   - procedure_number

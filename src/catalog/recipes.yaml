@@ -1,0 +1,154 @@
+# Fixed lookups for questions asked often enough that drafting SQL each time is slow and
+# uneven. The domain router picks one by id; code binds its parameters from the grounded
+# names and runs it through the same guard as a drafted statement. A recipe runs only when
+# the user named exactly the places it takes, so it never answers a narrower question.
+#
+# Each recipe:
+#   id, domains: the catalog packs its tables live in (loaded with it).
+#   when: what the router reads to decide. Say what it does not cover.
+#   purpose: one line for the reply, as a drafted statement's purpose would be.
+#   params: name -> the grounded column it binds from (table + named_values kind).
+#     :name in the SQL becomes ARRAY[...] of that name's stored values.
+#   sql: one SELECT. One row per kind of property; one column per figure, one unit each.
+recipes:
+- id: dubai_market_overview
+  domains: [market]
+  when: >-
+    Dubai-wide market direction ("how is the market", "are prices going up", "market trends")
+    with no place, property type, bedroom count, or period named. Not for one community.
+  purpose: >-
+    Latest official Dubai price and rent changes, with apartments and villas shown separately.
+  params: {}
+  sql: |
+    WITH price_y AS (
+      SELECT DISTINCT ON (type) type, year, quarter_number AS period, value
+      FROM chatbot_ai.annual_percentage_change_in_residential_property_price_d4f4bb36
+      ORDER BY type, year DESC, quarter_number DESC
+    ), price_q AS (
+      SELECT DISTINCT ON (type) type, year, quarter_number AS period, value
+      FROM chatbot_ai.quarterly_percentage_change_in_residential_property_pr_a5a9c409
+      ORDER BY type, year DESC, quarter_number DESC
+    ), rent_y AS (
+      SELECT DISTINCT ON (type) type, year, month_number AS period, value
+      FROM chatbot_ai.annual_percentage_change_in_residential_rents_price_in_9e8d8281
+      ORDER BY type, year DESC, month_number DESC
+    ), rent_m AS (
+      SELECT DISTINCT ON (type) type, year, month_number AS period, value
+      FROM chatbot_ai.monthly_percentage_change_in_residential_rents_price_i_09e18e38
+      ORDER BY type, year DESC, month_number DESC
+    ), commercial_y AS (
+      SELECT DISTINCT ON (type) type, year, quarter_number AS period, value
+      FROM chatbot_ai.annual_percentage_change_in_commercial_property_price__cec3c152
+      ORDER BY type, year DESC, quarter_number DESC
+    ), commercial_q AS (
+      SELECT DISTINCT ON (type) type, year, quarter_number AS period, value
+      FROM chatbot_ai.quarterly_percentage_change_in_commercial_property_pri_96bb404c
+      ORDER BY type, year DESC, quarter_number DESC
+    ), overview AS (
+      SELECT 1 AS position, 'Apartment prices' AS market, y.value AS yearly_change_pct,
+        q.value AS latest_change_pct, 'Q' || y.period || ' ' || y.year AS as_of
+      FROM price_y y LEFT JOIN price_q q ON q.type = y.type AND q.year = y.year AND q.period = y.period
+      WHERE y.type = 'Flats'
+      UNION ALL
+      SELECT 2, 'Villa prices', y.value, q.value, 'Q' || y.period || ' ' || y.year
+      FROM price_y y LEFT JOIN price_q q ON q.type = y.type AND q.year = y.year AND q.period = y.period
+      WHERE y.type = 'Villas'
+      UNION ALL
+      SELECT 3, 'Apartment rents', y.value, m.value, TO_CHAR(MAKE_DATE(CAST(y.year AS INT), CAST(y.period AS INT), 1), 'Mon YYYY')
+      FROM rent_y y LEFT JOIN rent_m m ON m.type = y.type AND m.year = y.year AND m.period = y.period
+      WHERE y.type = 'Units'
+      UNION ALL
+      SELECT 4, 'Villa rents', y.value, m.value, TO_CHAR(MAKE_DATE(CAST(y.year AS INT), CAST(y.period AS INT), 1), 'Mon YYYY')
+      FROM rent_y y LEFT JOIN rent_m m ON m.type = y.type AND m.year = y.year AND m.period = y.period
+      WHERE y.type = 'Villas'
+      UNION ALL
+      SELECT 5, 'Commercial prices (all types)', y.value, q.value, 'Q' || y.period || ' ' || y.year
+      FROM commercial_y y LEFT JOIN commercial_q q ON q.type = y.type AND q.year = y.year AND q.period = y.period
+      WHERE y.type = 'General Index'
+    )
+    SELECT market, yearly_change_pct, latest_change_pct, as_of
+    FROM overview
+    ORDER BY position
+
+- id: community_sale_prices_by_bedrooms
+  domains: [market]
+  when: >-
+    Sale prices, price per square foot, or the price trend in ONE named community or master
+    community (JVC, Dubai Marina), with no bedroom count, project, or period named.
+  purpose: >-
+    Median sale price and price per square foot by bedroom count over the latest 12 months
+    of registered sales, against the 12 months before.
+  params:
+    place: {table: public.price_trend_buy_fact, kind: master_project}
+  sql: |
+    WITH bounds AS (
+      SELECT DATE_TRUNC('month', MAX(month)) AS last_month
+      FROM public.price_trend_buy_fact
+      WHERE master_project_en = ANY(:place) AND month <= CURRENT_DATE
+    ), sales AS (
+      SELECT f.rooms_en, f.sale_price, f.aed_per_sqft,
+        f.month > b.last_month - INTERVAL '12 months' AS recent
+      FROM public.price_trend_buy_fact AS f CROSS JOIN bounds AS b
+      WHERE f.master_project_en = ANY(:place)
+        AND f.month > b.last_month - INTERVAL '24 months' AND f.month <= b.last_month
+        AND f.sale_price > 0 AND f.aed_per_sqft > 0
+        AND (f.rooms_en = 'Studio' OR f.rooms_en ~ '^[0-9]+ B/R$')
+    )
+    SELECT
+      CASE WHEN rooms_en = 'Studio' THEN 'Studio' ELSE SPLIT_PART(rooms_en, ' ', 1) || '-bed' END AS bedrooms,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price) FILTER (WHERE recent) AS median_price_aed,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY aed_per_sqft) FILTER (WHERE recent) AS median_aed_per_sqft,
+      ROUND(CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY aed_per_sqft) FILTER (WHERE recent)
+        / NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY aed_per_sqft) FILTER (WHERE NOT recent), 0) - 1) * 100 AS DECIMAL), 1)
+        AS yearly_change_per_sqft_pct,
+      COUNT(*) FILTER (WHERE recent) AS sales_last_12_months,
+      (SELECT TO_CHAR(last_month, 'Mon YYYY') FROM bounds) AS as_of
+    FROM sales
+    GROUP BY rooms_en
+    HAVING COUNT(*) FILTER (WHERE recent) >= 10
+    ORDER BY MIN(CASE WHEN rooms_en = 'Studio' THEN 0 ELSE CAST(SPLIT_PART(rooms_en, ' ', 1) AS INT) END)
+
+- id: community_rents_by_bedrooms
+  domains: [market]
+  when: >-
+    Rents or the rent trend in ONE named community or master community, with no bedroom
+    count, building, or period named. Not for rental yield.
+  purpose: >-
+    Median annual rent by bedroom count over the latest 12 months of registered rent
+    contracts, against the 12 months before.
+  # Rent facts spell master communities the same way as sale facts, so the sale-side
+  # grounding binds here too.
+  params:
+    place: {table: public.price_trend_buy_fact, kind: master_project}
+  sql: |
+    WITH bounds AS (
+      SELECT DATE_TRUNC('month', MAX(month)) AS last_month
+      FROM public.price_trend_rent_fact
+      WHERE master_project_en = ANY(:place) AND month <= CURRENT_DATE
+    ), contracts AS (
+      SELECT f.property_sub_type_en, f.annual_rent,
+        f.month > b.last_month - INTERVAL '12 months' AS recent
+      FROM public.price_trend_rent_fact AS f CROSS JOIN bounds AS b
+      WHERE f.master_project_en = ANY(:place)
+        AND f.month > b.last_month - INTERVAL '24 months' AND f.month <= b.last_month
+        AND f.annual_rent > 0
+        AND (f.property_sub_type_en = 'Studio' OR f.property_sub_type_en ~* '^[0-9]+ ?bed')
+    ), layouts AS (
+      SELECT
+        CASE WHEN property_sub_type_en = 'Studio' THEN 0
+          ELSE CAST(SUBSTRING(property_sub_type_en FROM '^[0-9]+') AS INT) END AS bedroom_count,
+        annual_rent, recent
+      FROM contracts
+    )
+    SELECT
+      CASE WHEN bedroom_count = 0 THEN 'Studio' ELSE bedroom_count || '-bed' END AS bedrooms,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY annual_rent) FILTER (WHERE recent) AS median_annual_rent_aed,
+      ROUND(CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY annual_rent) FILTER (WHERE recent)
+        / NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY annual_rent) FILTER (WHERE NOT recent), 0) - 1) * 100 AS DECIMAL), 1)
+        AS yearly_change_pct,
+      COUNT(*) FILTER (WHERE recent) AS contracts_last_12_months,
+      (SELECT TO_CHAR(last_month, 'Mon YYYY') FROM bounds) AS as_of
+    FROM layouts
+    GROUP BY bedroom_count
+    HAVING COUNT(*) FILTER (WHERE recent) >= 10
+    ORDER BY bedroom_count

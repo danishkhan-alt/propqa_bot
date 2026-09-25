@@ -7,8 +7,11 @@ Rules:
   A third primary is only for an explicit three-way comparison.
 - join_ids: packs needed only as join keys. locations is the usual bridge when the question is about a place. 
   Do not put locations in domain_ids unless the user is asking where something is or what community it belongs to.
-- If the warehouse cannot answer exactly (classified asking prices are not stored), 
+- If the warehouse cannot answer exactly (classified asking prices are not stored),
   still pick the closest domain. Do not invent an id.
+- recipe_id: recipes are fixed lookups for common questions. Pick one only when its "when" covers
+  the whole question as asked. Any extra condition (a bedroom count, a project, a period, a
+  second place, a comparison) means null. A recipe's own domains are loaded with it.
 
 Confusions:
 - What exists (units, plots, buildings, freehold) -> listings. Sold prices, volumes, registered rents -> transactions.

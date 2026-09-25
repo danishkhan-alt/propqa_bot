@@ -28,6 +28,7 @@ pitfalls:
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16
   description: Residential property price index base year 2019 2026 07 16
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -66,6 +67,7 @@ tables:
   qualified_name: chatbot_ai.residential_property_price_index_base_year_2019_2026_07_16
 - name: commercial_property_price_index_base_year_2019_2026_07_16
   description: Commercial property price index base year 2019 2026 07 16
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -104,6 +106,7 @@ tables:
   qualified_name: chatbot_ai.commercial_property_price_index_base_year_2019_2026_07_16
 - name: residential_rent_price_index_base_year_2024_2026_07_16
   description: Residential rent price index base year 2024 2026 07 16
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -152,6 +155,7 @@ tables:
   qualified_name: chatbot_ai.residential_rent_price_index_base_year_2024_2026_07_16
 - name: annual_percentage_change_in_residential_property_price_d4f4bb36
   description: Annual percentage change in residential property price d4f4bb36
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -190,6 +194,7 @@ tables:
   qualified_name: chatbot_ai.annual_percentage_change_in_residential_property_price_d4f4bb36
 - name: annual_percentage_change_in_commercial_property_price__cec3c152
   description: Annual percentage change in commercial property price  cec3c152
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -228,6 +233,7 @@ tables:
   qualified_name: chatbot_ai.annual_percentage_change_in_commercial_property_price__cec3c152
 - name: annual_percentage_change_in_residential_rents_price_in_9e8d8281
   description: Annual percentage change in residential rents price in 9e8d8281
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -276,6 +282,7 @@ tables:
   qualified_name: chatbot_ai.annual_percentage_change_in_residential_rents_price_in_9e8d8281
 - name: monthly_percentage_change_in_residential_rents_price_i_09e18e38
   description: Monthly percentage change in residential rents price i 09e18e38
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -324,6 +331,7 @@ tables:
   qualified_name: chatbot_ai.monthly_percentage_change_in_residential_rents_price_i_09e18e38
 - name: quarterly_percentage_change_in_residential_property_pr_a5a9c409
   description: Quarterly percentage change in residential property pr a5a9c409
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -362,6 +370,7 @@ tables:
   qualified_name: chatbot_ai.quarterly_percentage_change_in_residential_property_pr_a5a9c409
 - name: quarterly_percentage_change_in_commercial_property_pri_96bb404c
   description: Quarterly percentage change in commercial property pri 96bb404c
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -400,6 +409,7 @@ tables:
   qualified_name: chatbot_ai.quarterly_percentage_change_in_commercial_property_pri_96bb404c
 - name: construction_cost_index_by_building_stages_2019_100_2026_07_16
   description: Construction cost index by building stages 2019 100 2026 07 16
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -482,6 +492,7 @@ tables:
   qualified_name: chatbot_ai.construction_cost_index_by_economic_activity_2012_100__974b7e58
 - name: construction_cost_index_by_economic_activity_2019_100__c3793813
   description: Construction cost index by economic activity 2019 100  c3793813
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -797,6 +808,7 @@ tables:
   qualified_name: chatbot_ai.buildings_under_construction_by_type_2026_07_16
 - name: housing_units_aggregation
   description: Completed housing units by type across Dubai (DSC aggregation)
+  segments: [unit_type_en]
   primary_key:
   - year
   - unit_type_en
@@ -852,6 +864,7 @@ tables:
   qualified_name: chatbot_ai.housing_units_by_area_type_urban_and_rural_2026_07_16
 - name: building_permits_issued_and_licensed_areas_by_building_80cb34d3
   description: Building permits issued and licensed areas by building 80cb34d3
+  segments: [type]
   primary_key: []
   columns:
   - name: quarter
@@ -905,6 +918,8 @@ tables:
   qualified_name: chatbot_ai.building_permits_issued_and_licensed_areas_by_building_80cb34d3
 - name: dld_community_avg_sale_price
   description: Average sale or rent price by community, property subtype, and usage.
+  segments: [property_sub_type_en]
+  basis: [avg_price_type]
   primary_key: []
   columns:
   - name: community_name_en
@@ -995,6 +1010,7 @@ tables:
   qualified_name: public.mv_community_landing_page_stats
 - name: price_trend_buy_fact
   description: Individual sale used to build a buy-price trend. Aggregate by month and community.
+  segments: [rooms_en]
   primary_key: []
   columns:
   - name: instance_date
@@ -1027,6 +1043,7 @@ tables:
   qualified_name: public.price_trend_buy_fact
 - name: price_trend_rent_fact
   description: Individual rent contract used to build a rent trend. Aggregate by month and community.
+  segments: [property_sub_type_en]
   primary_key: []
   columns:
   - name: contract_start_date

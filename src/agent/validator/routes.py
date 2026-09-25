@@ -26,12 +26,23 @@ def apply_query_policy(
 
 
 def sanitize_domain_route(route: DomainRoute) -> tuple[DomainRoute, list[str]]:
-    """Drop unknown ids and cap how many packs are loaded. Do not add a pack the model did not name."""
+    """Drop unknown ids and cap how many packs are loaded.
+
+    The only pack added is a chosen recipe's own, since its tables must be loaded to run it.
+    """
+    from agent.sql.recipes import recipe
+
     notes: list[str] = []
     known = _known_ids()
     primary = _unique_known(route.domain_ids, known)
     if any(domain_id not in known for domain_id in route.domain_ids):
         notes.append("dropped_unknown")
+
+    chosen = recipe(route.recipe_id)
+    if route.recipe_id and chosen is None:
+        notes.append("dropped_unknown_recipe")
+    if chosen is not None:
+        primary = [*chosen.domains, *(domain_id for domain_id in primary if domain_id not in chosen.domains)]
 
     joins = [domain_id for domain_id in _unique_known(route.join_ids, known) if domain_id not in primary]
 
@@ -49,7 +60,8 @@ def sanitize_domain_route(route: DomainRoute) -> tuple[DomainRoute, list[str]]:
         else:
             break
 
-    return route.model_copy(update={"domain_ids": primary, "join_ids": joins}), notes
+    recipe_id = chosen.id if chosen is not None else None
+    return route.model_copy(update={"domain_ids": primary, "join_ids": joins, "recipe_id": recipe_id}), notes
 
 
 def _unique_known(ids: list[str], known: set[str]) -> list[str]:

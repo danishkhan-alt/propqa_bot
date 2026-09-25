@@ -16,14 +16,30 @@ from agent.graphs.chat import build_chat_graph
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage, json_ready
-from agent.sql.guard import SqlRejected, applied_conditions, prepare_select, tables_in_domains
+from agent.schemas.grounding import GroundedName, Grounding, StoredMatch
+from agent.sql.guard import (
+    SqlRejected,
+    applied_conditions,
+    blended_averages,
+    prepare_select,
+    segment_rules,
+    tables_in_domains,
+)
 from agent.sql.listings import listing_ids_from
-from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY, run_sql_lookup
+from agent.sql.lookup import BLENDED_NOTE, EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY, run_sql_lookup
+from agent.sql.recipes import bind_recipe, recipe, recipes
+from catalog import list_domains
 from agent.sql.trace import trace_sql_attempt
 
 
 class _Draft:
-    def __init__(self, sql: str = "SELECT avg(actual_worth) AS average_price FROM real_estate_transactions") -> None:
+    def __init__(
+        self,
+        sql: str = (
+            "SELECT property_sub_type_en, avg(actual_worth) AS average_price FROM real_estate_transactions "
+            "WHERE trans_group_en = 'Sales' GROUP BY property_sub_type_en"
+        ),
+    ) -> None:
         self.sql = sql
         self.calls = 0
         self.errors: list[str | None] = []
@@ -392,3 +408,142 @@ def test_a_dld_property_id_is_not_a_listing():
     rows = [{"property_id": 55, "amount": 1000000}]
     assert listing_ids_from(state, rows, "SELECT t.property_id, t.amount FROM dld.transactions t") == []
     assert listing_ids_from(state, rows, "SELECT avg(p.price_max) AS property_id FROM public.properties p") == []
+
+
+# Kinds of property and fixed recipes
+
+
+def test_an_average_must_not_mix_kinds_of_property():
+    rules = segment_rules(["transactions", "market"])
+    mixed = blended_averages(
+        "SELECT area_name_en, avg(actual_worth) FROM real_estate_transactions WHERE trans_group_en = 'Sales' "
+        "GROUP BY area_name_en",
+        rules,
+    )
+    assert len(mixed) == 1 and "property_sub_type_en" in mixed[0]
+    assert "trans_group_en" in blended_averages(
+        "SELECT property_sub_type_en, avg(actual_worth) FROM real_estate_transactions GROUP BY 1", rules
+    )[0]
+    # A presence check is not a split; filtering to the kind the user named is.
+    assert blended_averages(
+        "SELECT avg(sale_price) FROM public.price_trend_buy_fact WHERE rooms_en IS NOT NULL", rules
+    )
+    assert not blended_averages(
+        "SELECT avg(sale_price) FROM public.price_trend_buy_fact WHERE rooms_en = '2 B/R'", rules
+    )
+    # A grouping reached through a CTE alias counts, and so does a median.
+    assert not blended_averages(
+        "WITH s AS (SELECT rooms_en AS layout, sale_price FROM public.price_trend_buy_fact) "
+        "SELECT CASE WHEN layout = 'Studio' THEN 0 ELSE 1 END AS beds, "
+        "percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) FROM s GROUP BY 1",
+        rules,
+    )
+    assert blended_averages(
+        "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) FROM public.price_trend_buy_fact", rules
+    )
+    # Counts and totals are not averages.
+    assert not blended_averages("SELECT count(*) FROM real_estate_transactions", rules)
+
+
+def test_every_declared_segment_is_a_column_of_its_table_or_a_join():
+    joined = {"category_id"}
+    for rule in set(segment_rules([domain["id"] for domain in list_domains()]).values()):
+        for column in (*rule.segments, *rule.basis):
+            assert column in rule.columns or column in joined, (rule.table, column)
+
+
+def test_a_blended_draft_is_redrafted_once_then_answered_with_a_note():
+    blended = "SELECT avg(actual_worth) AS average_price FROM real_estate_transactions"
+    page = SqlPage(columns=["average_price"], rows=[{"average_price": "1650000"}], truncated=False, duration_ms=1)
+    runner = _Rows([page])
+    draft = _Draft(blended)
+    update = run_sql_lookup(_state(), draft, runner, row_cap=100)
+
+    assert draft.calls == 2
+    assert "mixes kinds of property" in draft.errors[1]
+    assert len(runner.calls) == 1
+    assert update["sql_result"]["status"] == "rows"
+    assert BLENDED_NOTE in update["sql_result"]["notes"]
+
+
+def test_an_aggregate_filter_is_not_reported_as_a_condition():
+    sql = (
+        "SELECT count(*) FILTER (WHERE recent) FROM public.price_trend_buy_fact "
+        "WHERE master_project_en = 'Dubai Marina'"
+    )
+    assert applied_conditions(sql) == ["master_project_en = 'Dubai Marina'"]
+
+
+def _grounded(*values: str, table: str = "public.price_trend_buy_fact", kind: str = "master_project"):
+    return Grounding(
+        names=[
+            GroundedName(
+                text=value,
+                kind="place",
+                stored=[StoredMatch(table=table, column="master_project_en", value=value, kind=kind)],
+            )
+            for value in values
+        ]
+    )
+
+
+def test_a_recipe_binds_only_the_names_it_takes():
+    overview = recipe("dubai_market_overview")
+    community = recipe("community_sale_prices_by_bedrooms")
+    assert bind_recipe(overview, Grounding()) is not None
+    assert bind_recipe(overview, _grounded("Dubai Marina")) is None
+    assert bind_recipe(community, Grounding()) is None
+    assert bind_recipe(community, _grounded("Dubai Marina", "Business Bay")) is None
+    assert bind_recipe(community, _grounded("Dubai Marina", kind="community")) is None
+
+    bound = bind_recipe(community, _grounded("Jumeirah Village Circle"))
+    assert "ANY(ARRAY['Jumeirah Village Circle'])" in bound.sql
+    assert bound.filters() == ["place: Jumeirah Village Circle"]
+    quoted = bind_recipe(community, _grounded("O'Hara Gardens"))
+    assert "ARRAY['O''Hara Gardens']" in quoted.sql
+
+
+def test_every_recipe_passes_the_guard_and_splits_kinds_of_property():
+    for item in recipes().values():
+        grounding = _grounded("Dubai Marina") if item.params else Grounding()
+        bound = bind_recipe(item, grounding)
+        guarded = prepare_select(bound.sql, tables_in_domains(list(item.domains)), 100)
+        assert blended_averages(guarded, segment_rules(list(item.domains))) == [], item.id
+
+
+def test_a_chosen_recipe_answers_without_drafting_sql():
+    state = _state("How are prices in JVC?")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["market"], join_ids=[], recipe_id="community_sale_prices_by_bedrooms", confidence=1, rationale="Trend."
+    )
+    state["grounding"] = _grounded("Jumeirah Village Circle")
+    page = SqlPage(columns=["bedrooms", "median_price_aed"], rows=[{"bedrooms": "1-bed", "median_price_aed": 1069300}], truncated=False, duration_ms=3)
+    runner = _Rows([page])
+    draft = _Draft()
+    update = run_sql_lookup(state, draft, runner, row_cap=100)
+
+    assert draft.calls == 0
+    assert update["sql_result"]["recipe"] == "community_sale_prices_by_bedrooms"
+    assert update["sql_result"]["filters"] == ["place: Jumeirah Village Circle"]
+    assert "Jumeirah Village Circle" in runner.calls[0]
+
+
+def test_a_recipe_that_finds_nothing_falls_back_to_a_draft():
+    state = _state("How are prices in JVC?")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["market", "transactions"],
+        join_ids=[],
+        recipe_id="community_sale_prices_by_bedrooms",
+        confidence=1,
+        rationale="Trend.",
+    )
+    state["grounding"] = _grounded("Jumeirah Village Circle")
+    empty = SqlPage(columns=[], rows=[], truncated=False, duration_ms=1)
+    found = SqlPage(columns=["average_price"], rows=[{"average_price": "1"}], truncated=False, duration_ms=1)
+    runner = _Rows([empty, found])
+    draft = _Draft()
+    update = run_sql_lookup(state, draft, runner, row_cap=100)
+
+    assert draft.calls == 1
+    assert "recipe" not in update["sql_result"]
+    assert update["sql_result"]["status"] == "rows"

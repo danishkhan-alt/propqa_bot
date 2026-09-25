@@ -29,7 +29,7 @@ class ReplyCard(BaseModel):
 
 
 FigureUnit = Literal[
-    "aed", "aed_per_sqft", "sqft", "percent", "fraction", "count", "number", "year", "text"
+    "aed", "aed_per_sqft", "sqft", "percent", "change", "fraction", "count", "number", "year", "text"
 ]
 
 
@@ -46,9 +46,10 @@ class FigureSpec(BaseModel):
 
     stats: one row, its figures as tiles. table: a few rows side by side.
     bar: one figure compared across rows, each row named by label_column.
+    line: one to three figures over periods, each row a period named by label_column.
     """
 
-    layout: Literal["none", "stats", "table", "bar"] = "none"
+    layout: Literal["none", "stats", "table", "bar", "line"] = "none"
     label_column: str = ""
     label_title: str = ""
     columns: list[FigureColumn] = Field(default_factory=list)

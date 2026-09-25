@@ -188,13 +188,15 @@ def _openai_chat_models():
     api_key = ActiveConfig.OPENAI_API_KEY or None
 
     def build(model: str, effort: str, max_tokens: int):
-        # Reasoning tokens come out of max_tokens, as with Claude's thinking.
+        # Reasoning tokens come out of max_tokens, as with Claude's thinking. A model that
+        # does not reason (gpt-4.1, gpt-4o) rejects the effort setting, so it gets none.
+        reasoning = {"reasoning_effort": effort} if effort and openai_model_reasons(model) else {}
         return ChatOpenAI(
             model=model,
             api_key=api_key,
             max_tokens=max_tokens,
-            reasoning_effort=effort,
             stream_usage=True,
+            **reasoning,
         )
 
     # The router reasons as well, so it needs more headroom than a Claude router.
@@ -202,6 +204,14 @@ def _openai_chat_models():
     answer = build(ActiveConfig.AI_MODEL, ActiveConfig.AI_REPLY_EFFORT, ActiveConfig.LLM_MAX_OUTPUT_TOKENS)
     sql = build(ActiveConfig.AI_MODEL, ActiveConfig.AI_SQL_EFFORT, ActiveConfig.LLM_MAX_OUTPUT_TOKENS)
     return router, answer, sql
+
+
+def openai_model_reasons(model: str) -> bool:
+    """OpenAI's reasoning families: the o-series and gpt-5, except its non-reasoning chat variant."""
+    name = model.lower().rsplit("/", 1)[-1]
+    if name.startswith("gpt-5"):
+        return "-chat" not in name
+    return len(name) > 1 and name[0] == "o" and name[1].isdigit()
 
 
 _PROVIDERS = {"anthropic": _anthropic_chat_models, "openai": _openai_chat_models}
@@ -216,6 +226,19 @@ def constrained_output_options() -> dict:
     from config import ActiveConfig
 
     return {"strict": True} if ActiveConfig.LLM_PROVIDER == "openai" else {}
+
+
+def cached_system(text: str) -> SystemMessage:
+    """A system message the provider may reuse across calls that start with it.
+
+    OpenAI caches any repeated prefix of 1024 tokens or more on its own. Claude caches
+    only up to a block marked with cache_control, so the marker is added there.
+    """
+    from config import ActiveConfig
+
+    if ActiveConfig.LLM_PROVIDER == "anthropic":
+        return SystemMessage(content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}])
+    return SystemMessage(content=text)
 
 
 def build_chat_models():
@@ -288,6 +311,7 @@ class RouterModels:
         turn_kind: TurnKind,
         last_need_db: LastNeedDb | None,
         index_text: str,
+        recipes_text: str = "",
         config: RunnableConfig | None = None,
     ) -> DomainRoute:
         payload = {
@@ -295,6 +319,7 @@ class RouterModels:
             "turn_kind": turn_kind.value,
             "last_need_db": last_need_db.model_dump() if last_need_db else None,
             "index": index_text,
+            "recipes": recipes_text,
         }
         messages = [
             SystemMessage(content=DOMAIN_ROUTER_SYSTEM),
@@ -386,12 +411,15 @@ class RouterModels:
         resolved_names: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ) -> SqlDraft:
+        # The catalog and table list depend only on the loaded packs, so they sit in the
+        # system prefix, where the provider caches them across turns. Per-turn facts follow.
+        instructions = (
+            f"{SQL_DRAFT_SYSTEM}\nallowed_tables: {json.dumps(allowed_tables)}\n\ncatalog:\n{catalog}"
+        )
         payload = {
             "message": message,
             "history": history,
             "resolved_names": resolved_names or [],
-            "catalog": catalog,
-            "allowed_tables": allowed_tables,
             "assumptions": assumptions,
             "query_frame": query_frame,
             "previous_error": previous_error,
@@ -400,7 +428,7 @@ class RouterModels:
         return invoke_structured(
             self._sql,
             [
-                SystemMessage(content=SQL_DRAFT_SYSTEM),
+                cached_system(instructions),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
             ],
             config,
@@ -535,7 +563,7 @@ class RouterModels:
             "follow_up_question": follow_up_question,
         }
         messages = [
-            SystemMessage(content=STRUCTURED_REPLY_SYSTEM),
+            cached_system(STRUCTURED_REPLY_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
         ]
         return stream_structured_reply(self._reply, messages, config, on_text)

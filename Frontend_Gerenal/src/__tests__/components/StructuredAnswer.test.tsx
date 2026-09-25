@@ -107,6 +107,50 @@ describe("StructuredAnswer blocks", () => {
     expect(screen.getByText("+3 more not shown")).toBeInTheDocument();
   });
 
+  it("shows a change with its direction and a repeated period once, under the table", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          figures: {
+            layout: "table",
+            headers: ["Bedrooms", "Median price", "Yearly change"],
+            rows: [
+              ["1-bed", "AED 1.07M", "▲ 9.9%"],
+              ["2-bed", "AED 1.55M", "▼ 1.2%"],
+            ],
+            caption: ["As of: May 2026"],
+          },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByRole("cell", { name: /^up\s*9\.9%$/ })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: /^down\s*1\.2%$/ })).toBeInTheDocument();
+    expect(screen.getByText("As of: May 2026")).toBeInTheDocument();
+  });
+
+  it("draws a line per series with a legend and the latest values", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          figures: {
+            layout: "line",
+            title: "",
+            labels: ["2024", "2025", "2026"],
+            series: [
+              { name: "Apartments", points: [{ value: 100, display: "100" }, { value: 110, display: "110" }, { value: 120, display: "120" }] },
+              { name: "Villas", points: [{ value: 100, display: "100" }, { value: null, display: "" }, { value: 140, display: "140" }] },
+            ],
+          },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByRole("list", { name: "Series" })).toHaveTextContent("ApartmentsVillas");
+    expect(screen.getByRole("img", { name: "Apartments, Villas, 2024 to 2026" })).toBeInTheDocument();
+    expect(screen.getByText("Latest (2026): Apartments 120 · Villas 140")).toBeInTheDocument();
+  });
+
   it("draws a bar per row, labelled with its value", () => {
     render(
       <StructuredAnswer

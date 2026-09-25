@@ -304,3 +304,46 @@ def test_an_explainer_without_points_is_dropped():
     assert build_explainer(Explainer(kind="none", points=["a"])) is None
     shown = build_explainer(Explainer(kind="steps", title="Buying off-plan", points=["Reserve"], cautions=["x"]))
     assert shown == {"kind": "steps", "title": "Buying off-plan", "points": ["Reserve"], "cautions": []}
+
+
+@pytest.mark.parametrize(
+    "value, shown",
+    [("8.9", "▲ 8.9%"), (-1.234, "▼ 1.2%"), ("0.01", "0%"), (13.16, "▲ 13.2%")],
+)
+def test_a_change_shows_its_direction(value, shown):
+    assert format_figure(value, "change") == shown
+
+
+def test_a_period_repeated_on_every_row_becomes_a_caption():
+    rows = [
+        {"bedrooms": "1-bed", "median": 1069300, "change": "9.9", "as_of": "May 2026", "yield": "6"},
+        {"bedrooms": "2-bed", "median": 1550427, "change": "6.4", "as_of": "May 2026", "yield": "6"},
+    ]
+    spec = _spec(
+        "table",
+        [("median", "Median price", "aed"), ("change", "Yearly change", "change"), ("as_of", "As of", "text"), ("yield", "Yield", "percent")],
+        "bedrooms",
+        "Bedrooms",
+    )
+    table = build_figures(spec, rows, list(rows[0]))
+    assert table["headers"] == ["Bedrooms", "Median price", "Yearly change", "Yield"]
+    assert table["rows"][0] == ["1-bed", "AED 1.07M", "▲ 9.9%", "6%"]
+    assert table["caption"] == ["As of: May 2026"]
+
+
+def test_a_line_runs_oldest_first_and_skips_a_thin_series():
+    rows = [
+        {"month": "2026-03", "flats": "1300", "villas": "1900", "offices": None},
+        {"month": "2026-02", "flats": "1290", "villas": None, "offices": "1100"},
+        {"month": "2026-01", "flats": "1280", "villas": "1850", "offices": None},
+    ]
+    spec = _spec(
+        "line",
+        [("flats", "Apartments", "aed_per_sqft"), ("villas", "Villas", "aed_per_sqft"), ("offices", "Offices", "aed_per_sqft")],
+        "month",
+    )
+    line = build_figures(spec, rows, list(rows[0]))
+    assert line["labels"] == ["2026-01", "2026-02", "2026-03"]
+    assert [series["name"] for series in line["series"]] == ["Apartments"]
+    assert line["series"][0]["points"][-1] == {"value": 1300.0, "display": "AED 1,300/sqft"}
+    assert build_figures(_spec("line", [("flats", "Apartments", "aed_per_sqft")]), rows, list(rows[0])) is None

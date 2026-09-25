@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 import yaml
@@ -19,7 +21,7 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft
-from agent.services.llm import invoke_structured
+from agent.services.llm import invoke_structured, openai_model_reasons
 from agent.sql.execute import SqlPage
 from agent.validator import apply_query_policy, sanitize_domain_route
 
@@ -406,3 +408,29 @@ def test_router_schemas_are_accepted_by_strict_mode():
 
     for model in (QueryRoute, DomainRoute):
         walk(output_schema(model))
+
+
+def test_a_chosen_recipe_loads_its_own_pack_and_an_unknown_one_is_dropped():
+    route = DomainRoute(
+        domain_ids=["transactions"],
+        join_ids=[],
+        recipe_id="community_sale_prices_by_bedrooms",
+        confidence=0.9,
+        rationale="Community trend.",
+    )
+    cleaned, _ = sanitize_domain_route(route)
+    assert cleaned.domain_ids == ["market", "transactions"]
+    assert cleaned.recipe_id == "community_sale_prices_by_bedrooms"
+
+    invented, notes = sanitize_domain_route(route.model_copy(update={"recipe_id": "made_up"}))
+    assert invented.recipe_id is None
+    assert invented.domain_ids == ["transactions"]
+    assert "dropped_unknown_recipe" in notes
+
+
+@pytest.mark.parametrize(
+    "model, reasons",
+    [("gpt-5.5", True), ("gpt-5.4-mini", True), ("o4-mini", True), ("gpt-5-chat-latest", False), ("gpt-4.1", False), ("gpt-4o", False)],
+)
+def test_only_reasoning_models_are_sent_an_effort(model, reasons):
+    assert openai_model_reasons(model) is reasons
