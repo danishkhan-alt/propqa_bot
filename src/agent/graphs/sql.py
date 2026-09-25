@@ -20,6 +20,7 @@ from agent.services.tracing import langfuse_client
 from agent.sql.cards import listing_cards, load_from_warehouse
 from agent.sql.execute import run_against_warehouse
 from agent.sql.guard import tables_in_domains
+from agent.sql.listing_rules import LISTINGS_TABLE
 from agent.sql.lookup import run_listing_lookup, run_sql_lookup, uses_listing_search
 from agent.states.chat import ChatState
 from common.logger import get_logger
@@ -42,6 +43,8 @@ def ground_message_names(state: ChatState, runtime: Runtime[AgentContext]) -> di
         unmatched = [GroundedName(text=name.text, kind=name.kind) for name in query.names]
         return {"grounding": Grounding(names=unmatched)}
     tables = tables_in_domains([*domain.domain_ids, *domain.join_ids])
+    if uses_listing_search(state):
+        tables.add(LISTINGS_TABLE)
     grounding = ground_names(query.names, index, tables)
     logger.info(
         "grounding.names",

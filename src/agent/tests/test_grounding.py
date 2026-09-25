@@ -207,3 +207,71 @@ def test_an_unknown_name_is_reported_not_dropped():
     assert grounding.unresolved() == ["Atlantis Zzyzx"]
     assert grounding.for_sql_prompt() == [{"name": "Atlantis Zzyzx", "unresolved": True}]
     assert "searched as text" in grounding.notes()[0]
+
+
+def test_a_legacy_node_at_the_same_spot_as_a_v2_node_joins_the_v2_place_it_sits_in():
+    v2 = [
+        _v2(2, None, "Dubai", Breadth.REGION),
+        _v2(40, 2, "Downtown Dubai", Breadth.AREA, 25.194, 55.274),
+        _v2(41, 40, "Burj Khalifa", Breadth.BUILDING, 25.1971, 55.2745),
+    ]
+    legacy = [
+        _v2(12057, None, "Burj Khalifa", Breadth.AREA, 25.1972, 55.2744),
+        _v2(12058, 12057, "Blvd Heights", Breadth.PROJECT, 25.199, 55.270),
+        # Same name, far away: a different place, never linked.
+        _v2(99000, None, "Burj Khalifa", Breadth.BUILDING, 24.40, 54.50),
+    ]
+    downtown = build_place_directory(v2, legacy, ListingLinks(), region="Dubai").find("downtown").place
+    assert {12057, 12058} <= downtown.legacy_ids
+    assert 99000 not in downtown.legacy_ids
+
+
+def test_a_legacy_node_inside_a_drawn_outline_belongs_to_that_area():
+    v2 = [_v2(2, None, "Dubai", Breadth.REGION), _v2(30, 2, "Dubai Hills Estate", Breadth.AREA, 25.11, 55.26)]
+    legacy = [_v2(1102, None, "DUBAI HILLS - EMERALD HILLS", Breadth.AREA, 25.1298, 55.2702)]
+    directory = build_place_directory(v2, legacy, ListingLinks(), region="Dubai", inside_outline={30: [1102]})
+    assert 1102 in directory.find("Dubai Hills Estate").place.legacy_ids
+    assert 1102 not in build_place_directory(v2, legacy, ListingLinks(), region="Dubai").find(
+        "Dubai Hills Estate"
+    ).place.legacy_ids
+
+
+def test_an_outline_does_not_claim_a_legacy_area_that_v2_places_elsewhere():
+    v2 = [
+        _v2(2, None, "Dubai", Breadth.REGION),
+        _v2(10, 2, "Dubai Marina", Breadth.AREA, 25.083, 55.144),
+        _v2(70, 2, "Dubai Harbour", Breadth.AREA, 25.095, 55.140),
+    ]
+    legacy = [
+        _v2(311546, None, "Dubai Harbour", Breadth.AREA, 25.086, 55.143),
+        _v2(309575, 311546, "SUNRISE BAY", Breadth.PROJECT, 25.096, 55.139),
+    ]
+    directory = build_place_directory(v2, legacy, ListingLinks(), region="Dubai", inside_outline={10: [311546]})
+    assert not {311546, 309575} & directory.find("Dubai Marina").place.legacy_ids
+    assert {311546, 309575} <= directory.find("Dubai Harbour").place.legacy_ids
+
+
+def test_a_company_name_matches_every_stored_name_that_contains_it():
+    table = "public.properties"
+    index = StoredValueIndex(
+        [
+            StoredValue(table, "developer", "Emaar", "developer", 82),
+            StoredValue(table, "developer", "Emaar Properties (P.J.S.C)", "developer", 44),
+            StoredValue(table, "developer", "Damac", "developer", 11),
+        ],
+        {},
+    )
+    found = index.find(["Emaar"], [table], {"developer"})
+    assert [value.value for value in found] == ["Emaar", "Emaar Properties (P.J.S.C)"]
+
+
+def test_a_place_name_keeps_the_exact_match_over_names_containing_it():
+    table = "chatbot_ai.real_estate_transactions"
+    index = StoredValueIndex(
+        [
+            StoredValue(table, "master_project_en", "Dubai Marina", "master_project", 97_000),
+            StoredValue(table, "master_project_en", "Dubai Marina Mall", "master_project", 50),
+        ],
+        {},
+    )
+    assert [value.value for value in index.find(["Dubai Marina"], [table], {"place"})] == ["Dubai Marina"]

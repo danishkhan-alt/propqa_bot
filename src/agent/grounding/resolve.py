@@ -32,7 +32,7 @@ def _ground(mention: NameMention, index: GroundingIndex, tables: set[str]) -> Gr
     # "Downtown Dubai", which is how the other sources spell it.
     spellings = [mention.text]
     if match is not None:
-        spellings = [*sorted(match.place.names), mention.text]
+        spellings = [*sorted(match.place.names | match.place.covered_names), mention.text]
     stored = index.stored.find(spellings, tables, _GROUPS_BY_MENTION[mention.kind])
     return GroundedName(
         text=mention.text,

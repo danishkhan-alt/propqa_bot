@@ -15,7 +15,7 @@ from agent.grounding import GroundingIndex
 from agent.grounding.places import Breadth, ListingLinks, LocationNode, build_place_directory
 from agent.grounding.stored_values import StoredValue, StoredValueIndex
 from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding
-from agent.schemas.listing import ListingFilters, ListingSort, MentionKind, NameMention
+from agent.schemas.listing import ListingFilters, ListingPurpose, ListingSort, MentionKind, NameMention
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlPage
@@ -23,7 +23,6 @@ from agent.sql.listing_search import (
     ListingSearch,
     build_listing_query,
     category_ids,
-    listing_purpose,
     search_listings,
 )
 from agent.sql.lookup import ONLY_ZERO_VALUES, run_sql_lookup
@@ -55,7 +54,7 @@ class _CountingRunner:
 
 def test_a_place_matches_any_way_a_listing_points_at_it():
     query = build_listing_query(
-        ListingSearch(filters=ListingFilters(), purpose="for_sale", places=[MARINA]),
+        ListingSearch(filters=ListingFilters(purpose=ListingPurpose.SALE), places=[MARINA]),
         limit=10,
         offset=0,
     )
@@ -95,11 +94,13 @@ def test_types_map_to_catalog_categories_and_unknown_types_are_reported():
 
 
 @pytest.mark.parametrize(
-    ("stated", "stored"),
-    [("sale", "for_sale"), ("to buy", "for_sale"), ("rent", "for_rent"), ("for_rent", "for_rent"), (None, None)],
+    ("purpose", "stored"),
+    [(ListingPurpose.SALE, "for_sale"), (ListingPurpose.RENT, "for_rent"), (ListingPurpose.ANY, None)],
 )
-def test_purpose_is_read_from_what_the_user_said(stated, stored):
-    assert listing_purpose(stated) == stored
+def test_purpose_maps_to_the_stored_value_and_any_adds_no_filter(purpose, stored):
+    query = build_listing_query(ListingSearch(filters=ListingFilters(purpose=purpose)), limit=10, offset=0)
+    assert query.params.get("purpose") == stored
+    assert ("p.purpose = %(purpose)s" in query.sql) is (stored is not None)
 
 
 def test_an_unmatched_place_is_searched_as_address_text_not_dropped():
@@ -161,7 +162,7 @@ class _ListingModels:
             intent=Intent.LIST,
             purpose="sale",
             names=[NameMention(text="marina")],
-            listing_filters=ListingFilters(bedrooms_min=2, bedrooms_max=2),
+            listing_filters=ListingFilters(purpose=ListingPurpose.SALE, bedrooms_min=2, bedrooms_max=2),
             confidence=0.9,
             rationale="Show listings.",
         )
@@ -206,7 +207,11 @@ def test_a_property_search_turn_never_asks_the_model_for_sql():
     assert params["bedrooms_min"] == 2
     assert models.answers and models.answers[0]["listing_ids"] == ["101", "102"]
     assert state["grounding"] is None
-    assert state["last_need_db"].result_meta["listing_filters"] == {"bedrooms_min": 2, "bedrooms_max": 2}
+    assert state["last_need_db"].result_meta["listing_filters"] == {
+        "purpose": "sale",
+        "bedrooms_min": 2,
+        "bedrooms_max": 2,
+    }
 
 
 class _DraftRecorder:

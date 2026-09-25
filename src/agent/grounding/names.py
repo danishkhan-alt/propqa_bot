@@ -104,6 +104,20 @@ class NameMatcher(Generic[Key]):
                 return self._hits(normalized, names, tier)
         return []
 
+    def find_containing(self, phrase: str) -> list[NameHit[Key]]:
+        """Every key named exactly the phrase or containing all its words; typos only as a fallback."""
+        normalized = normalize_name(phrase)
+        if not normalized:
+            return []
+        exact = self._exact(normalized)
+        containing = [name for name in self._containing_words(normalized) if name not in exact]
+        if exact or containing:
+            return [
+                *self._hits(normalized, exact, MatchTier.EXACT),
+                *self._hits(normalized, containing, MatchTier.WORDS),
+            ]
+        return self._hits(normalized, self._similar(normalized), MatchTier.FUZZY)
+
     def _exact(self, normalized: str) -> list[str]:
         return [normalized] if normalized in self._keys_by_name else []
 

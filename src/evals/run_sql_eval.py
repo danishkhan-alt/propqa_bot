@@ -56,6 +56,7 @@ class TurnOutcome:
     total: int | None = None
     notes: list[str] = field(default_factory=list)
     names: list[dict] = field(default_factory=list)
+    route: dict = field(default_factory=dict)
     reply: str = ""
     seconds: float = 0.0
     error: str = ""
@@ -132,6 +133,13 @@ def _record(update: dict, outcome: TurnOutcome) -> None:
     for node, value in update.items():
         if not isinstance(value, dict):
             continue
+        if node == "query_router" and value.get("query_route") is not None:
+            query = value["query_route"]
+            outcome.route = query.model_dump(
+                mode="json", include={"intent", "purpose", "limit", "names", "listing_filters"}
+            )
+        if node == "domain_router" and value.get("domain_route") is not None:
+            outcome.route["domains"] = [*value["domain_route"].domain_ids, *value["domain_route"].join_ids]
         if node == "ground_names" and value.get("grounding") is not None:
             outcome.names = [
                 {"text": name.text, "place": name.place.title if name.place else None, "stored": len(name.stored)}
@@ -156,6 +164,8 @@ def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
         passed, detail = _score_listings(case["listings"], outcome)
     elif "value" in case:
         passed, detail = _score_value(case["value"], outcome)
+    elif "sql_contains" in case:
+        passed, detail = _score_sql_contains(case["sql_contains"], outcome)
     else:
         passed, detail = _score_rows_contain(case["rows_contain"], outcome)
     return CaseScore(case["id"], passed, detail, outcome)
@@ -171,7 +181,9 @@ def _score_listings(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
         relaxed = True
     returned = set(outcome.listing_ids)
     wrong = returned - truth
-    expected_on_page = min(len(truth), DEFAULT_PER_PAGE)
+    # "The cheapest penthouse" asks for one row; otherwise a page of the default size.
+    page_size = outcome.route.get("limit") or DEFAULT_PER_PAGE
+    expected_on_page = min(len(truth), page_size)
     total_ok = outcome.total is None or outcome.total == len(truth)
     note_ok = not relaxed or bool(outcome.notes)
     passed = not wrong and len(returned) == expected_on_page and total_ok and note_ok
@@ -210,6 +222,11 @@ def _score_value(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
                 return True, f"answer={number:g} truth={truth:g}"
     shown = ", ".join(f"{truth:g}" for truth in truths if truth is not None)
     return False, f"answer={answered[:3]} truth in [{shown}] status={outcome.status}"
+
+
+def _score_sql_contains(texts: list[str], outcome: TurnOutcome) -> tuple[bool, str]:
+    missing = [text for text in texts if text not in outcome.sql]
+    return not missing and bool(outcome.rows), f"rows={len(outcome.rows)} missing_in_sql={missing}"
 
 
 def _score_rows_contain(texts: list[str], outcome: TurnOutcome) -> tuple[bool, str]:

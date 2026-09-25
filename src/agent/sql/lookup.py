@@ -12,13 +12,15 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from agent.enums.routing import Intent
 from agent.schemas.grounding import Grounding, as_grounding
 from agent.schemas.listing import ListingFilters, MentionKind
 from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage
 from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
-from agent.sql.listing_search import ListingSearch, listing_purpose, search_listings
+from agent.sql.listing_rules import LISTINGS_TABLE
+from agent.sql.listing_search import ListingSearch, search_listings
 from agent.sql.listings import is_listing_list, listing_ids_from
 from agent.sql.trace import trace_sql_attempt
 from agent.states.chat import ChatState
@@ -36,13 +38,16 @@ ONLY_ZERO_VALUES = (
     "The query returned one row whose values are all zero or empty. A name filter probably matched "
     "nothing; use the stored values in resolved_names, or check the filters against the catalog."
 )
-LISTING_OWNER = ("public.properties", "developer")
+LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK})
 
 
 def uses_listing_search(state: ChatState) -> bool:
-    """A property search the router gave filters for. Written in code, not by the model."""
+    """The user wants to see properties on the market. Written in code, not by the model.
+
+    The router's listing filters decide this, not which catalog packs were loaded.
+    """
     query = as_query_route(state.get("query_route"))
-    return query is not None and query.listing_filters is not None and is_listing_list(state)
+    return query is not None and query.listing_filters is not None and query.intent in LISTING_INTENTS
 
 
 def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
@@ -221,9 +226,8 @@ def _listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSe
     filters = query.listing_filters if query is not None else None
     return ListingSearch(
         filters=filters or ListingFilters(),
-        purpose=listing_purpose(query.purpose if query is not None else None),
         places=[name.place for name in places if name.place is not None],
-        developers=grounding.stored_in(*LISTING_OWNER),
+        developers=grounding.stored_in(LISTINGS_TABLE, "developer"),
         unmatched_places=[name.text for name in places if name.place is None],
     )
 

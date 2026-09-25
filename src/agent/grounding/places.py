@@ -28,6 +28,8 @@ MAX_ALTERNATIVES = 3
 # A place covers a place whose name extends its own ("Dubai Hills" and "Dubai Hills Estate",
 # "DUBAI HILLS - SIDRA 1") when the two are at most this far apart.
 COVER_RADIUS_KM = 1.5
+# Nodes of the two trees with the same name this close together are one location.
+SAME_SPOT_KM = 1.0
 _EARTH_RADIUS_KM = 6371.0
 
 
@@ -55,6 +57,7 @@ LEGACY_BREADTH = {
     "project": Breadth.PROJECT,
     "building": Breadth.BUILDING,
 }
+_PLACE_BREADTHS = frozenset({Breadth.AREA, Breadth.PROJECT})
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,8 @@ class Place:
     lng: float | None = None
     # Spellings of this place itself. Only these are matched against what the user typed.
     names: set[str] = field(default_factory=set)
+    # Spellings of nearby places it covers by name, e.g. "dubai hills estate" for "Dubai Hills".
+    covered_names: set[str] = field(default_factory=set)
     # What a search for this place covers: its subtrees in both trees and the address parts
     # that name it or a place it covers, e.g. "jumeirah village circle (jvc)".
     v2_ids: set[int] = field(default_factory=set)
@@ -155,8 +160,12 @@ def build_place_directory(
     *,
     region: str,
     aliases: Mapping[str, list[str]] | None = None,
+    inside_outline: Mapping[int, Iterable[int]] | None = None,
 ) -> PlaceDirectory:
-    """Group both trees into places. v2 is limited to the region; legacy is the product's own tree."""
+    """Group both trees into places. v2 is limited to the region; legacy is the product's own tree.
+
+    `inside_outline` maps a v2 area with a drawn outline to the legacy nodes whose point lies in it.
+    """
     v2 = _in_region({node.id: node for node in v2_nodes}, region)
     legacy = {node.id: node for node in legacy_nodes}
     places: dict[str, Place] = {}
@@ -179,6 +188,7 @@ def build_place_directory(
             place.names.update(_spellings(node))
     for place in places.values():
         place.address_names.update(place.names)
+    _cover_legacy_nodes_inside(places, v2, legacy, inside_outline or {})
     _cover_nearby_extensions(places)
     for place in places.values():
         place.listing_count = (
@@ -193,6 +203,41 @@ def _place_key(title: str) -> str:
     return normalize_name(without_brackets(title)) or normalize_name(title)
 
 
+def _cover_legacy_nodes_inside(
+    places: dict[str, Place],
+    v2: Mapping[int, LocationNode],
+    legacy: Mapping[int, LocationNode],
+    inside_outline: Mapping[int, Iterable[int]],
+) -> None:
+    """The v2 tree decides what lies inside a place; legacy nodes follow it.
+
+    A legacy node belongs to a place when it is the same location as a v2 node under that
+    place (same name, same spot: the legacy "Burj Khalifa" project sits under v2 "Downtown
+    Dubai"), or when its point lies inside the place's drawn outline. An outline only places
+    legacy nodes v2 does not already name as an area or project: the legacy "Dubai Harbour"
+    point falls inside the Dubai Marina outline, but v2 has Dubai Harbour as its own area.
+    """
+    legacy_below = _descendants(legacy)
+    legacy_by_key: dict[str, list[LocationNode]] = defaultdict(list)
+    for node in legacy.values():
+        legacy_by_key[_place_key(node.title)].append(node)
+    linked: dict[int, set[int]] = defaultdict(set)
+    for node in v2.values():
+        for twin in legacy_by_key.get(_place_key(node.title), ()):
+            if _distance_km(node, twin) <= SAME_SPOT_KM:
+                linked[node.id] |= legacy_below[twin.id]
+    placed_by_v2 = {_place_key(node.title) for node in v2.values() if node.breadth in _PLACE_BREADTHS}
+    for v2_id, legacy_ids in inside_outline.items():
+        for legacy_id in legacy_ids:
+            node = legacy.get(legacy_id)
+            if node is None or _place_key(node.title) in placed_by_v2:
+                continue
+            linked[v2_id] |= legacy_below[legacy_id]
+    for place in places.values():
+        for v2_id in list(place.v2_ids):
+            place.legacy_ids |= linked.get(v2_id, set())
+
+
 def _cover_nearby_extensions(places: dict[str, Place]) -> None:
     """Let an area or project also cover nearby places whose names extend its own name.
 
@@ -200,7 +245,10 @@ def _cover_nearby_extensions(places: dict[str, Place]) -> None:
     "Dubai Hills View" still means only that community.
     """
     keys = sorted(places)
-    own = {key: (set(place.v2_ids), set(place.legacy_ids), set(place.names)) for key, place in places.items()}
+    own = {
+        key: (set(place.v2_ids), set(place.legacy_ids), set(place.names))
+        for key, place in places.items()
+    }
     for place in places.values():
         if place.breadth > Breadth.PROJECT or place.lat is None:
             continue
@@ -215,9 +263,10 @@ def _cover_nearby_extensions(places: dict[str, Place]) -> None:
             place.v2_ids |= v2_ids
             place.legacy_ids |= legacy_ids
             place.address_names |= names
+            place.covered_names |= names
 
 
-def _distance_km(first: Place, second: Place) -> float:
+def _distance_km(first: Place | LocationNode, second: Place | LocationNode) -> float:
     if None in (first.lat, first.lng, second.lat, second.lng):
         return math.inf
     lat1, lng1, lat2, lng2 = map(math.radians, (first.lat, first.lng, second.lat, second.lng))

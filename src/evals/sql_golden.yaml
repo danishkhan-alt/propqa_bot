@@ -8,6 +8,7 @@
 #   a filter and say so.
 # - value: one number the answer must contain (within `tolerance`, relative). `sql` lists every
 #   acceptable reading of the question, e.g. the DLD area or the marketing master project.
+# - sql_contains: text the SQL must contain, such as the stored value it filters on.
 # - rows_contain: text that must appear in the returned rows.
 # `turns` runs a conversation; only the last turn is scored.
 
@@ -149,7 +150,7 @@ cases:
 
 - id: palm_service_charges
   message: what are the service charges in Palm Jumeirah
-  rows_contain: [Palm Jumeirah]
+  sql_contains: ["'Palm Jumeirah'"]
 
 - id: schools_arabian_ranches
   message: schools near Arabian Ranches

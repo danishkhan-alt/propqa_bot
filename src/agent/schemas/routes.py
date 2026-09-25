@@ -23,7 +23,10 @@ class QueryRoute(BaseModel):
     )
     purpose: str | None = Field(
         default=None,
-        description="sale, rent, or whatever the user stated. Null when neither this message nor the previous lookup says.",
+        description=(
+            "sale, rent, or whatever the user stated. Null when neither this message nor the "
+            "previous lookup says; 'properties in Marina' states no purpose."
+        ),
     )
     limit: int | None = Field(
         default=None,

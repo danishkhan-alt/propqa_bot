@@ -15,7 +15,7 @@ from typing import Any
 
 from agent.grounding.names import normalize_name
 from agent.schemas.grounding import GroundedPlace
-from agent.schemas.listing import ListingFilters, ListingSort
+from agent.schemas.listing import Completion, Furnishing, ListingFilters, ListingPurpose, ListingSort
 from agent.sql.listing_rules import ACTIVE_LISTING, ASKING_PRICE
 
 _ORDER_BY = {
@@ -24,7 +24,8 @@ _ORDER_BY = {
     ListingSort.PRICE_HIGH: f"{ASKING_PRICE} DESC NULLS LAST",
     ListingSort.SIZE_LARGE: "p.area DESC NULLS LAST",
 }
-_PURPOSES = {"for_sale": ("sale", "sell", "buy", "purchase"), "for_rent": ("rent", "lease", "let")}
+# Stored value of properties.purpose for each purpose the router can choose.
+_STORED_PURPOSE = {ListingPurpose.SALE: "for_sale", ListingPurpose.RENT: "for_rent"}
 
 ListingRunner = Callable[[str, dict[str, Any]], Any]
 
@@ -32,7 +33,6 @@ ListingRunner = Callable[[str, dict[str, Any]], Any]
 @dataclass(frozen=True)
 class ListingSearch:
     filters: ListingFilters
-    purpose: str | None = None
     places: list[GroundedPlace] = field(default_factory=list)
     developers: list[str] = field(default_factory=list)
     # Place names nothing matched. Searched as address text so they are not silently dropped.
@@ -87,24 +87,15 @@ RELAXATIONS: tuple[Relaxation, ...] = (
     ),
     Relaxation(
         note="No listing matched the furnishing, so these results include any furnishing.",
-        applies=lambda f: f.furnishing is not None,
-        relax=lambda f: f.model_copy(update={"furnishing": None}),
+        applies=lambda f: f.furnishing is not Furnishing.ANY,
+        relax=lambda f: f.model_copy(update={"furnishing": Furnishing.ANY}),
     ),
     Relaxation(
         note="No listing matched the completion status, so ready and off-plan are both included.",
-        applies=lambda f: f.completion is not None,
-        relax=lambda f: f.model_copy(update={"completion": None}),
+        applies=lambda f: f.completion is not Completion.ANY,
+        relax=lambda f: f.model_copy(update={"completion": Completion.ANY}),
     ),
 )
-
-
-def listing_purpose(stated: str | None) -> str | None:
-    """The stored purpose for what the user said, such as "rent" or "buy"."""
-    words = set(normalize_name(stated or "").split())
-    for purpose, cues in _PURPOSES.items():
-        if purpose in (stated or "") or words & set(cues):
-            return purpose
-    return None
 
 
 def category_ids(property_types: list[str]) -> tuple[list[int], list[str]]:
@@ -131,9 +122,9 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
     params: dict[str, Any] = {}
     filters = search.filters
 
-    if search.purpose:
+    if filters.purpose is not ListingPurpose.ANY:
         clauses.append("p.purpose = %(purpose)s")
-        params["purpose"] = search.purpose
+        params["purpose"] = _STORED_PURPOSE[filters.purpose]
     categories, _ = category_ids(filters.property_types)
     if categories:
         clauses.append(
@@ -144,10 +135,10 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
     _add_range(clauses, params, "p.rooms", "bedrooms", filters.bedrooms_min, filters.bedrooms_max)
     _add_range(clauses, params, ASKING_PRICE, "price", filters.price_min, filters.price_max)
     _add_range(clauses, params, "p.area", "size", filters.size_min_sqft, filters.size_max_sqft)
-    if filters.furnishing is not None:
+    if filters.furnishing is not Furnishing.ANY:
         clauses.append("p.furnished = %(furnishing)s")
         params["furnishing"] = filters.furnishing.value
-    if filters.completion is not None:
+    if filters.completion is not Completion.ANY:
         clauses.append("p.completion_status = %(completion)s")
         params["completion"] = filters.completion.value
     if search.developers:
@@ -158,7 +149,7 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
         clauses.append(place_clause)
 
     where = "\n  AND ".join(clauses)
-    order_by = _ORDER_BY[filters.sort or ListingSort.NEWEST]
+    order_by = _ORDER_BY[filters.sort]
     params.update(limit=limit, offset=offset)
     return ListingQuery(
         sql=(

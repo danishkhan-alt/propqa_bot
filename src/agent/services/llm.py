@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel
 
 from agent.enums.routing import TurnKind
 from agent.memory.session.follow_up import FrameClass
@@ -48,6 +49,28 @@ SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
 REPLY_FALLBACK = StructuredReply(
     intro_text="Sorry, I couldn't put that answer together just now. Could you ask me again?"
 )
+
+
+def output_schema(model: type[BaseModel]) -> dict:
+    """The JSON schema a structured call is constrained to, with every field required.
+
+    The API allows at most 24 optional and 16 union-typed fields, and each optional field
+    makes the grammar slower to compile. Here every field is required, nullable ones as
+    unions, so the model always writes each field. Python defaults still apply wherever
+    code builds these models.
+    """
+    return _require_every_property(model.model_json_schema(mode="serialization"))
+
+
+def _require_every_property(node):
+    if isinstance(node, dict):
+        shaped = {key: _require_every_property(value) for key, value in node.items()}
+        if isinstance(shaped.get("properties"), dict):
+            shaped["required"] = list(shaped["properties"])
+        return shaped
+    if isinstance(node, list):
+        return [_require_every_property(item) for item in node]
+    return node
 
 
 def invoke_structured(
@@ -110,10 +133,10 @@ class AnthropicRouterModels:
             effort=ActiveConfig.AI_REPLY_EFFORT,
         )
         self._query = router_llm.with_structured_output(
-            QueryRoute, method="json_schema", include_raw=True
+            output_schema(QueryRoute), method="json_schema", include_raw=True
         ).with_config({"run_name": "router.query"})
         self._domain = router_llm.with_structured_output(
-            DomainRoute, method="json_schema", include_raw=True
+            output_schema(DomainRoute), method="json_schema", include_raw=True
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
         self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
@@ -130,10 +153,10 @@ class AnthropicRouterModels:
             effort=ActiveConfig.AI_SQL_EFFORT,
         )
         self._sql = sql_llm.with_structured_output(
-            SqlDraft, method="json_schema", include_raw=True
+            output_schema(SqlDraft), method="json_schema", include_raw=True
         ).with_config({"run_name": "sql.generate"})
         self._frame = router_llm.with_structured_output(
-            FrameClass, method="json_schema", include_raw=True
+            output_schema(FrameClass), method="json_schema", include_raw=True
         ).with_config({"run_name": "memory.frame"})
 
     def route_query(

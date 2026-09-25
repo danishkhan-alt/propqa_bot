@@ -21,6 +21,10 @@ SAME_PLACE_AGREEMENT = 0.8
 # Place kinds, broadest first. A broader kind wins a tie, as with places.
 PLACE_KIND_ORDER = {"area": 0, "community": 0, "master_project": 1, "project": 2, "building": 3}
 PLACE_GROUP = "place"
+# Company names carry legal suffixes ("Emaar Properties (P.J.S.C)"), so every stored name that
+# contains the typed name is the same company. A place is different: "Dubai Marina Mall" is
+# not "Dubai Marina", so places keep the strongest match only.
+GROUPS_MATCHING_CONTAINING_NAMES = frozenset({"developer"})
 
 
 def name_group(kind: str) -> str:
@@ -92,16 +96,27 @@ class StoredValueIndex:
         found: list[StoredValue] = []
         for (table, group), matcher in sorted(self._matchers.items()):
             if table in wanted and (groups is None or group in groups):
-                found.extend(self._find_in_matcher(matcher, spellings))
+                containing = group in GROUPS_MATCHING_CONTAINING_NAMES
+                found.extend(self._find_in_matcher(matcher, spellings, containing=containing))
         return found
 
-    def _find_in_matcher(self, matcher: NameMatcher[ValueKey], spellings: list[str]) -> list[StoredValue]:
-        hits = [hit for spelling in spellings for hit in matcher.find(spelling)]
+    def _find_in_matcher(
+        self,
+        matcher: NameMatcher[ValueKey],
+        spellings: list[str],
+        *,
+        containing: bool,
+    ) -> list[StoredValue]:
+        find = matcher.find_containing if containing else matcher.find
+        hits = [hit for spelling in spellings for hit in find(spelling)]
         if not hits:
             return []
-        # A table may store more than one spelling of a place, so every hit at the strongest tier counts.
+        # A table may store more than one spelling of a name, so every hit at the strongest tier
+        # counts. When containing names match, exact and containing hits count alike.
         best_tier = max(hit.tier for hit in hits)
-        best_keys = list(dict.fromkeys(hit.key for hit in hits if hit.tier == best_tier))
+        if containing:
+            best_tier = min(best_tier, MatchTier.WORDS)
+        best_keys = list(dict.fromkeys(hit.key for hit in hits if hit.tier >= best_tier))
         values = [self._values[key] for key in best_keys]
         broadest = min(_kind_rank(value.kind) for value in values)
         kept = sorted(

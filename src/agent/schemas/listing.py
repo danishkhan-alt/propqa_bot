@@ -21,13 +21,23 @@ class ListingSort(str, Enum):
     SIZE_LARGE = "size_large"
 
 
+# "any" is an explicit value rather than null: the router's output schema may hold at most
+# 16 nullable (union-typed) fields, and a named "any" is chosen more reliably than a null.
+class ListingPurpose(str, Enum):
+    ANY = "any"
+    SALE = "sale"
+    RENT = "rent"
+
+
 class Furnishing(str, Enum):
+    ANY = "any"
     FURNISHED = "furnished"
     UNFURNISHED = "unfurnished"
     SEMI_FURNISHED = "semi-furnished"
 
 
 class Completion(str, Enum):
+    ANY = "any"
     READY = "ready"
     OFF_PLAN = "off_plan"
 
@@ -53,6 +63,10 @@ class NameMention(BaseModel):
 class ListingFilters(BaseModel):
     """Filters for properties on the market. Places and developers come from `names`."""
 
+    purpose: ListingPurpose = Field(
+        default=ListingPurpose.ANY,
+        description="sale or rent only when the user said so. any when they did not.",
+    )
     property_types: list[str] = Field(
         default_factory=list,
         description="Property types as the user said them, such as apartment, villa, penthouse, office.",
@@ -63,9 +77,9 @@ class ListingFilters(BaseModel):
     price_max: float | None = Field(default=None, description="Highest asking price in AED.")
     size_min_sqft: float | None = Field(default=None, description="Smallest built-up area in square feet.")
     size_max_sqft: float | None = Field(default=None, description="Largest built-up area in square feet.")
-    furnishing: Furnishing | None = None
-    completion: Completion | None = None
-    sort: ListingSort | None = Field(default=None, description="Null when the user did not ask for an order.")
+    furnishing: Furnishing = Furnishing.ANY
+    completion: Completion = Completion.ANY
+    sort: ListingSort = Field(default=ListingSort.NEWEST, description="newest when the user did not ask for an order.")
 
     @field_validator("bedrooms_min", "bedrooms_max", mode="before")
     @classmethod

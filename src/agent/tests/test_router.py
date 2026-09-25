@@ -341,3 +341,27 @@ def test_golden_file_is_model_routed():
     cases = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     assert {case["id"] for case in cases} >= {"empty", "cheaper", "greeting", "average_price"}
     assert all(case["deterministic"] is False for case in cases)
+
+
+def _schema_counts(node, counts=None) -> dict:
+    counts = counts if counts is not None else {"unions": 0, "optional": 0}
+    if isinstance(node, dict):
+        counts["unions"] += "anyOf" in node
+        if isinstance(node.get("properties"), dict):
+            counts["optional"] += len(set(node["properties"]) - set(node.get("required", [])))
+        for value in node.values():
+            _schema_counts(value, counts)
+    elif isinstance(node, list):
+        for value in node:
+            _schema_counts(value, counts)
+    return counts
+
+
+def test_the_router_schema_stays_inside_the_structured_output_limits():
+    # The API rejects more than 16 union-typed or 24 optional fields, and optional fields
+    # slow grammar compilation, so every field is required and unions stay under the cap.
+    from agent.services.llm import output_schema
+
+    counts = _schema_counts(output_schema(QueryRoute))
+    assert counts["optional"] == 0
+    assert counts["unions"] <= 16

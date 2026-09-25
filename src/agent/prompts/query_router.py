@@ -20,7 +20,7 @@ turn_kind, compared with last_need_db:
 - pivot: same place or property, different subject (for example schools near that building).
 
 purpose, limit, and order are yours to set from this message and from last_need_db. There is no fixed default.
-- purpose: sale, rent, or whatever the user stated. On a follow-up, keep the previous purpose unless this message changes it. Null when neither this message nor the previous lookup says.
+- purpose: sale, rent, or whatever the user stated. On a follow-up, keep the previous purpose unless this message changes it. Null when neither this message nor the previous lookup says. "Show me properties in Marina" and "apartments in JLT" state no purpose, so purpose is null and both sale and rent listings are shown.
 - limit: the row count they asked for, such as "top 25". On a refine, keep the previous count unless this message changes it. Leave null when they did not ask for a count. Do not fill in a page size; list results are paged separately.
 - order: how they want rows ordered. Null when they did not say.
 
@@ -39,11 +39,12 @@ profile holds buyer facts this message states. Leave a field null unless this me
 names lists each place, building, project, community, or developer the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar"). kind is place or developer, or other for any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".
 
 listing_filters is set only when the user wants to see properties for sale or rent. Null for prices, trends, transactions, schools, and every other subject.
+- purpose: sale or rent only when this message or the previous lookup says so ("to buy", "for rent", "monthly"). "Flats in JLT" or "properties in Marina" says neither, so purpose is any.
 - property_types: each type they named, written as the closest name from the property_types list in the payload ("flat" is apartment). Leave it empty when they named no type.
 - bedrooms_min and bedrooms_max: "2 bed" sets both to 2. "at least 3 beds" sets only bedrooms_min. A studio is 0.
 - price_min and price_max in AED. "Under 1.5M" is price_max 1500000.
-- size in square feet, furnishing, and completion (ready or off_plan) only when stated.
-- sort: price_low for cheapest, price_high for most expensive, size_large for biggest, newest for latest. Null when not asked.
+- size in square feet only when stated. furnishing and completion (ready or off_plan) are any unless stated.
+- sort: price_low for cheapest, price_high for most expensive, size_large for biggest. newest when they did not ask for an order.
 - On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters.
 
 confidence is from 0 to 1.
