@@ -111,7 +111,7 @@ class Config:
         "LLM_MAX_OUTPUT_TOKENS", _int("ANTHROPIC_MAX_OUTPUT_TOKENS", 4096)
     )
     AI_MODEL = os.getenv(
-        "AI_MODEL", "gpt-5.5" if LLM_PROVIDER == "openai" else "claude-sonnet-5"
+        "AI_MODEL", "gpt-4.1" if LLM_PROVIDER == "openai" else "claude-sonnet-5"
     )
     ROUTER_MODEL = os.getenv(
         "ROUTER_MODEL", "gpt-5.4-mini" if LLM_PROVIDER == "openai" else "claude-haiku-4-5"

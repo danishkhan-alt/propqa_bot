@@ -21,6 +21,7 @@ from agent.schemas.routes import (
 from agent.services.catalog_index import domain_blurbs, domain_index_text
 from agent.services.transcript import history_summary, latest_user_text
 from agent.sql.listing_search import category_names
+from agent.sql.recipes import recipe_index_text
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
 from common.logger import get_logger
@@ -120,6 +121,7 @@ def domain_router(
             turn_kind=kind,
             last_need_db=last,
             index_text=domain_index_text(),
+            recipes_text=recipe_index_text(),
             config=config,
         )
 
@@ -131,6 +133,7 @@ def domain_router(
             "extra_data": {
                 "domain_ids": route.domain_ids,
                 "join_ids": route.join_ids,
+                "recipe_id": route.recipe_id,
                 "confidence": route.confidence,
                 "rationale": route.rationale,
                 "notes": notes,

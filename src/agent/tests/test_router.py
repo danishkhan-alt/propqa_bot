@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 import yaml
@@ -10,6 +12,7 @@ from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.catalog import catalog_load, finalize
 from agent.graphs.chat import build_chat_graph
+from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
     DomainRoute,
     QueryRoute,
@@ -19,7 +22,7 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft
-from agent.services.llm import invoke_structured
+from agent.services.llm import invoke_structured, openai_model_reasons
 from agent.sql.execute import SqlPage
 from agent.validator import apply_query_policy, sanitize_domain_route
 
@@ -365,3 +368,83 @@ def test_the_router_schema_stays_inside_the_structured_output_limits():
     counts = _schema_counts(output_schema(QueryRoute))
     assert counts["optional"] == 0
     assert counts["unions"] <= 16
+
+
+def test_a_reply_of_the_wrong_shape_is_retried_then_replaced():
+    # A model not held to the schema once wrapped its answer in the schema's own "properties".
+    class Wrapped:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def invoke(self, messages, config=None):
+            self.calls += 1
+            if self.calls == 1:
+                return {"parsed": {"properties": {"domain_ids": ["listings"]}}, "parsing_error": None}
+            return {
+                "parsed": {"domain_ids": ["listings"], "join_ids": [], "confidence": 0.9, "rationale": "ok"},
+                "parsing_error": None,
+            }
+
+    runnable = Wrapped()
+    parsed = invoke_structured(runnable, [], None, DomainRoute(domain_ids=[], confidence=0.3, rationale="Fallback."))
+    assert isinstance(parsed, DomainRoute) and parsed.domain_ids == ["listings"]
+    assert runnable.calls == 2
+
+
+def test_router_schemas_are_accepted_by_strict_mode():
+    # Strict mode needs closed objects and no keywords beside a $ref.
+    from agent.services.llm import output_schema
+
+    def walk(node):
+        if isinstance(node, dict):
+            if "$ref" in node:
+                assert set(node) == {"$ref"}
+            if isinstance(node.get("properties"), dict):
+                assert node["additionalProperties"] is False
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    for model in (QueryRoute, DomainRoute):
+        walk(output_schema(model))
+
+
+def test_a_chosen_recipe_loads_its_own_pack_and_an_unknown_one_is_dropped():
+    route = DomainRoute(
+        domain_ids=["transactions"],
+        join_ids=[],
+        recipe_id="community_sale_prices_by_bedrooms",
+        confidence=0.9,
+        rationale="Community trend.",
+    )
+    cleaned, _ = sanitize_domain_route(route)
+    assert cleaned.domain_ids == ["market", "transactions"]
+    assert cleaned.recipe_id == "community_sale_prices_by_bedrooms"
+
+    invented, notes = sanitize_domain_route(route.model_copy(update={"recipe_id": "made_up"}))
+    assert invented.recipe_id is None
+    assert invented.domain_ids == ["transactions"]
+    assert "dropped_unknown_recipe" in notes
+
+
+@pytest.mark.parametrize(
+    "model, reasons",
+    [("gpt-5.5", True), ("gpt-5.4-mini", True), ("o4-mini", True), ("gpt-5-chat-latest", False), ("gpt-4.1", False), ("gpt-4o", False)],
+)
+def test_only_reasoning_models_are_sent_an_effort(model, reasons):
+    assert openai_model_reasons(model) is reasons
+
+
+def test_the_city_itself_is_never_a_place_to_filter_on():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        names=[NameMention(text="Dubai"), NameMention(text=" dubai  UAE"), NameMention(text="Dubai Marina")],
+        confidence=0.9,
+        rationale="Trend.",
+    )
+    updated, notes = apply_query_policy(route, None)
+    assert [name.text for name in updated.names] == ["Dubai Marina"]
+    assert "dropped_region_name" in notes

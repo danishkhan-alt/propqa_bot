@@ -95,6 +95,10 @@ class DomainRoute(BaseModel):
         default_factory=list,
         description="Packs needed only as join keys, usually locations. Not a duplicate of domain_ids.",
     )
+    recipe_id: str | None = Field(
+        default=None,
+        description="A recipe id whose 'when' covers the whole question as asked. Null otherwise.",
+    )
     confidence: float = Field(ge=0, le=1)
     rationale: str
 

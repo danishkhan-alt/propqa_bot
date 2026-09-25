@@ -8,7 +8,7 @@ from agent.enums.routing import Intent, Route, TurnKind
 from agent.reply.clarify import merge_profile, next_question
 from agent.schemas.profile import ProfileSignals
 from agent.reply.figures import build_explainer, build_figures, format_figure, reply_blocks
-from agent.schemas.reply import Explainer, FigureColumn, FigureSpec, ReplyCard, StructuredReply
+from agent.schemas.reply import Explainer, FigureColumn, FigureSeries, FigureSpec, ReplyCard, StructuredReply
 from agent.schemas.routes import QueryRoute
 from agent.services.llm import REPLY_FALLBACK, stream_structured_reply
 from agent.sql.cards import listing_cards, listing_facts
@@ -304,3 +304,96 @@ def test_an_explainer_without_points_is_dropped():
     assert build_explainer(Explainer(kind="none", points=["a"])) is None
     shown = build_explainer(Explainer(kind="steps", title="Buying off-plan", points=["Reserve"], cautions=["x"]))
     assert shown == {"kind": "steps", "title": "Buying off-plan", "points": ["Reserve"], "cautions": []}
+
+
+@pytest.mark.parametrize(
+    "value, shown",
+    [("8.9", "▲ 8.9%"), (-1.234, "▼ 1.2%"), ("0.01", "0%"), (13.16, "▲ 13.2%")],
+)
+def test_a_change_shows_its_direction(value, shown):
+    assert format_figure(value, "change") == shown
+
+
+def test_a_period_repeated_on_every_row_becomes_a_caption():
+    rows = [
+        {"bedrooms": "1-bed", "median": 1069300, "change": "9.9", "as_of": "May 2026", "yield": "6"},
+        {"bedrooms": "2-bed", "median": 1550427, "change": "6.4", "as_of": "May 2026", "yield": "6"},
+    ]
+    spec = _spec(
+        "table",
+        [("median", "Median price", "aed"), ("change", "Yearly change", "change"), ("as_of", "As of", "text"), ("yield", "Yield", "percent")],
+        "bedrooms",
+        "Bedrooms",
+    )
+    table = build_figures(spec, rows, list(rows[0]))
+    assert table["headers"] == ["Bedrooms", "Median price", "Yearly change", "Yield"]
+    assert table["rows"][0] == ["1-bed", "AED 1.07M", "▲ 9.9%", "6%"]
+    assert table["caption"] == ["As of: May 2026"]
+
+
+def test_a_line_runs_oldest_first_and_skips_a_thin_series():
+    rows = [
+        {"month": "2026-03", "flats": "1300", "villas": "1900", "offices": None},
+        {"month": "2026-02", "flats": "1290", "villas": None, "offices": "1100"},
+        {"month": "2026-01", "flats": "1280", "villas": "1850", "offices": None},
+    ]
+    spec = _spec(
+        "line",
+        [("flats", "Apartments", "aed_per_sqft"), ("villas", "Villas", "aed_per_sqft"), ("offices", "Offices", "aed_per_sqft")],
+        "month",
+    )
+    line = build_figures(spec, rows, list(rows[0]))
+    assert line["labels"] == ["2026-01", "2026-02", "2026-03"]
+    assert [series["name"] for series in line["series"]] == ["Apartments"]
+    assert line["series"][0]["points"][-1] == {"value": 1300.0, "display": "AED 1,300/sqft"}
+    assert build_figures(_spec("line", [("flats", "Apartments", "aed_per_sqft")]), rows, list(rows[0])) is None
+
+
+def test_a_percent_column_named_as_a_change_shows_its_direction():
+    rows = [{"market": "Villa prices", "yearly_change_pct": 13.16, "yield_pct": 5.1}, {"market": "Apartment prices", "yearly_change_pct": -0.4, "yield_pct": 6.2}]
+    spec = _spec("table", [("yearly_change_pct", "Yearly change", "percent"), ("yield_pct", "Yield", "percent")], "market")
+    assert build_figures(spec, rows, list(rows[0]))["rows"] == [["Villa prices", "▲ 13.2%", "5.1%"], ["Apartment prices", "▼ 0.4%", "6.2%"]]
+
+
+def test_rows_with_two_dimensions_become_a_column_per_series():
+    rows = [
+        {"year": "2021", "layout": "1bed room+Hall", "median_rent": "58000"},
+        {"year": "2021", "layout": "2 bed rooms+hall", "median_rent": "85000"},
+        {"year": "2021", "layout": "Shop", "median_rent": "150000"},
+        {"year": "2022", "layout": "1bed room+Hall", "median_rent": "62000"},
+        {"year": "2022", "layout": "2 bed rooms+hall", "median_rent": "91000"},
+        {"year": "2023", "layout": "1bed room+Hall", "median_rent": "70000"},
+    ]
+    spec = FigureSpec(
+        layout="table",
+        label_column="year",
+        label_title="Year",
+        columns=[FigureColumn(column="median_rent", label="Median rent", unit="aed")],
+        series_column="layout",
+        series=[FigureSeries(value="1bed room+Hall", label="1-bed"), FigureSeries(value="2 bed rooms+hall", label="2-bed")],
+    )
+    table = build_figures(spec, rows, list(rows[0]))
+    assert table["headers"] == ["Year", "1-bed", "2-bed"]
+    assert table["rows"] == [["2021", "AED 58,000", "AED 85,000"], ["2022", "AED 62,000", "AED 91,000"], ["2023", "AED 70,000", ""]]
+
+    line = build_figures(spec.model_copy(update={"layout": "line"}), rows, list(rows[0]))
+    assert [series["name"] for series in line["series"]] == ["1-bed"]
+
+
+def test_one_data_column_is_never_shown_under_two_headers():
+    rows = [{"year": "2021", "rent": "58000"}, {"year": "2022", "rent": "62000"}]
+    spec = _spec("table", [("rent", "1-bed rent", "aed"), ("rent", "2-bed rent", "aed")], "year")
+    assert build_figures(spec, rows, ["year", "rent"])["headers"] == ["Year", "1-bed rent"]
+
+
+def test_a_long_run_of_periods_shows_the_latest():
+    rows = [{"year": str(year), "sales": year} for year in range(2026, 2014, -1)]
+    table = build_figures(_spec("table", [("sales", "Sales", "count")], "year"), rows, ["year", "sales"])
+    assert [row[0] for row in table["rows"]] == [str(year) for year in range(2019, 2027)]
+    assert table["hidden_rows"] == 4
+
+
+def test_a_period_after_today_is_left_out():
+    rows = [{"year": "2024", "rent": 1}, {"year": "2025", "rent": 2}, {"year": "2026", "rent": 3}, {"year": "2999", "rent": 9}]
+    table = build_figures(_spec("table", [("rent", "Rent", "aed")], "year"), rows, ["year", "rent"])
+    assert [row[0] for row in table["rows"]] == ["2024", "2025", "2026"]

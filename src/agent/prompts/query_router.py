@@ -3,6 +3,7 @@ QUERY_ROUTER_SYSTEM = """You route one turn of a Dubai real-estate chatbot. You 
 Routes, only these two:
 - direct_answer: greetings, an empty message, what the product can do, definitions, and how-to. No stored fact is required.
 - need_db: the answer depends on warehouse data. Prefer need_db whenever a number or a stored name might be required. Never guess a market fact. If details are missing, still choose need_db. Do not refuse the lookup because an area, budget, or purpose was not named.
+- The one exception: a request about one particular property, unit, or listing that gives nothing to find it by (no id, reference, unit, building, project, or area, here or in history). That is direct_answer, so the reply asks which one. Looking up arbitrary records would answer a different question.
 
 intent is the shape of the result:
 - list: rows (properties, agents, schools, stations, projects), including things near a place.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import functools
+import time
 from collections.abc import AsyncIterator
 
 from langchain_core.messages import HumanMessage
@@ -44,19 +46,19 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     query frame, then queue extraction after the answer.
     """
     builder = StateGraph(ChatState, context_schema=AgentContext, input_schema=ChatInput)
-    builder.add_node("load_context", load_context)
-    builder.add_node("recall_memory", recall_memory)
-    builder.add_node("refine_or_new", refine_or_new)
-    builder.add_node("confirm_forget", confirm_forget)
-    builder.add_node("query_router", query_router)
-    builder.add_node("domain_router", domain_router)
-    builder.add_node("apply_defaults", apply_defaults)
-    builder.add_node("catalog_load", catalog_load)
-    builder.add_node("ground_names", ground_message_names)
-    builder.add_node("sql_lookup", sql_lookup)
-    builder.add_node("answer", answer)
-    builder.add_node("enqueue_extraction", enqueue_extraction)
-    builder.add_node("finalize", finalize)
+    builder.add_node("load_context", timed("load_context", load_context))
+    builder.add_node("recall_memory", timed("recall_memory", recall_memory))
+    builder.add_node("refine_or_new", timed("refine_or_new", refine_or_new))
+    builder.add_node("confirm_forget", timed("confirm_forget", confirm_forget))
+    builder.add_node("query_router", timed("query_router", query_router))
+    builder.add_node("domain_router", timed("domain_router", domain_router))
+    builder.add_node("apply_defaults", timed("apply_defaults", apply_defaults))
+    builder.add_node("catalog_load", timed("catalog_load", catalog_load))
+    builder.add_node("ground_names", timed("ground_names", ground_message_names))
+    builder.add_node("sql_lookup", timed("sql_lookup", sql_lookup))
+    builder.add_node("answer", timed("answer", answer))
+    builder.add_node("enqueue_extraction", timed("enqueue_extraction", enqueue_extraction))
+    builder.add_node("finalize", timed("finalize", finalize))
 
     builder.add_edge(START, "load_context")
     builder.add_edge("load_context", "recall_memory")
@@ -73,6 +75,25 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_edge("enqueue_extraction", "finalize")
     builder.add_edge("finalize", END)
     return builder.compile(checkpointer=checkpointer, store=store)
+
+
+def timed(name: str, node):
+    """Log how long a graph node took, so a slow turn shows which step it spent its time in.
+
+    functools.wraps keeps the node's signature visible, so LangGraph still injects
+    config and runtime by parameter name.
+    """
+
+    @functools.wraps(node)
+    def run(*args, **kwargs):
+        started = time.perf_counter()
+        try:
+            return node(*args, **kwargs)
+        finally:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            logger.info("node.timing", extra={"extra_data": {"node": name, "ms": elapsed_ms}})
+
+    return run
 
 
 def get_chat_graph() -> CompiledStateGraph:
