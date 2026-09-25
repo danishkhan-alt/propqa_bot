@@ -152,6 +152,42 @@ def test_a_redis_constructor_envelope_reads_back_as_the_model():
     assert last.intent_summary == "flats"
 
 
+def test_nested_constructor_envelopes_read_back_as_models():
+    route = as_query_route(
+        {
+            "lc": 2,
+            "type": "constructor",
+            "id": ["agent", "schemas", "routes", "QueryRoute"],
+            "kwargs": {
+                "route": "need_db",
+                "turn_kind": "new",
+                "intent": "list",
+                "confidence": 0.95,
+                "rationale": "Listings in Dubai Marina under 2M.",
+                "names": [
+                    {
+                        "lc": 2,
+                        "type": "constructor",
+                        "id": ["agent", "schemas", "listing", "NameMention"],
+                        "kwargs": {"text": "dubai marina", "kind": "place"},
+                    }
+                ],
+                "listing_filters": {
+                    "lc": 2,
+                    "type": "constructor",
+                    "id": ["agent", "schemas", "listing", "ListingFilters"],
+                    "kwargs": {"purpose": "sale", "price_max": 2000000},
+                },
+            },
+        }
+    )
+
+    assert isinstance(route, QueryRoute)
+    assert [name.text for name in route.names] == ["dubai marina"]
+    assert route.listing_filters is not None
+    assert route.listing_filters.price_max == 2000000
+
+
 def test_delete_thread_requires_an_id():
     with pytest.raises(ValueError):
         delete_thread("  ")

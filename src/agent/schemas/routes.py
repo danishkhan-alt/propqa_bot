@@ -135,16 +135,22 @@ class LastNeedDb(BaseModel):
     result_meta: dict[str, Any] = Field(default_factory=dict)
 
 
-def checkpoint_payload(value: dict[str, Any]) -> dict[str, Any]:
+def checkpoint_payload(value: Any) -> Any:
     """Redis stores these models as LangChain constructor envelopes.
 
-    The fields live under ``kwargs``. A plain dict is already the payload.
+    The fields live under ``kwargs``. Nested models (names, filters, profile)
+    are wrapped the same way, so unwrap every level. A plain dict is already
+    the payload.
     """
+    if isinstance(value, list):
+        return [checkpoint_payload(item) for item in value]
+    if not isinstance(value, dict):
+        return value
     if value.get("lc") in (1, 2) and value.get("type") == "constructor":
         kwargs = value.get("kwargs")
         if isinstance(kwargs, dict):
-            return kwargs
-    return value
+            value = kwargs
+    return {key: checkpoint_payload(item) for key, item in value.items()}
 
 
 def as_query_route(value: QueryRoute | dict[str, Any] | None) -> QueryRoute | None:

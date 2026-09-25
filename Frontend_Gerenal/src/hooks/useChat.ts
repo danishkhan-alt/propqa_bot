@@ -637,6 +637,14 @@ export function useChat() {
       setIsStreaming(false);
       setLoadingStatus("");
       const turn = currentTurnRef.current;
+      // Cards that already arrived this turn are real results — keep them.
+      const received = turn?.cards?.length
+        ? {
+            cards: turn.cards,
+            searchUrl: turn.searchUrl ?? undefined,
+            appliedFilters: turn.appliedFilters ?? undefined,
+          }
+        : {};
       setMessages((prev) => {
         // If a streaming message already exists for this turn, finalize it.
         // When it already has content (tokens were streamed), keep that content.
@@ -645,7 +653,7 @@ export function useChat() {
         if (idx !== -1) {
           return prev.map((m, i) =>
             i === idx
-              ? { ...m, isStreaming: false, content: m.content || frame.message }
+              ? { ...m, ...received, isStreaming: false, content: m.content || frame.message }
               : m
           );
         }
@@ -657,6 +665,7 @@ export function useChat() {
             role: "assistant" as const,
             content: frame.message,
             isStreaming: false,
+            ...received,
             userPrompt: turn?.prompt,
             timestamp: new Date(),
           },
