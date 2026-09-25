@@ -21,7 +21,7 @@ from agent.schemas.routes import (
 )
 from agent.services.events import publish
 from agent.services.transcript import ANSWER_HISTORY, history_summary, latest_user_text
-from agent.sql.cards import listing_facts
+from agent.sql.cards import PROMPT_LISTING_LIMIT, listing_facts
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from common.logger import get_logger
@@ -84,10 +84,16 @@ def _answer_from_lookup(
     query = as_query_route(state.get("query_route"))
     assumptions = as_assumptions(state.get("assumptions"))
     listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
-    # A listing turn answers from the filled cards, not from the id-only SQL rows.
+    # A listing turn answers from the filled cards. Rows stay only for columns the cards
+    # lack, such as a permit number, and only for the listings the model reads.
     listings = listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
-    rows = [] if listing_ids else list(result.get("rows") or [])
-    columns = [] if listing_ids else list(result.get("columns") or [])
+    rows = list(result.get("rows") or [])
+    columns = list(result.get("columns") or [])
+    if listing_ids:
+        if len(columns) <= 1:
+            rows, columns = [], []
+        else:
+            rows = rows[:PROMPT_LISTING_LIMIT]
     note = _data_note(result.get("domain_ids") or [])
     search_notes = [str(item) for item in (result.get("notes") or [])]
     filters = [str(item) for item in (result.get("filters") or [])]
@@ -279,7 +285,9 @@ def _draft_structured(
         return None
     reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
     payload = reply.model_dump()
-    payload.update(reply_blocks(reply, list(fields.get("rows") or []), list(fields.get("columns") or [])))
+    # Listings have their own photo cards, so their rows are never laid out as figures.
+    figure_rows = [] if fields.get("listings") else list(fields.get("rows") or [])
+    payload.update(reply_blocks(reply, figure_rows, list(fields.get("columns") or [])))
     payload["question"] = question.payload() if question is not None else None
     if question is not None:
         # The question already has its own tap options; a chip repeating it is noise.

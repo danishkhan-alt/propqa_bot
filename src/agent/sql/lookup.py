@@ -221,7 +221,7 @@ def run_sql_lookup(
     return {
         "sql_result": last,
         "sql_rows": rows,
-        "listing_ids": listing_ids_from(state, rows),
+        "listing_ids": listing_ids_from(state, rows, last["sql"] if rows else ""),
     }
 
 

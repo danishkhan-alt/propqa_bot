@@ -57,9 +57,51 @@ def output_schema(model: type[BaseModel]) -> dict:
     The API allows at most 24 optional and 16 union-typed fields, and each optional field
     makes the grammar slower to compile. Here every field is required, nullable ones as
     unions, so the model always writes each field. Python defaults still apply wherever
-    code builds these models.
+    code builds these models. Objects are closed, as OpenAI's strict mode requires.
     """
-    return _require_every_property(model.model_json_schema(mode="serialization"))
+    schema = model.model_json_schema(mode="serialization")
+    defs = schema.get("$defs", {})
+    shaped = _inline_annotated_refs({key: value for key, value in schema.items() if key != "$defs"}, defs)
+    used = _referenced_defs(shaped, defs)
+    if used:
+        shaped["$defs"] = {name: _inline_annotated_refs(defs[name], defs) for name in used}
+    return _require_every_property(shaped)
+
+
+def _referenced_defs(node, defs: dict) -> list[str]:
+    """Definitions still reached by a $ref, following refs inside definitions too."""
+    found: list[str] = []
+    pending = [node]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, list):
+            pending.extend(current)
+        elif isinstance(current, dict):
+            ref = current.get("$ref")
+            name = ref.removeprefix("#/$defs/") if isinstance(ref, str) else None
+            if name in defs and name not in found:
+                found.append(name)
+                pending.append(_inline_annotated_refs(defs[name], defs))
+            pending.extend(current.values())
+    return found
+
+
+def _inline_annotated_refs(node, defs: dict):
+    """Strict mode rejects a $ref with sibling keywords, so inline that definition instead.
+
+    The field's description is kept; its default is dropped, since every field is written.
+    """
+    if isinstance(node, list):
+        return [_inline_annotated_refs(item, defs) for item in node]
+    if not isinstance(node, dict):
+        return node
+    ref = node.get("$ref")
+    if isinstance(ref, str) and len(node) > 1 and ref.startswith("#/$defs/"):
+        target = defs.get(ref.removeprefix("#/$defs/"))
+        if isinstance(target, dict):
+            siblings = {key: value for key, value in node.items() if key not in ("$ref", "default")}
+            return _inline_annotated_refs({**target, **siblings}, defs)
+    return {key: _inline_annotated_refs(value, defs) for key, value in node.items()}
 
 
 def _require_every_property(node):
@@ -67,6 +109,7 @@ def _require_every_property(node):
         shaped = {key: _require_every_property(value) for key, value in node.items()}
         if isinstance(shaped.get("properties"), dict):
             shaped["required"] = list(shaped["properties"])
+            shaped["additionalProperties"] = False
         return shaped
     if isinstance(node, list):
         return [_require_every_property(item) for item in node]
@@ -76,7 +119,12 @@ def _require_every_property(node):
 def invoke_structured(
     runnable, messages: list, config: RunnableConfig | None, fallback
 ):
-    """Call a structured runnable once, retry once, then return the fallback."""
+    """Call a structured runnable once, retry once, then return the fallback.
+
+    The reply is validated as the fallback's model inside each attempt, so an answer of the
+    wrong shape is retried and then replaced, never raised into the graph.
+    """
+    shape = type(fallback)
 
     def once(payload: list):
         result = runnable.invoke(payload, config=config)
@@ -84,11 +132,10 @@ def invoke_structured(
             error = result.get("parsing_error")
             if error:
                 raise ValueError(str(error))
-            parsed = result.get("parsed")
-            if parsed is None:
+            result = result.get("parsed")
+            if result is None:
                 raise ValueError("structured output was empty")
-            return parsed
-        return result
+        return result if isinstance(result, shape) else shape.model_validate(result)
 
     try:
         return once(messages)
@@ -160,6 +207,17 @@ def _openai_chat_models():
 _PROVIDERS = {"anthropic": _anthropic_chat_models, "openai": _openai_chat_models}
 
 
+def constrained_output_options() -> dict:
+    """Options that make a json_schema call enforce its schema on the active provider.
+
+    Claude's json_schema method always constrains decoding. OpenAI only does when strict
+    is set; without it the schema is a hint, and the model can answer in another shape.
+    """
+    from config import ActiveConfig
+
+    return {"strict": True} if ActiveConfig.LLM_PROVIDER == "openai" else {}
+
+
 def build_chat_models():
     """(router, answer, sql) chat models from the provider set by LLM_PROVIDER."""
     from config import ActiveConfig
@@ -177,11 +235,12 @@ class RouterModels:
 
     def __init__(self) -> None:
         router_llm, answer_llm, sql_llm = build_chat_models()
+        constrained = constrained_output_options()
         self._query = router_llm.with_structured_output(
-            output_schema(QueryRoute), method="json_schema", include_raw=True
+            output_schema(QueryRoute), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "router.query"})
         self._domain = router_llm.with_structured_output(
-            output_schema(DomainRoute), method="json_schema", include_raw=True
+            output_schema(DomainRoute), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
         self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
@@ -191,10 +250,10 @@ class RouterModels:
             StructuredReply.model_json_schema(), method="json_schema"
         ).with_config({"run_name": "answer.structured"})
         self._sql = sql_llm.with_structured_output(
-            output_schema(SqlDraft), method="json_schema", include_raw=True
+            output_schema(SqlDraft), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "sql.generate"})
         self._frame = router_llm.with_structured_output(
-            output_schema(FrameClass), method="json_schema", include_raw=True
+            output_schema(FrameClass), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "memory.frame"})
 
     def route_query(
@@ -220,12 +279,7 @@ class RouterModels:
             SystemMessage(content=QUERY_ROUTER_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
         ]
-        parsed = invoke_structured(self._query, messages, config, QUERY_FALLBACK)
-        return (
-            parsed
-            if isinstance(parsed, QueryRoute)
-            else QueryRoute.model_validate(parsed)
-        )
+        return invoke_structured(self._query, messages, config, QUERY_FALLBACK)
 
     def route_domain(
         self,
@@ -246,12 +300,7 @@ class RouterModels:
             SystemMessage(content=DOMAIN_ROUTER_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
         ]
-        parsed = invoke_structured(self._domain, messages, config, DOMAIN_FALLBACK)
-        return (
-            parsed
-            if isinstance(parsed, DomainRoute)
-            else DomainRoute.model_validate(parsed)
-        )
+        return invoke_structured(self._domain, messages, config, DOMAIN_FALLBACK)
 
     def stream_answer_direct(
         self,
@@ -348,7 +397,7 @@ class RouterModels:
             "previous_error": previous_error,
             "listing_ids_only": listing_ids_only,
         }
-        parsed = invoke_structured(
+        return invoke_structured(
             self._sql,
             [
                 SystemMessage(content=SQL_DRAFT_SYSTEM),
@@ -357,7 +406,6 @@ class RouterModels:
             config,
             SQL_DRAFT_FALLBACK,
         )
-        return parsed if isinstance(parsed, SqlDraft) else SqlDraft.model_validate(parsed)
 
     def stream_answer_from_sql(
         self,
@@ -500,7 +548,7 @@ class RouterModels:
         config: RunnableConfig | None = None,
     ) -> str:
         payload = {"message": message, "query_frame": {key: value for key, value in frame.items() if key != "sql"}}
-        parsed = invoke_structured(
+        return invoke_structured(
             self._frame,
             [
                 SystemMessage(content=FRAME_CLASS_SYSTEM),
@@ -508,9 +556,7 @@ class RouterModels:
             ],
             config,
             FRAME_FALLBACK,
-        )
-        kind = parsed.kind if isinstance(parsed, FrameClass) else FrameClass.model_validate(parsed).kind
-        return kind
+        ).kind
 
 
 def stream_structured_reply(
@@ -545,8 +591,7 @@ def stream_structured_reply(
         )
         if shown.strip():
             return StructuredReply(intro_text=shown)
-    parsed = invoke_structured(runnable, messages, config, REPLY_FALLBACK)
-    reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
+    reply = invoke_structured(runnable, messages, config, REPLY_FALLBACK)
     if on_text is not None and reply.intro_text:
         on_text(reply.intro_text)
     return reply

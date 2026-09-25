@@ -365,3 +365,44 @@ def test_the_router_schema_stays_inside_the_structured_output_limits():
     counts = _schema_counts(output_schema(QueryRoute))
     assert counts["optional"] == 0
     assert counts["unions"] <= 16
+
+
+def test_a_reply_of_the_wrong_shape_is_retried_then_replaced():
+    # A model not held to the schema once wrapped its answer in the schema's own "properties".
+    class Wrapped:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def invoke(self, messages, config=None):
+            self.calls += 1
+            if self.calls == 1:
+                return {"parsed": {"properties": {"domain_ids": ["listings"]}}, "parsing_error": None}
+            return {
+                "parsed": {"domain_ids": ["listings"], "join_ids": [], "confidence": 0.9, "rationale": "ok"},
+                "parsing_error": None,
+            }
+
+    runnable = Wrapped()
+    parsed = invoke_structured(runnable, [], None, DomainRoute(domain_ids=[], confidence=0.3, rationale="Fallback."))
+    assert isinstance(parsed, DomainRoute) and parsed.domain_ids == ["listings"]
+    assert runnable.calls == 2
+
+
+def test_router_schemas_are_accepted_by_strict_mode():
+    # Strict mode needs closed objects and no keywords beside a $ref.
+    from agent.services.llm import output_schema
+
+    def walk(node):
+        if isinstance(node, dict):
+            if "$ref" in node:
+                assert set(node) == {"$ref"}
+            if isinstance(node.get("properties"), dict):
+                assert node["additionalProperties"] is False
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    for model in (QueryRoute, DomainRoute):
+        walk(output_schema(model))

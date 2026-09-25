@@ -371,3 +371,24 @@ def test_trace_survives_a_langfuse_outage():
         },
         Boom(),
     )
+
+
+def test_rows_that_are_live_listings_become_listing_cards_on_any_intent():
+    state = _state("Check property 7952")
+    state["query_route"] = QueryRoute(
+        route=Route.NEED_DB, turn_kind=TurnKind.NEW, intent=Intent.LOOKUP, confidence=1, rationale="One listing."
+    )
+    state["domain_route"] = DomainRoute(domain_ids=["listings"], join_ids=[], confidence=1, rationale="Listing.")
+    rows = [{"property_id": 7952, "title_en": "Marina flat", "permit_number": None}]
+    sql = "SELECT p.id AS property_id, p.title_en, p.permit_number FROM public.properties AS p WHERE p.id = 7952"
+    assert listing_ids_from(state, rows, sql) == ["7952"]
+
+
+def test_a_dld_property_id_is_not_a_listing():
+    state = _state("Sales of unit 55")
+    state["query_route"] = QueryRoute(
+        route=Route.NEED_DB, turn_kind=TurnKind.NEW, intent=Intent.LOOKUP, confidence=1, rationale="DLD unit."
+    )
+    rows = [{"property_id": 55, "amount": 1000000}]
+    assert listing_ids_from(state, rows, "SELECT t.property_id, t.amount FROM dld.transactions t") == []
+    assert listing_ids_from(state, rows, "SELECT avg(p.price_max) AS property_id FROM public.properties p") == []

@@ -7,6 +7,7 @@ import re
 import sqlglot
 from sqlglot import exp
 
+from agent.sql.listing_rules import LISTINGS_TABLE
 from catalog import load_domains
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -91,6 +92,49 @@ def referenced_tables(sql: str) -> set[str]:
     except sqlglot.errors.ParseError:
         return set()
     return _referenced_tables(statement) if statement is not None else set()
+
+
+def live_listing_id_column(sql: str) -> str | None:
+    """The result column holding the live listing id, when each row is one live listing.
+
+    Only a top-level SELECT that projects the id of public.properties counts. DLD tables
+    also have a property_id column, but it is not a listing id, so names alone do not tell.
+    """
+    try:
+        statement = sqlglot.parse_one(sql or "", read="postgres")
+    except sqlglot.errors.ParseError:
+        return None
+    if not isinstance(statement, exp.Select):
+        return None
+    sources = _direct_sources(statement)
+    for projection in statement.expressions:
+        column = projection.unalias()
+        if not isinstance(column, exp.Column) or column.name.lower() != "id":
+            continue
+        qualifier = column.table.lower()
+        if qualifier:
+            table = sources.get(qualifier)
+        else:
+            table = next(iter(sources.values())) if len(sources) == 1 else None
+        if table == LISTINGS_TABLE:
+            return projection.alias_or_name
+    return None
+
+
+def _direct_sources(select: exp.Select) -> dict[str, str]:
+    """Alias (or bare name) to full table name, for tables in this SELECT's FROM and JOINs."""
+    tables: list[exp.Expression] = []
+    source = select.args.get("from") or select.args.get("from_")
+    if source is not None:
+        tables.append(source.this)
+    tables.extend(join.this for join in select.args.get("joins") or [])
+    sources: dict[str, str] = {}
+    for table in tables:
+        if not isinstance(table, exp.Table) or not table.name:
+            continue
+        full = f"{table.db.lower()}.{table.name.lower()}" if table.db else table.name.lower()
+        sources[table.alias_or_name.lower()] = full
+    return sources
 
 
 def _is_join_or_presence(term: exp.Expression) -> bool:
