@@ -1,0 +1,14 @@
+# Secrets reach the containers through compose, never the image.
+
+.git
+.venv
+.cursor
+.pytest_cache
+.ruff_cache
+**/__pycache__
+**/*.py[cod]
+
+logs
+Example
+Frontend_Gerenal
+playground.ipynb

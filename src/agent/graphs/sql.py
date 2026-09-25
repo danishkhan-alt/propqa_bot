@@ -39,8 +39,13 @@ def ground_message_names(state: ChatState, runtime: Runtime[AgentContext]) -> di
         index = grounding_cache().get()
     if index is None:
         # Never drop a name: unmatched names are still searched as text, and the reply says so.
-        logger.info("grounding.not_ready", extra={"extra_data": {"names": [name.text for name in query.names]}})
-        unmatched = [GroundedName(text=name.text, kind=name.kind) for name in query.names]
+        logger.info(
+            "grounding.not_ready",
+            extra={"extra_data": {"names": [name.text for name in query.names]}},
+        )
+        unmatched = [
+            GroundedName(text=name.text, kind=name.kind) for name in query.names
+        ]
         return {"grounding": Grounding(names=unmatched)}
     tables = tables_in_domains([*domain.domain_ids, *domain.join_ids])
     if uses_listing_search(state):
@@ -76,7 +81,11 @@ def sql_lookup(
     if uses_listing_search(state):
         update = run_listing_lookup(state, runner, client=langfuse_client())
     else:
-        models = runtime.context.models if runtime.context.models is not None else default_models()
+        models = (
+            runtime.context.models
+            if runtime.context.models is not None
+            else default_models()
+        )
         update = run_sql_lookup(
             state,
             models,

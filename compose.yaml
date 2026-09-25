@@ -1,0 +1,89 @@
+# Propqa chatbot: API, memory worker, chat Postgres (pgvector), Redis.
+#
+#   docker compose up -d --build
+#   docker compose run --rm consolidate      # one-off memory consolidation
+
+
+x-app: &app
+  build: .
+  image: propqa-chatbot:latest
+  env_file: .env
+  environment: &app-env
+    APP_ENV: ${APP_ENV:-production}
+    CHAT_DB_HOST: postgres
+    CHAT_DB_PORT: "5432"
+    CHAT_DB_NAME: propqa_chatbot
+    CHAT_DB_USER: propqa
+    CHAT_DB_PASSWORD: ${POSTGRES_PASSWORD:-propqa}
+    CHAT_DB_SSLMODE: disable
+    REDIS_URL: redis://redis:6379/0
+    # Containers log to stdout; `docker compose logs` collects it.
+    LOG_TO_FILE: "false"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Reads the `memq` stream and writes long-term memories. Without it, extracted
+  # memories never reach Postgres.
+  worker:
+    <<: *app
+    command: ["python", "-m", "agent.memory.worker"]
+
+  # One-off: `docker compose run --rm consolidate`. Not started by `up`.
+  consolidate:
+    <<: *app
+    command: ["python", "-m", "agent.memory.worker", "--consolidate"]
+    restart: "no"
+    profiles: ["jobs"]
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: propqa_chatbot
+      POSTGRES_USER: propqa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-propqa}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U propqa -d propqa_chatbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Redis 8 ships the search and JSON modules the LangGraph checkpointer needs.
+  # AOF keeps checkpoints and queued memory jobs across restarts.
+  redis:
+    image: redis:8.2
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
