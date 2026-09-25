@@ -32,6 +32,11 @@ interface ResumeSSEOpts {
   onError?: (err: Error) => void;
 }
 
+/** Explicit token wins; otherwise fall back to the auth store's token. */
+function _authHeaders(accessToken?: string | null): Record<string, string> {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : withAuthHeaders();
+}
+
 function _isAbortError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const name = (err as { name?: string }).name;
@@ -120,7 +125,7 @@ async function _streamSSE(
 }
 
 export async function sendSSE(opts: SendSSEOpts): Promise<void> {
-  const headers = withAuthHeaders(opts.accessToken);
+  const headers = _authHeaders(opts.accessToken);
   const body: Record<string, unknown> = {
     message: opts.prompt,
     session_id: opts.sessionId,
@@ -145,7 +150,7 @@ export async function sendSSE(opts: SendSSEOpts): Promise<void> {
 }
 
 export async function resumeSSE(opts: ResumeSSEOpts): Promise<void> {
-  const headers = withAuthHeaders(opts.accessToken);
+  const headers = _authHeaders(opts.accessToken);
   await _streamSSE(
     "/api/chat/resume",
     {
@@ -167,7 +172,7 @@ export function postCancelRun(
   accessToken?: string | null,
 ): void {
   if (!runId) return;
-  const headers = withAuthHeaders(accessToken);
+  const headers = _authHeaders(accessToken);
   void fetch(`/api/chat/${encodeURIComponent(runId)}/cancel`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
