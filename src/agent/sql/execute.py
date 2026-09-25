@@ -29,22 +29,18 @@ class SqlPage:
     duration_ms: int
 
 
+REFERENCE_TIMEOUT_MS = 60_000
+REFERENCE_ROW_CAP = 500_000
+
+
 def run_against_warehouse(sql: str, params: dict[str, Any] | None = None) -> SqlPage:
     """Execute `sql` on the warehouse pool. The caller has already guarded it.
 
     `params` is for fixed statements written in code. Model-drafted SQL never has any.
     """
-    from common.db import get_pool, warehouse_conninfo
     from config import ActiveConfig
 
-    pool = get_pool(
-        "warehouse",
-        warehouse_conninfo(),
-        min_size=1,
-        max_size=min(ActiveConfig.CHAT_DB_POOL_MAX, 4),
-        connect_kwargs={"row_factory": dict_row},
-    )
-    with pool.connection() as connection:
+    with _warehouse_pool().connection() as connection:
         return fetch_readonly(
             connection,
             sql,
@@ -53,6 +49,35 @@ def run_against_warehouse(sql: str, params: dict[str, Any] | None = None) -> Sql
             search_path=ActiveConfig.DB_SEARCH_PATH,
             row_cap=ActiveConfig.SQL_ROW_CAP,
         )
+
+
+def fetch_reference_rows(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Reference data that code reads in bulk, such as the grounding index. Never model-drafted SQL."""
+    from config import ActiveConfig
+
+    with _warehouse_pool().connection() as connection:
+        page = fetch_readonly(
+            connection,
+            sql,
+            params=params,
+            timeout_ms=REFERENCE_TIMEOUT_MS,
+            search_path=ActiveConfig.DB_SEARCH_PATH,
+            row_cap=REFERENCE_ROW_CAP,
+        )
+    return page.rows
+
+
+def _warehouse_pool():
+    from common.db import get_pool, warehouse_conninfo
+    from config import ActiveConfig
+
+    return get_pool(
+        "warehouse",
+        warehouse_conninfo(),
+        min_size=1,
+        max_size=min(ActiveConfig.CHAT_DB_POOL_MAX, 4),
+        connect_kwargs={"row_factory": dict_row},
+    )
 
 
 def fetch_readonly(

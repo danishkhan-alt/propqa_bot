@@ -4,6 +4,7 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph.message import add_messages
 
+from agent.schemas.grounding import Grounding
 from agent.schemas.routes import Assumptions, DomainRoute, LastNeedDb, QueryRoute
 
 
@@ -16,6 +17,7 @@ class ChatState(TypedDict, total=False):
     domain_route: DomainRoute | None
     loaded_domains: list[str]
     catalog_context: str
+    grounding: Grounding | None
     last_need_db: LastNeedDb | None
     assumptions: Assumptions | None
     awaiting_sql: bool

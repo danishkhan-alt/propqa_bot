@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from agent.enums.routing import Intent, Route, TurnKind
+from agent.schemas.listing import ListingFilters, NameMention
 from agent.schemas.profile import ProfileSignals
 
 
@@ -42,6 +43,14 @@ class QueryRoute(BaseModel):
     profile: ProfileSignals = Field(
         default_factory=ProfileSignals,
         description="Buyer facts stated in this message only.",
+    )
+    names: list[NameMention] = Field(
+        default_factory=list,
+        description="Places, buildings, projects, and developers the lookup is about, as the user wrote them.",
+    )
+    listing_filters: ListingFilters | None = Field(
+        default=None,
+        description="Set only when the user wants to see properties for sale or rent. Null otherwise.",
     )
     confidence: float = Field(ge=0, le=1, description="0 to 1. How sure this route is.")
     rationale: str = Field(description="One sentence explaining the route. No user data beyond the ask.")
@@ -123,7 +132,7 @@ class LastNeedDb(BaseModel):
     result_meta: dict[str, Any] = Field(default_factory=dict)
 
 
-def _checkpoint_payload(value: dict[str, Any]) -> dict[str, Any]:
+def checkpoint_payload(value: dict[str, Any]) -> dict[str, Any]:
     """Redis stores these models as LangChain constructor envelopes.
 
     The fields live under ``kwargs``. A plain dict is already the payload.
@@ -140,7 +149,7 @@ def as_query_route(value: QueryRoute | dict[str, Any] | None) -> QueryRoute | No
         return None
     if isinstance(value, QueryRoute):
         return value
-    return QueryRoute.model_validate(_checkpoint_payload(value))
+    return QueryRoute.model_validate(checkpoint_payload(value))
 
 
 def as_domain_route(value: DomainRoute | dict[str, Any] | None) -> DomainRoute | None:
@@ -148,7 +157,7 @@ def as_domain_route(value: DomainRoute | dict[str, Any] | None) -> DomainRoute |
         return None
     if isinstance(value, DomainRoute):
         return value
-    return DomainRoute.model_validate(_checkpoint_payload(value))
+    return DomainRoute.model_validate(checkpoint_payload(value))
 
 
 def as_assumptions(value: Assumptions | dict[str, Any] | None) -> Assumptions | None:
@@ -156,7 +165,7 @@ def as_assumptions(value: Assumptions | dict[str, Any] | None) -> Assumptions | 
         return None
     if isinstance(value, Assumptions):
         return value
-    return Assumptions.model_validate(_checkpoint_payload(value))
+    return Assumptions.model_validate(checkpoint_payload(value))
 
 
 def as_last_need_db(value: LastNeedDb | dict[str, Any] | None) -> LastNeedDb | None:
@@ -164,4 +173,4 @@ def as_last_need_db(value: LastNeedDb | dict[str, Any] | None) -> LastNeedDb | N
         return None
     if isinstance(value, LastNeedDb):
         return value
-    return LastNeedDb.model_validate(_checkpoint_payload(value))
+    return LastNeedDb.model_validate(checkpoint_payload(value))

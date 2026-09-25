@@ -1,0 +1,240 @@
+"""The grounding index: places and stored names, read from the warehouse and kept in memory.
+
+It is read-only and small (tens of thousands of names), so each process keeps its own copy.
+No request waits for it: loading runs in a background thread, started when the app starts,
+and a stale copy keeps serving while the next one loads. Until the first copy is ready,
+turns run without grounding, as they did before it existed.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from psycopg import sql
+
+from agent.grounding.places import (
+    LEGACY_BREADTH,
+    V2_BREADTH,
+    Breadth,
+    ListingLinks,
+    LocationNode,
+    PlaceDirectory,
+    build_place_directory,
+)
+from agent.grounding.stored_values import NamedColumn, StoredValue, StoredValueIndex, learn_same_place
+from agent.sql.listing_rules import ACTIVE_LISTING
+from common.logger import get_logger
+
+logger = get_logger("agent.grounding")
+
+# A declared column with more distinct names than this keeps only its most used ones.
+MAX_NAMES_PER_COLUMN = 50_000
+
+ReferenceReader = Callable[[str], list[dict]]
+
+
+@dataclass(frozen=True)
+class GroundingIndex:
+    places: PlaceDirectory
+    stored: StoredValueIndex
+    loaded_at: float
+
+
+def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingIndex:
+    from catalog import name_aliases, named_columns
+
+    aliases = name_aliases()
+    places = build_place_directory(
+        _v2_nodes(read),
+        _legacy_nodes(read),
+        _listing_links(read),
+        region=region,
+        aliases=aliases,
+    )
+    columns = [NamedColumn(**declared) for declared in named_columns()]
+    kinds = {(column.table, column.column): column.kind for column in columns}
+    values: list[StoredValue] = []
+    same_place: dict = {}
+    for column in columns:
+        try:
+            values.extend(_stored_values(read, column))
+            if column.same_place_as:
+                canonical_kind = kinds.get((column.table, column.same_place_as), "area")
+                same_place.update(learn_same_place(column, canonical_kind, _name_pairs(read, column)))
+        except Exception as exc:
+            # One broken declaration must not take grounding down for every other column.
+            logger.warning(
+                "grounding.column_failed",
+                extra={"extra_data": {"table": column.table, "column": column.column, "error": str(exc)[:200]}},
+            )
+    stored = StoredValueIndex(values, same_place, aliases)
+    logger.info(
+        "grounding.loaded",
+        extra={"extra_data": {"places": len(places), "stored_values": len(stored), "same_place": len(same_place)}},
+    )
+    return GroundingIndex(places=places, stored=stored, loaded_at=time.monotonic())
+
+
+class GroundingCache:
+    """Serves the last loaded index and reloads it in the background once it is older than `max_age`."""
+
+    def __init__(self, loader: Callable[[], GroundingIndex], max_age_seconds: float) -> None:
+        self._loader = loader
+        self._max_age = max_age_seconds
+        self._index: GroundingIndex | None = None
+        self._lock = threading.Lock()
+        self._loading = False
+
+    def get(self) -> GroundingIndex | None:
+        """The current index, or None while the first load is still running. Never blocks."""
+        index = self._index
+        if index is None or time.monotonic() - index.loaded_at > self._max_age:
+            self.load_in_background()
+        return index
+
+    def load_in_background(self) -> None:
+        with self._lock:
+            if self._loading:
+                return
+            self._loading = True
+        threading.Thread(target=self.load_now, name="grounding-load", daemon=True).start()
+
+    def load_now(self) -> GroundingIndex | None:
+        """Load on the calling thread. For startup warm-up, scripts, and evals."""
+        try:
+            self._index = self._loader()
+        except Exception:
+            # The previous copy, if any, keeps serving. The next request starts another try.
+            logger.warning("grounding.load_failed", exc_info=True)
+        finally:
+            with self._lock:
+                self._loading = False
+        return self._index
+
+
+_cache: GroundingCache | None = None
+_cache_lock = threading.Lock()
+
+
+def grounding_cache() -> GroundingCache:
+    """Process-wide cache over the warehouse."""
+    global _cache
+    with _cache_lock:
+        if _cache is None:
+            from agent.sql.execute import fetch_reference_rows
+            from config import ActiveConfig
+
+            _cache = GroundingCache(
+                lambda: load_grounding_index(fetch_reference_rows, region=ActiveConfig.GROUNDING_REGION),
+                max_age_seconds=ActiveConfig.GROUNDING_REFRESH_SECONDS,
+            )
+        return _cache
+
+
+def _v2_nodes(read: ReferenceReader) -> list[LocationNode]:
+    rows = read(
+        "SELECT id, parent_id, type, title_en, aliases_en, lat, lng "
+        "FROM public.locations_v2 WHERE title_en IS NOT NULL"
+    )
+    return [
+        LocationNode(
+            id=int(row["id"]),
+            parent_id=_optional_int(row["parent_id"]),
+            title=str(row["title_en"]),
+            breadth=V2_BREADTH.get(str(row["type"] or "").lower(), Breadth.PROJECT),
+            aliases=_leading_alias_parts(row["aliases_en"]),
+            lat=_optional_float(row["lat"]),
+            lng=_optional_float(row["lng"]),
+        )
+        for row in rows
+    ]
+
+
+def _legacy_nodes(read: ReferenceReader) -> list[LocationNode]:
+    rows = read("SELECT id, parent_id, type, name_en, lat, lng FROM public.locations WHERE name_en IS NOT NULL")
+    return [
+        LocationNode(
+            id=int(row["id"]),
+            parent_id=_optional_int(row["parent_id"]),
+            title=str(row["name_en"]),
+            breadth=LEGACY_BREADTH.get(str(row["type"] or "").lower(), Breadth.PROJECT),
+            lat=_optional_float(row["lat"]),
+            lng=_optional_float(row["lng"]),
+        )
+        for row in rows
+    ]
+
+
+def _listing_links(read: ReferenceReader) -> ListingLinks:
+    by_v2 = read(
+        f"SELECT p.location_v2_id AS id, count(*) AS n FROM public.properties p "
+        f"WHERE {ACTIVE_LISTING} AND p.location_v2_id IS NOT NULL GROUP BY 1"
+    )
+    by_legacy = read(
+        f"SELECT linked.id, count(*) AS n FROM public.properties p, "
+        f"unnest(ARRAY[p.location_master_project_id, p.location_project_id, p.location_building_id]) AS linked(id) "
+        f"WHERE {ACTIVE_LISTING} AND linked.id IS NOT NULL GROUP BY 1"
+    )
+    by_address = read(
+        f"SELECT trim(part) AS part, count(*) AS n FROM public.properties p, "
+        f"unnest(string_to_array(lower(p.address_en), ',')) AS part "
+        f"WHERE {ACTIVE_LISTING} GROUP BY 1"
+    )
+    return ListingLinks(
+        by_v2_id={int(row["id"]): int(row["n"]) for row in by_v2},
+        by_legacy_id={int(row["id"]): int(row["n"]) for row in by_legacy},
+        by_address_part={str(row["part"]): int(row["n"]) for row in by_address if row["part"]},
+    )
+
+
+def _stored_values(read: ReferenceReader, column: NamedColumn) -> list[StoredValue]:
+    statement = sql.SQL(
+        "SELECT {col}::text AS value, count(*) AS n FROM {table} WHERE {col} IS NOT NULL "
+        "GROUP BY 1 ORDER BY 2 DESC LIMIT {limit}"
+    ).format(col=sql.Identifier(column.column), table=_table(column.table), limit=sql.Literal(MAX_NAMES_PER_COLUMN))
+    return [
+        StoredValue(table=column.table, column=column.column, value=text, kind=column.kind, row_count=int(row["n"]))
+        for row in read(statement.as_string())
+        if (text := str(row["value"]).strip())
+    ]
+
+
+def _name_pairs(read: ReferenceReader, column: NamedColumn) -> list[tuple[str, str, int]]:
+    statement = sql.SQL(
+        "SELECT {name}::text AS name, {canonical}::text AS canonical, count(*) AS n FROM {table} "
+        "WHERE {name} IS NOT NULL AND {canonical} IS NOT NULL GROUP BY 1, 2"
+    ).format(
+        name=sql.Identifier(column.column),
+        canonical=sql.Identifier(column.same_place_as or ""),
+        table=_table(column.table),
+    )
+    return [
+        (str(row["name"]).strip(), str(row["canonical"]).strip(), int(row["n"]))
+        for row in read(statement.as_string())
+    ]
+
+
+def _table(qualified: str) -> sql.Identifier:
+    return sql.Identifier(*qualified.split(".", 1))
+
+
+def _leading_alias_parts(aliases) -> tuple[str, ...]:
+    """v2 aliases read "Dubai Marina, Dubai, UAE". The part before the first comma is the name."""
+    if not isinstance(aliases, list):
+        return ()
+    parts = (str(alias).split(",", 1)[0].strip() for alias in aliases if isinstance(alias, str))
+    return tuple(part for part in parts if part)
+
+
+def _optional_int(value) -> int | None:
+    return None if value is None else int(value)
+
+
+def _optional_float(value) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None

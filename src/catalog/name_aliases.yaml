@@ -1,0 +1,7 @@
+# Wording people use for a place that no table spells out and the data cannot link.
+# Each key is extra wording; its list holds stored names (any table) it should match.
+# Most names need nothing here: bracketed short forms such as "(JVC)", marketing names
+# stored next to official ones (Dubai Marina / Marsa Dubai), and typos are handled in code.
+# Add an entry only when an unresolved name shows up in the grounding.unresolved log.
+jumeirah lake towers:
+- Al Thanyah Fifth

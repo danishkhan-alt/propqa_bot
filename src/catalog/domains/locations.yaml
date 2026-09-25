@@ -828,3 +828,17 @@ tables:
     type: text
     meaning: The alias to match in DLD tables
   qualified_name: public.dld_community_lookup
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: chatbot_ai.ps_communities
+  column: community_name
+  kind: community
+- table: public.dld_community_lookup
+  column: community_name
+  kind: community
+- table: chatbot_ai.dubai_community_areas
+  column: name_en
+  kind: area

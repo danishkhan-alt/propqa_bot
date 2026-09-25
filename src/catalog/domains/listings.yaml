@@ -98,7 +98,7 @@ pitfalls:
 - public.properties is the live listing table. Use it for asking price, beds, baths, furnished, and for sale or for rent.
 - A visible listing is status = 'active' AND deleted_at IS NULL. Leave out is_sold and is_rented unless the user asked for them.
 - properties.type is empty. Filter type with category_property.category_id and the PropertyCategory ids.
-- price_min is the asking sale price. For rent, use yearly_price, monthly_price, weekly_price, or daily_price according to rental_period. area is square feet.
+- The asking price is price_max, for sale and for rent alike; price_min is only a lower bound and is usually empty. Use COALESCE(price_max, price_min). rental_period says what a rent price covers. area is square feet.
 - When listing ids are required, SELECT properties.id AS property_id.
 - DLD tables (building_property_records, registered_freehold_real_estate_units, land_registry) are registered inventory, not asking prices.
 - Use transactions for sold prices and rent_contracts for contracted rents.
@@ -139,10 +139,10 @@ tables:
     - for_rent
   - name: price_min
     type: numeric(15,4)
-    meaning: Asking sale price in AED
+    meaning: Lower bound of an asking price range in AED. Usually empty.
   - name: price_max
     type: numeric(15,4)
-    meaning: Upper asking price in AED, when a range is set
+    meaning: Asking price in AED, for sale or rent
   - name: yearly_price
     type: numeric(15,4)
     meaning: Yearly rent in AED
@@ -1538,3 +1538,28 @@ tables:
     type: text
     meaning: Site-plan notes, including parking rules
   qualified_name: public.dda_plots
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: public.properties
+  column: developer
+  kind: developer
+- table: chatbot_ai.building_property_records
+  column: area_name_en
+  kind: area
+- table: chatbot_ai.building_property_records
+  column: master_project_en
+  kind: master_project
+  same_place_as: area_name_en
+- table: chatbot_ai.building_property_records
+  column: project_name_en
+  kind: project
+- table: chatbot_ai.land_registry
+  column: area_name_en
+  kind: area
+- table: chatbot_ai.land_registry
+  column: master_project_en
+  kind: master_project
+  same_place_as: area_name_en

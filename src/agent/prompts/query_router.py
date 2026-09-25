@@ -36,6 +36,16 @@ profile holds buyer facts this message states. Leave a field null unless this me
 - timeline: ready (move in now) or off_plan (willing to wait for handover). Asking for off-plan listings counts as off_plan.
 - family_size: people in the household, when they say it.
 
+names lists each place, building, project, community, or developer the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar"). kind is place or developer, or other for any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".
+
+listing_filters is set only when the user wants to see properties for sale or rent. Null for prices, trends, transactions, schools, and every other subject.
+- property_types: each type they named, written as the closest name from the property_types list in the payload ("flat" is apartment). Leave it empty when they named no type.
+- bedrooms_min and bedrooms_max: "2 bed" sets both to 2. "at least 3 beds" sets only bedrooms_min. A studio is 0.
+- price_min and price_max in AED. "Under 1.5M" is price_max 1500000.
+- size in square feet, furnishing, and completion (ready or off_plan) only when stated.
+- sort: price_low for cheapest, price_high for most expensive, size_large for biggest, newest for latest. Null when not asked.
+- On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters.
+
 confidence is from 0 to 1.
 rationale is one sentence.
 

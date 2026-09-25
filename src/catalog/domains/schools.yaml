@@ -1390,3 +1390,17 @@ tables:
     type: text
     meaning: Col 3
   qualified_name: chatbot_ai.universities_uae_with_locations
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: chatbot_ai.ps_schools
+  column: area
+  kind: community
+- table: chatbot_ai.ps_schools
+  column: school_name
+  kind: school
+- table: chatbot_ai.khda_school_search
+  column: areaen
+  kind: area

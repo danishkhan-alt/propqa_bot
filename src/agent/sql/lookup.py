@@ -1,19 +1,29 @@
-"""Draft a SELECT from the loaded catalog, run it, and retry once."""
+"""Answer a lookup from the warehouse.
+
+Property searches are written in code from the router's filters (`run_listing_lookup`).
+Everything else is drafted by the model from the loaded catalog and the grounded names,
+run, and retried once (`run_sql_lookup`).
+"""
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from agent.schemas.routes import as_assumptions, as_domain_route
+from agent.schemas.grounding import Grounding, as_grounding
+from agent.schemas.listing import ListingFilters, MentionKind
+from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage
 from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
+from agent.sql.listing_search import ListingSearch, listing_purpose, search_listings
 from agent.sql.listings import is_listing_list, listing_ids_from
 from agent.sql.trace import trace_sql_attempt
 from agent.states.chat import ChatState
 from common.logger import get_logger
+from common.schemas.pagination import page_request
 from config import ActiveConfig
 
 logger = get_logger("agent.sql")
@@ -21,6 +31,69 @@ logger = get_logger("agent.sql")
 MAX_ATTEMPTS = 2
 EMPTY_LOOKUP_REPLY = "Nothing matched those filters. I can widen the area or the dates if you want."
 FAILED_LOOKUP_REPLY = "I couldn't complete that lookup. Try a more specific area or time range."
+NO_ROWS = "The query returned no rows."
+ONLY_ZERO_VALUES = (
+    "The query returned one row whose values are all zero or empty. A name filter probably matched "
+    "nothing; use the stored values in resolved_names, or check the filters against the catalog."
+)
+LISTING_OWNER = ("public.properties", "developer")
+
+
+def uses_listing_search(state: ChatState) -> bool:
+    """A property search the router gave filters for. Written in code, not by the model."""
+    query = as_query_route(state.get("query_route"))
+    return query is not None and query.listing_filters is not None and is_listing_list(state)
+
+
+def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
+    """Search live listings from the router's filters and the grounded names. No model call."""
+    query = as_query_route(state.get("query_route"))
+    domain = as_domain_route(state.get("domain_route"))
+    domain_ids = [*domain.domain_ids, *domain.join_ids] if domain is not None else []
+    grounding = as_grounding(state.get("grounding")) or Grounding()
+    assumptions = as_assumptions(state.get("assumptions"))
+    window = page_request(
+        page=(assumptions.page if assumptions and assumptions.page else 1),
+        per_page=assumptions.limit if assumptions else None,
+    )
+    search = _listing_search(query, grounding)
+    try:
+        found = search_listings(
+            search,
+            runner,
+            limit=window.per_page,
+            offset=(window.page - 1) * window.per_page,
+        )
+    except SqlFailed as exc:
+        last = _result(
+            domain_ids=domain_ids,
+            attempt=1,
+            purpose="property search",
+            sql="",
+            status="failed",
+            error=str(exc),
+        )
+        trace_sql_attempt(last, client)
+        return {"sql_result": last, "sql_rows": [], "listing_ids": []}
+    rows = [{"property_id": listing_id} for listing_id in found.ids]
+    last = _result(
+        domain_ids=domain_ids,
+        attempt=1,
+        purpose="property search",
+        sql=found.query.sql,
+        status="rows" if rows else "empty",
+        columns=["property_id"],
+        rows=rows,
+        duration_ms=found.duration_ms,
+        error=None if rows else NO_ROWS,
+    )
+    last.update(
+        params=found.query.params,
+        total=found.total,
+        notes=[*grounding.notes(), *found.notes],
+    )
+    trace_sql_attempt(last, client)
+    return {"sql_result": last, "sql_rows": rows, "listing_ids": found.ids}
 
 
 def run_sql_lookup(
@@ -44,8 +117,12 @@ def run_sql_lookup(
     history = _history(state)
 
     listing_ids_only = is_listing_list(state)
+    grounding = as_grounding(state.get("grounding"))
+    resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
     previous_error: str | None = None
     last: dict[str, Any] = _empty_result(domain_ids)
+    # An attempt that returned rows, kept in case the retry it prompted fails outright.
+    answered: dict[str, Any] | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         draft = _draft(
             models,
@@ -57,6 +134,7 @@ def run_sql_lookup(
             query_frame=frame,
             previous_error=previous_error,
             listing_ids_only=listing_ids_only,
+            resolved_names=resolved_names,
             config=config,
         )
         logger.info(
@@ -116,19 +194,56 @@ def run_sql_lookup(
             rows=page.rows,
             truncated=page.truncated,
             duration_ms=page.duration_ms,
-            error=None if page.rows else "The query returned no rows.",
+            error=None if page.rows else NO_ROWS,
         )
+        if grounding is not None:
+            last["notes"] = grounding.notes()
         trace_sql_attempt(last, client)
-        if page.rows or attempt == MAX_ATTEMPTS:
+        if page.rows:
+            answered = last
+        retry_reason = NO_ROWS if not page.rows else ONLY_ZERO_VALUES if _only_zero_values(page.rows) else None
+        if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
-        previous_error = "The query returned no rows."
+        previous_error = retry_reason
 
+    if last["status"] == "failed" and answered is not None:
+        last = answered
     rows = list(last["rows"]) if last["status"] == "rows" else []
     return {
         "sql_result": last,
         "sql_rows": rows,
         "listing_ids": listing_ids_from(state, rows),
     }
+
+
+def _listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
+    places = [name for name in grounding.names if name.kind is MentionKind.PLACE]
+    filters = query.listing_filters if query is not None else None
+    return ListingSearch(
+        filters=filters or ListingFilters(),
+        purpose=listing_purpose(query.purpose if query is not None else None),
+        places=[name.place for name in places if name.place is not None],
+        developers=grounding.stored_in(*LISTING_OWNER),
+        unmatched_places=[name.text for name in places if name.place is None],
+    )
+
+
+def _only_zero_values(rows: list[dict]) -> bool:
+    """One row of nothing but zeros and nulls: an aggregate whose filter matched no rows."""
+    if len(rows) != 1 or not rows[0]:
+        return False
+    return all(_is_zero_or_empty(value) for value in rows[0].values())
+
+
+def _is_zero_or_empty(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return False
+    try:
+        return Decimal(str(value)) == 0
+    except (InvalidOperation, ValueError):
+        return False
 
 
 def _draft(models, **kwargs) -> SqlDraft:

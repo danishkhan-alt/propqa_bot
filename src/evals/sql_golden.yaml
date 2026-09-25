@@ -1,0 +1,164 @@
+# End-to-end lookup eval: real models, real warehouse. Run with `python -m evals.run_sql_eval`.
+#
+# Truth is written here as SQL, independent of the code under test.
+# - listings: the listing ids a correct search returns. `place` lists the lowercase names of the
+#   place; a listing is in it when it is linked (in either location tree, at any depth) to a node
+#   with one of those names, or its address mentions one. `where` adds filters on `p`.
+#   `relaxed_where` is the truth when `where` matches nothing, since the search must then relax
+#   a filter and say so.
+# - value: one number the answer must contain (within `tolerance`, relative). `sql` lists every
+#   acceptable reading of the question, e.g. the DLD area or the marketing master project.
+# - rows_contain: text that must appear in the returned rows.
+# `turns` runs a conversation; only the last turn is scored.
+
+cases:
+- id: marina_listings
+  message: show me properties in marina
+  listings:
+    place: [dubai marina]
+
+- id: marina_listings_typo
+  message: properties in dubia marina
+  listings:
+    place: [dubai marina]
+
+- id: jvc_two_bed_sale_under_budget
+  message: 2 bed apartments for sale in JVC under 1.5M
+  listings:
+    place: [jumeirah village circle, jumeirah village circle (jvc)]
+    where: >-
+      p.purpose = 'for_sale' AND p.rooms = 2
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+      AND COALESCE(p.price_max, p.price_min) <= 1500000
+    relaxed_where: >-
+      p.purpose = 'for_sale' AND p.rooms = 2
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+
+- id: dubai_hills_villas_rent
+  message: villas for rent in Dubai Hills
+  listings:
+    place: [dubai hills, dubai hills estate]
+    where: >-
+      p.purpose = 'for_rent'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 3)
+
+- id: palm_penthouses
+  message: cheapest penthouse in Palm Jumeirah
+  listings:
+    place: [palm jumeirah]
+    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 33)
+
+- id: building_listings
+  message: properties in Binghatti Lavender
+  listings:
+    place: [binghatti lavender]
+
+- id: downtown_rentals
+  message: apartments for rent in downtown
+  listings:
+    place: [downtown dubai, burj khalifa]
+    where: >-
+      p.purpose = 'for_rent'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+
+- id: business_bay_offices
+  message: offices for sale in Business Bay
+  listings:
+    place: [business bay]
+    where: >-
+      p.purpose = 'for_sale'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 5)
+
+- id: jlt_flats
+  message: flats in JLT
+  listings:
+    place: [jumeirah lake towers, jumeirah lake towers (jlt)]
+    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+
+- id: developer_listings
+  message: show me properties by Emaar
+  listings:
+    where: p.developer ILIKE '%emaar%'
+
+- id: refine_keeps_place
+  turns:
+  - show me apartments in JVC
+  - only 2 bedrooms
+  listings:
+    place: [jumeirah village circle, jumeirah village circle (jvc)]
+    where: >-
+      p.rooms = 2
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+
+- id: marina_average_sale_price
+  message: average sale price in Dubai Marina last 12 months
+  value:
+    tolerance: 0.02
+    sql:
+    - >-
+      SELECT avg(actual_worth) FROM chatbot_ai.real_estate_transactions
+      WHERE area_name_en = 'Marsa Dubai' AND trans_group_en = 'Sales' AND instance_date >= CURRENT_DATE - INTERVAL '12 months'
+    - >-
+      SELECT avg(actual_worth) FROM chatbot_ai.real_estate_transactions
+      WHERE master_project_en = 'Dubai Marina' AND trans_group_en = 'Sales' AND instance_date >= CURRENT_DATE - INTERVAL '12 months'
+
+- id: downtown_sales_count
+  message: how many sales transactions in downtown in 2025
+  value:
+    tolerance: 0
+    sql:
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE area_name_en = 'Burj Khalifa' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2025
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE master_project_en = 'DownTown Dubai' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2025
+
+- id: jvc_sales_count
+  message: number of sale transactions in Jumeirah Village Circle in 2024
+  value:
+    tolerance: 0
+    sql:
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE master_project_en = 'Jumeirah Village Circle' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE area_name_en = 'Al Barsha South Fourth' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
+
+- id: dubai_hills_sales_count
+  message: how many properties were sold in Dubai Hills in 2024
+  value:
+    tolerance: 0
+    sql:
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE area_name_en = 'Hadaeq Sheikh Mohammed Bin Rashid' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
+    - >-
+      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      WHERE master_project_en IN ('DUBAI HILLS', 'Dubai Hills Estate') AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
+
+- id: jlt_one_bed_rent
+  message: average annual rent for a 1 bed in JLT
+  value:
+    tolerance: 0.02
+    sql:
+    - >-
+      SELECT avg(annual_amount) FROM chatbot_ai.rent_contracts
+      WHERE area_name_en = 'Al Thanyah Fifth' AND ejari_property_sub_type_en = '1bed room+Hall'
+
+- id: palm_service_charges
+  message: what are the service charges in Palm Jumeirah
+  rows_contain: [Palm Jumeirah]
+
+- id: schools_arabian_ranches
+  message: schools near Arabian Ranches
+  rows_contain: [Arabian Ranches]
+
+- id: metro_business_bay
+  message: metro stations near Business Bay
+  rows_contain: [Business Bay]
+
+- id: emaar_offplan_2027
+  message: off-plan projects by Emaar with handover in 2027
+  rows_contain: [Emaar]

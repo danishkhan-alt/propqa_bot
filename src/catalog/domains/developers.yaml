@@ -1088,3 +1088,27 @@ tables:
     type: bigint
     meaning: Location identifier
   qualified_name: public.offplan_projects_new
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: public.offplan_projects_new
+  column: developer_name_en
+  kind: developer
+- table: public.offplan_projects_new
+  column: area_en
+  kind: area
+- table: public.offplan_projects_new
+  column: project_name_en
+  kind: project
+- table: chatbot_ai.real_estate_projects
+  column: developer_name
+  kind: developer
+- table: chatbot_ai.real_estate_projects
+  column: area_name_en
+  kind: area
+- table: chatbot_ai.real_estate_projects
+  column: master_project_en
+  kind: master_project
+  same_place_as: area_name_en

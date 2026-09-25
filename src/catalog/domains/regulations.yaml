@@ -208,3 +208,14 @@ tables:
     - 1-2003
     - 1-2004
   qualified_name: chatbot_ai.property_map_requests
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: chatbot_ai.owners_association_service_charges
+  column: master_community_name_en
+  kind: area
+- table: chatbot_ai.owners_association_service_charges
+  column: project_name
+  kind: project

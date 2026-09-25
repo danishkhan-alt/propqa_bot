@@ -27,7 +27,7 @@ from agent.graphs.nodes import (
     route_after_domain,
     route_after_query,
 )
-from agent.graphs.sql import sql_lookup
+from agent.graphs.sql import ground_message_names, sql_lookup
 from agent.schemas.routes import as_query_route
 from agent.services.tracing import langfuse_client
 from agent.states.chat import ChatInput, ChatState
@@ -39,7 +39,7 @@ _graph: CompiledStateGraph | None = None
 
 
 def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
-    """Query router, then domain router, catalog load, and a read-only SQL lookup.
+    """Query router, then domain router, catalog load, name grounding, and a read-only SQL lookup.
 
     Memory runs around that path: load working state, recall long-term items, refine the
     query frame, then queue extraction after the answer.
@@ -53,6 +53,7 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_node("domain_router", domain_router)
     builder.add_node("apply_defaults", apply_defaults)
     builder.add_node("catalog_load", catalog_load)
+    builder.add_node("ground_names", ground_message_names)
     builder.add_node("sql_lookup", sql_lookup)
     builder.add_node("answer", answer)
     builder.add_node("enqueue_extraction", enqueue_extraction)
@@ -66,7 +67,8 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_conditional_edges("query_router", route_after_query, ["domain_router", "answer"])
     builder.add_conditional_edges("domain_router", route_after_domain, ["apply_defaults", "answer"])
     builder.add_edge("apply_defaults", "catalog_load")
-    builder.add_edge("catalog_load", "sql_lookup")
+    builder.add_edge("catalog_load", "ground_names")
+    builder.add_edge("ground_names", "sql_lookup")
     builder.add_edge("sql_lookup", "answer")
     builder.add_edge("answer", "enqueue_extraction")
     builder.add_edge("enqueue_extraction", "finalize")

@@ -31,6 +31,7 @@ from agent.memory.read.prompt_text import append_memory_notes
 from agent.memory.session.search_results import summarize_search_results
 from agent.services.transcript import ANSWER_HISTORY, history_summary, latest_user_text
 from agent.sql.cards import listing_facts
+from agent.sql.listing_search import category_names
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from agent.validator import apply_query_policy, sanitize_domain_route
@@ -66,6 +67,7 @@ def query_router(
         last_need_db=last,
         domain_blurbs=domain_blurbs(),
         memory_context=state.get("memory_block") or "",
+        property_types=category_names(),
         config=config,
     )
     route, notes = apply_query_policy(route, last)
@@ -213,8 +215,14 @@ def answer(
 
 
 def finalize(state: ChatState, config: RunnableConfig) -> dict:
-    """Drop catalog YAML so the checkpointer does not keep schema packs."""
-    update: dict = {"catalog_context": "", "loaded_domains": [], "listing_ids": [], "listing_cards": []}
+    """Drop catalog YAML and grounded ids so the checkpointer does not keep them."""
+    update: dict = {
+        "catalog_context": "",
+        "loaded_domains": [],
+        "grounding": None,
+        "listing_ids": [],
+        "listing_cards": [],
+    }
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
     if (
@@ -236,6 +244,11 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
         listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
         if listing_ids:
             meta["ids"] = listing_ids
+        # A refine starts from these, so "cheaper" keeps the place and the filters.
+        if query.names:
+            meta["names"] = [name.model_dump(mode="json") for name in query.names]
+        if query.listing_filters is not None:
+            meta["listing_filters"] = query.listing_filters.model_dump(mode="json", exclude_defaults=True)
         update["last_need_db"] = LastNeedDb(
             domain_ids=list(domain.domain_ids),
             join_ids=list(domain.join_ids),
@@ -290,6 +303,8 @@ def _answer_from_lookup(
     rows = [] if listing_ids else list(result.get("rows") or [])
     columns = [] if listing_ids else list(result.get("columns") or [])
     note = _data_note(result.get("domain_ids") or [])
+    search_notes = [str(item) for item in (result.get("notes") or [])]
+    listing_count = int(result.get("total") or len(listing_ids))
     question = None
     structured = None
     if status in ("rows", "empty"):
@@ -306,9 +321,10 @@ def _answer_from_lookup(
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
             listings=listings,
-            listing_count=len(listing_ids),
+            listing_count=listing_count,
             lookup_status=status,
             data_note=note,
+            search_notes=search_notes,
             session_profile=state.get("session_profile") or {},
             question=question,
             config=config,
@@ -330,6 +346,7 @@ def _answer_from_lookup(
             memory_block=state.get("memory_block") or "",
             listing_ids=listing_ids or None,
             data_note=note,
+            search_notes=search_notes,
             config=config,
         )
     elif status == "empty":

@@ -2128,3 +2128,20 @@ tables:
     examples:
     - DD.dddddd
   qualified_name: chatbot_ai.dewa_ev_green_charger_points
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: chatbot_ai.metro_stations_gis
+  column: community_name
+  kind: community
+- table: chatbot_ai.metro_stations_gis
+  column: station_name_en
+  kind: station
+- table: chatbot_ai.bus_network_coverage
+  column: community_name
+  kind: community
+- table: chatbot_ai.number_of_parking_spaces_per_zone
+  column: community_name_en
+  kind: community

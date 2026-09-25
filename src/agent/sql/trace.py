@@ -20,6 +20,7 @@ def trace_sql_attempt(payload: dict[str, Any], client=None) -> None:
             as_type="tool",
             input={
                 "sql": payload.get("sql"),
+                "params": payload.get("params"),
                 "purpose": payload.get("purpose"),
                 "domain_ids": payload.get("domain_ids"),
                 "attempt": payload.get("attempt"),

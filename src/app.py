@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import ActiveConfig
+from agent.grounding import grounding_cache
 from agent.memory.routes import router as memory_router
 from common.http import register_exception_handlers
 from common.middleware import CallerMiddleware, RateLimitMiddleware, RequestIdMiddleware
@@ -78,6 +79,8 @@ def main() -> None:
         max_bytes=ActiveConfig.LOG_MAX_BYTES,
         backup_count=ActiveConfig.LOG_BACKUP_COUNT,
     )
+    # Name grounding loads in the background; turns run without it until it is ready.
+    grounding_cache().load_in_background()
     uvicorn.run(
         create_app(),
         host=ActiveConfig.APP_HOST,

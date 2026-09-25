@@ -144,6 +144,7 @@ class AnthropicRouterModels:
         last_need_db: LastNeedDb | None,
         domain_blurbs: str,
         memory_context: str = "",
+        property_types: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> QueryRoute:
         payload = {
@@ -152,6 +153,7 @@ class AnthropicRouterModels:
             "last_need_db": last_need_db.model_dump() if last_need_db else None,
             "domain_blurbs": domain_blurbs,
             "memory_context": memory_context,
+            "property_types": property_types or [],
         }
         messages = [
             SystemMessage(content=QUERY_ROUTER_SYSTEM),
@@ -271,11 +273,13 @@ class AnthropicRouterModels:
         query_frame: dict | None,
         previous_error: str | None,
         listing_ids_only: bool = False,
+        resolved_names: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ) -> SqlDraft:
         payload = {
             "message": message,
             "history": history,
+            "resolved_names": resolved_names or [],
             "catalog": catalog,
             "allowed_tables": allowed_tables,
             "assumptions": assumptions,
@@ -308,6 +312,7 @@ class AnthropicRouterModels:
         memory_block: str = "",
         listing_ids: list[str] | None = None,
         data_note: str = "",
+        search_notes: list[str] | None = None,
         config: RunnableConfig | None = None,
     ):
         payload = {
@@ -322,6 +327,7 @@ class AnthropicRouterModels:
             "memory_block": memory_block,
             "listing_ids": listing_ids,
             "data_note": data_note,
+            "search_notes": search_notes or [],
         }
         yield from _llm_deltas(
             self._sql_answer,
@@ -346,6 +352,7 @@ class AnthropicRouterModels:
         memory_block: str = "",
         listing_ids: list[str] | None = None,
         data_note: str = "",
+        search_notes: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> str:
         return "".join(
@@ -361,6 +368,7 @@ class AnthropicRouterModels:
                 memory_block=memory_block,
                 listing_ids=listing_ids,
                 data_note=data_note,
+                search_notes=search_notes,
                 config=config,
             )
         ).strip()
@@ -381,6 +389,7 @@ class AnthropicRouterModels:
         listing_count: int = 0,
         lookup_status: str | None = None,
         data_note: str = "",
+        search_notes: list[str] | None = None,
         session_profile: dict | None = None,
         follow_up_question: str | None = None,
         on_text: Callable[[str], None] | None = None,
@@ -401,6 +410,7 @@ class AnthropicRouterModels:
             "row_count": row_count,
             "truncated": truncated,
             "data_note": data_note,
+            "search_notes": search_notes or [],
             "follow_up_question": follow_up_question,
         }
         messages = [

@@ -6,6 +6,7 @@ from typing import Protocol
 from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import TurnKind
+from agent.grounding import GroundingIndex
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.cards import ListingLoader
@@ -23,6 +24,7 @@ class RouterModels(Protocol):
         last_need_db: LastNeedDb | None,
         domain_blurbs: str,
         memory_context: str = "",
+        property_types: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> QueryRoute: ...
 
@@ -64,6 +66,7 @@ class RouterModels(Protocol):
         query_frame: dict | None,
         previous_error: str | None,
         listing_ids_only: bool = False,
+        resolved_names: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ) -> SqlDraft: ...
 
@@ -81,21 +84,26 @@ class RouterModels(Protocol):
         memory_block: str = "",
         listing_ids: list[str] | None = None,
         data_note: str = "",
+        search_notes: list[str] | None = None,
         config: RunnableConfig | None = None,
     ) -> str: ...
 
 
 class SqlRunner(Protocol):
-    """Runs one already-guarded SELECT and returns the page of rows."""
+    """Runs one read-only SELECT and returns the page of rows.
 
-    def __call__(self, sql: str) -> SqlPage: ...
+    `params` is only passed with SQL written in code. Model-drafted SQL is guarded and has none.
+    """
+
+    def __call__(self, sql: str, params: dict | None = None) -> SqlPage: ...
 
 
 @dataclass
 class AgentContext:
-    """Run-scoped values. `models` is None in production and a fake in tests."""
+    """Run-scoped values. `models` and `grounding` are None in production and fakes in tests."""
 
     user_id: str
     models: RouterModels | None = None
     sql_runner: SqlRunner | None = None
     listing_loader: ListingLoader | None = None
+    grounding: GroundingIndex | None = None

@@ -79,6 +79,9 @@ class Config:
     )
     SQL_ROW_CAP = _int("SQL_ROW_CAP", 100)
     SQL_TIMEOUT_MS = _int("SQL_TIMEOUT_MS", 15_000)
+    # Place names are matched inside this region of the location tree.
+    GROUNDING_REGION = os.getenv("GROUNDING_REGION", "Dubai")
+    GROUNDING_REFRESH_SECONDS = _int("GROUNDING_REFRESH_SECONDS", 3600)
 
     # Chatbot database on this machine's Postgres. The socket uses peer auth, so
     # the role matches the OS user and there is no password. Not the warehouse.

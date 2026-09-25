@@ -1048,3 +1048,20 @@ tables:
     type: numeric
     meaning: Annual rent in AED per square foot
   qualified_name: public.price_trend_rent_fact
+
+# Columns whose values are names users type. Grounding loads their stored spellings,
+# so the SQL model filters on the exact value. same_place_as names a column on the same
+# row that holds the official name of the same place; that pairing is learned from the data.
+named_values:
+- table: public.dld_community_avg_sale_price
+  column: community_name_en
+  kind: community
+- table: public.mv_community_dld_market_metrics
+  column: community_name
+  kind: community
+- table: public.price_trend_buy_fact
+  column: master_project_en
+  kind: master_project
+- table: public.price_trend_buy_fact
+  column: project_name_en
+  kind: project
