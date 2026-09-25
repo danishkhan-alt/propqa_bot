@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field, field_validator
 
 MAX_CARDS = 3
 MAX_FOLLOWUPS = 3
+MAX_FIGURE_COLUMNS = 4
+MAX_EXPLAINER_POINTS = 6
 
 
 class ReplyCard(BaseModel):
@@ -26,6 +28,52 @@ class ReplyCard(BaseModel):
         return text
 
 
+FigureUnit = Literal[
+    "aed", "aed_per_sqft", "sqft", "percent", "fraction", "count", "number", "year", "text"
+]
+
+
+class FigureColumn(BaseModel):
+    """One column of the lookup rows to show, named the way a buyer would read it."""
+
+    column: str
+    label: str
+    unit: FigureUnit = "number"
+
+
+class FigureSpec(BaseModel):
+    """Which rows and columns to lay out. The model picks them; code copies the values.
+
+    stats: one row, its figures as tiles. table: a few rows side by side.
+    bar: one figure compared across rows, each row named by label_column.
+    """
+
+    layout: Literal["none", "stats", "table", "bar"] = "none"
+    label_column: str = ""
+    label_title: str = ""
+    columns: list[FigureColumn] = Field(default_factory=list)
+
+    @field_validator("columns")
+    @classmethod
+    def cap_columns(cls, value: list[FigureColumn]) -> list[FigureColumn]:
+        return value[:MAX_FIGURE_COLUMNS]
+
+
+class Explainer(BaseModel):
+    """A short written aid: ordered steps, pros and cons, or one callout."""
+
+    kind: Literal["none", "steps", "pros_cons", "callout"] = "none"
+    title: str = ""
+    points: list[str] = Field(default_factory=list)
+    cautions: list[str] = Field(default_factory=list)
+
+    @field_validator("points", "cautions")
+    @classmethod
+    def cap_points(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item and item.strip()]
+        return cleaned[:MAX_EXPLAINER_POINTS]
+
+
 class StructuredReply(BaseModel):
     """What the answer model returns. The follow-up question is added in code.
 
@@ -33,8 +81,12 @@ class StructuredReply(BaseModel):
     """
 
     intro_text: str = Field(description="The reply itself, in markdown.")
-    message_type: Literal["recommendation", "factual_answer", "listing_results"] = "factual_answer"
+    message_type: Literal["recommendation", "factual_answer", "explanation", "listing_results"] = (
+        "factual_answer"
+    )
     cards: list[ReplyCard] = Field(default_factory=list)
+    figures: FigureSpec | None = None
+    explainer: Explainer | None = None
     exclusions_note: str = ""
     data_source_note: str = ""
     suggested_followups: list[str] = Field(default_factory=list)
