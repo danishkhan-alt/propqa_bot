@@ -103,15 +103,25 @@ class Config:
     JWT_ACCESS_TOKEN_TTL_SECONDS = _int("JWT_ACCESS_TOKEN_TTL_SECONDS", 900)
     JWT_REFRESH_TOKEN_TTL_DAYS = _int("JWT_REFRESH_TOKEN_TTL_DAYS", 30)
 
+    # Which vendor serves every LLM call: "anthropic" or "openai".
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    ANTHROPIC_MAX_OUTPUT_TOKENS = _int("ANTHROPIC_MAX_OUTPUT_TOKENS", 4096)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
-    ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-4-5")
-    # AI_MODEL thinks adaptively, and its thinking counts against max_tokens. Effort sets
-    # how much it thinks per route: replies write from facts already fetched, SQL reasons.
+    LLM_MAX_OUTPUT_TOKENS = _int(
+        "LLM_MAX_OUTPUT_TOKENS", _int("ANTHROPIC_MAX_OUTPUT_TOKENS", 4096)
+    )
+    AI_MODEL = os.getenv(
+        "AI_MODEL", "gpt-5.5" if LLM_PROVIDER == "openai" else "claude-sonnet-5"
+    )
+    ROUTER_MODEL = os.getenv(
+        "ROUTER_MODEL", "gpt-5.4-mini" if LLM_PROVIDER == "openai" else "claude-haiku-4-5"
+    )
+    # AI_MODEL reasons before it answers, and that reasoning counts against max_tokens.
+    # Effort sets how much it reasons per route: replies write from facts already
+    # fetched, SQL reasons. OpenAI routers reason too, so they get their own effort.
     AI_REPLY_EFFORT = os.getenv("AI_REPLY_EFFORT", "low")
     AI_SQL_EFFORT = os.getenv("AI_SQL_EFFORT", "medium")
+    ROUTER_EFFORT = os.getenv("ROUTER_EFFORT", "low")
 
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
