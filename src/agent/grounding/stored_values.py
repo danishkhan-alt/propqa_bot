@@ -128,7 +128,15 @@ class StoredValueIndex:
             for key in ((value.table, value.column, value.value) for value in kept)
             if key in self._same_place
         ]
-        return [*kept, *linked]
+        # Several project names often lead to the same official area; list each value once.
+        seen: set[tuple[str, str]] = set()
+        unique: list[StoredValue] = []
+        # The official area comes first: it covers every project registered under the place.
+        for value in [*linked, *kept]:
+            if (value.column, value.value) not in seen:
+                seen.add((value.column, value.value))
+                unique.append(value)
+        return unique
 
 
 def learn_same_place(

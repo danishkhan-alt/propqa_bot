@@ -171,15 +171,19 @@ def _legacy_nodes(read: ReferenceReader) -> list[LocationNode]:
 
 
 def _legacy_inside_outlines(read: ReferenceReader) -> dict[int, list[int]]:
-    """v2 areas with a drawn outline, each with the legacy nodes whose point lies inside it."""
+    """v2 areas with a drawn outline, each with the legacy nodes whose point lies inside it.
+
+    Outlines overlap, so a point belongs only to the smallest outline that contains it.
+    """
     try:
         rows = read(
-            "SELECT area.id AS area_id, node.id AS legacy_id "
+            "SELECT DISTINCT ON (node.id) area.id AS area_id, node.id AS legacy_id "
             "FROM public.locations_v2 area "
             "JOIN public.locations node ON node.lat IS NOT NULL AND node.lng IS NOT NULL "
             "AND ST_Contains(area.geom, "
             "ST_SetSRID(ST_MakePoint(node.lng::float8, node.lat::float8), ST_SRID(area.geom))) "
-            "WHERE area.geom IS NOT NULL"
+            "WHERE area.geom IS NOT NULL "
+            "ORDER BY node.id, ST_Area(area.geom)"
         )
     except Exception:
         # Outlines only sharpen containment; the tree and same-spot links still work without them.

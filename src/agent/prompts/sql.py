@@ -5,7 +5,7 @@ A column marked filled: 0% is always empty. Do not filter, sort, or aggregate on
 
 resolved_names holds each name in the message and the exact values it is stored as, per column.
 - To filter on that name, use = or IN with those stored values on that column. Do not use ILIKE or a pattern for a resolved name.
-- A value with same_place_as is the official name of the same place, found through that other column on the same rows. Either filter is correct. For an area-wide figure prefer the area column.
+- A value with same_place_as is the official area the place is registered under, found through that other column on the same rows. For a count, total, or average about the place, filter on that area value; it covers every project in the place. Use the project or master project values only when the user named a project.
 - A name marked unresolved matched no stored value. Filter on it with ILIKE on the most likely name column.
 The statement is a single SELECT, or WITH ... SELECT. No other statement type.
 When the user asked for an average, count, or total, aggregate. When they asked for a list, select the useful columns and order them as they asked.

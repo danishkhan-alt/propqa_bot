@@ -163,11 +163,12 @@ def _stored_index(aliases=None) -> StoredValueIndex:
 
 def test_the_broadest_stored_name_wins_and_brings_its_official_area():
     found = _stored_index().find(["marina"], [DLD_SALES], {"place"})
+    # The official area comes first: it covers every project registered under the place.
     assert [(value.column, value.value) for value in found] == [
-        ("master_project_en", "Dubai Marina"),
         ("area_name_en", "Marsa Dubai"),
+        ("master_project_en", "Dubai Marina"),
     ]
-    assert found[1].same_place_as == "master_project_en = 'Dubai Marina'"
+    assert found[0].same_place_as == "master_project_en = 'Dubai Marina'"
 
 
 def test_a_developer_name_never_matches_a_project_named_after_it():
@@ -245,9 +246,14 @@ def test_an_outline_does_not_claim_a_legacy_area_that_v2_places_elsewhere():
     legacy = [
         _v2(311546, None, "Dubai Harbour", Breadth.AREA, 25.086, 55.143),
         _v2(309575, 311546, "SUNRISE BAY", Breadth.PROJECT, 25.096, 55.139),
+        _v2(12034, None, "Palm Jumeirah", Breadth.AREA, 25.11, 55.13),
+        # Filed under Palm Jumeirah; its point wrongly lands inside the Dubai Marina outline.
+        _v2(276307, 12034, "ALFATTAN HOTEL & RESIDENSE", Breadth.PROJECT, 25.08, 55.14),
     ]
-    directory = build_place_directory(v2, legacy, ListingLinks(), region="Dubai", inside_outline={10: [311546]})
-    assert not {311546, 309575} & directory.find("Dubai Marina").place.legacy_ids
+    directory = build_place_directory(
+        v2, legacy, ListingLinks(), region="Dubai", inside_outline={10: [311546, 276307]}
+    )
+    assert not {311546, 309575, 276307} & directory.find("Dubai Marina").place.legacy_ids
     assert {311546, 309575} <= directory.find("Dubai Harbour").place.legacy_ids
 
 

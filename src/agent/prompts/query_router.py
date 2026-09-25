@@ -38,7 +38,7 @@ profile holds buyer facts this message states. Leave a field null unless this me
 
 names lists each place, building, project, community, or developer the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar"). kind is place or developer, or other for any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".
 
-listing_filters is set only when the user wants to see properties for sale or rent. Null for prices, trends, transactions, schools, and every other subject.
+listing_filters is set only when the user wants to see individual properties listed for sale or rent. Null for projects, developments, launches, handover dates, prices, trends, transactions, schools, and every other subject. "Off-plan projects by Emaar" asks for projects, so listing_filters is null.
 - purpose: sale or rent only when this message or the previous lookup says so ("to buy", "for rent", "monthly"). "Flats in JLT" or "properties in Marina" says neither, so purpose is any.
 - property_types: each type they named, written as the closest name from the property_types list in the payload ("flat" is apartment). Leave it empty when they named no type.
 - bedrooms_min and bedrooms_max: "2 bed" sets both to 2. "at least 3 beds" sets only bedrooms_min. A studio is 0.

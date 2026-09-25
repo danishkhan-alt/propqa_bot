@@ -213,9 +213,12 @@ def _cover_legacy_nodes_inside(
 
     A legacy node belongs to a place when it is the same location as a v2 node under that
     place (same name, same spot: the legacy "Burj Khalifa" project sits under v2 "Downtown
-    Dubai"), or when its point lies inside the place's drawn outline. An outline only places
-    legacy nodes v2 does not already name as an area or project: the legacy "Dubai Harbour"
-    point falls inside the Dubai Marina outline, but v2 has Dubai Harbour as its own area.
+    Dubai"), or when its point lies inside the place's drawn outline.
+
+    Coordinates fill gaps in the trees and never override them, so an outline only places a
+    legacy node that has no legacy parent and that v2 does not name as an area or project.
+    The legacy "Dubai Harbour" point falls inside the Dubai Marina outline, but v2 has Dubai
+    Harbour as its own area; a project filed under Palm Jumeirah stays there whatever its point says.
     """
     legacy_below = _descendants(legacy)
     legacy_by_key: dict[str, list[LocationNode]] = defaultdict(list)
@@ -230,7 +233,7 @@ def _cover_legacy_nodes_inside(
     for v2_id, legacy_ids in inside_outline.items():
         for legacy_id in legacy_ids:
             node = legacy.get(legacy_id)
-            if node is None or _place_key(node.title) in placed_by_v2:
+            if node is None or node.parent_id in legacy or _place_key(node.title) in placed_by_v2:
                 continue
             linked[v2_id] |= legacy_below[legacy_id]
     for place in places.values():
