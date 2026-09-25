@@ -9,6 +9,8 @@ from langgraph.types import Command
 
 from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext, RouterModels
+from agent.graphs.answer import answer
+from agent.graphs.catalog import catalog_load, finalize
 from agent.graphs.memory import (
     apply_defaults,
     confirm_forget,
@@ -17,11 +19,8 @@ from agent.graphs.memory import (
     refine_or_new,
     route_after_refine,
 )
-from agent.graphs.nodes import (
-    answer,
-    catalog_load,
+from agent.graphs.router import (
     domain_router,
-    finalize,
     load_context,
     query_router,
     route_after_domain,

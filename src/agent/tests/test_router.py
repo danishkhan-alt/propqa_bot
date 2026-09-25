@@ -8,8 +8,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
+from agent.graphs.catalog import catalog_load, finalize
 from agent.graphs.chat import build_chat_graph
-from agent.graphs.nodes import catalog_load, finalize
 from agent.schemas.routes import (
     DomainRoute,
     QueryRoute,
@@ -19,8 +19,8 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft
-from agent.sql.execute import SqlPage
 from agent.services.llm import invoke_structured
+from agent.sql.execute import SqlPage
 from agent.validator import apply_query_policy, sanitize_domain_route
 
 GOLDEN = Path(__file__).resolve().parents[2] / "evals" / "router_golden.yaml"
