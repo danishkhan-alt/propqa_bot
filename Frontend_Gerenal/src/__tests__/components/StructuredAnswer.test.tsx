@@ -64,6 +64,95 @@ describe("StructuredAnswer", () => {
   });
 });
 
+describe("StructuredAnswer blocks", () => {
+  it("shows key figures as tiles", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          intro_text: "Prices in Dubai Marina.",
+          figures: {
+            layout: "stats",
+            tiles: [
+              { label: "Average sale price", value: "AED 4.33M" },
+              { label: "Sales", value: "3,216" },
+            ],
+          },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByText("Average sale price")).toBeInTheDocument();
+    expect(screen.getByText("AED 4.33M")).toBeInTheDocument();
+  });
+
+  it("compares rows in a table with a header per figure", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          figures: {
+            layout: "table",
+            headers: ["Area", "Average rent"],
+            rows: [
+              ["JVC", "AED 60,000"],
+              ["JLT", "AED 75,000"],
+            ],
+            hidden_rows: 3,
+          },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Average rent" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "AED 75,000" })).toBeInTheDocument();
+    expect(screen.getByText("+3 more not shown")).toBeInTheDocument();
+  });
+
+  it("draws a bar per row, labelled with its value", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          figures: {
+            layout: "bar",
+            title: "Sales",
+            bars: [
+              { label: "2023", value: 120, display: "120" },
+              { label: "2024", value: 180, display: "180" },
+            ],
+          },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByText("Sales")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("numbers the steps of an explainer", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          explainer: { kind: "steps", title: "Buying off-plan", points: ["Reserve the unit", "Sign the SPA"] },
+        }}
+        interactive
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Buying off-plan" })).toBeInTheDocument();
+    const steps = screen.getAllByRole("listitem");
+    expect(steps[1]).toHaveTextContent("2Sign the SPA");
+  });
+
+  it("splits pros and cautions", () => {
+    render(
+      <StructuredAnswer
+        reply={{ explainer: { kind: "pros_cons", points: ["Lower entry price"], cautions: ["Handover risk"] } }}
+        interactive
+      />,
+    );
+    expect(screen.getByRole("list", { name: "Upsides" })).toHaveTextContent("Lower entry price");
+    expect(screen.getByRole("list", { name: "Watch out for" })).toHaveTextContent("Handover risk");
+  });
+});
+
 describe("ListingSummary", () => {
   it("summarises the result set and opens the panel", async () => {
     const onOpen = vi.fn();

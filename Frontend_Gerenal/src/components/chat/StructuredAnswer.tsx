@@ -2,6 +2,7 @@ import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
 import { QuickReplies, type FollowUpQuestion, type QuickReplyOption } from "./QuickReplies";
+import { ExplainerBlock, FiguresBlock, type ReplyExplainer, type ReplyFigures } from "./ReplyBlocks";
 
 export interface ReplyCard {
   title: string;
@@ -16,6 +17,9 @@ export interface StructuredReply {
   intro_text?: string;
   data_source_note?: string;
   cards?: ReplyCard[];
+  /** Figures copied from the lookup rows; the server sends at most one of cards, figures, explainer. */
+  figures?: ReplyFigures | null;
+  explainer?: ReplyExplainer | null;
   exclusions_note?: string;
   question?: FollowUpQuestion | null;
   suggested_followups?: string[];
@@ -37,7 +41,7 @@ interface StructuredAnswerProps {
   onQuickReply?: (question: FollowUpQuestion, option: QuickReplyOption) => void;
 }
 
-/** One assistant reply: the answer, optional comparison, one question, next steps, source. */
+/** One assistant reply: the answer, one optional block (comparison, figures, or explainer), one question, next steps, source. */
 export function StructuredAnswer({
   reply,
   interactive,
@@ -86,6 +90,10 @@ export function StructuredAnswer({
           ))}
         </div>
       )}
+
+      {reply.figures && <FiguresBlock figures={reply.figures} />}
+
+      {reply.explainer && <ExplainerBlock explainer={reply.explainer} />}
 
       {reply.exclusions_note && (
         <p className="text-xs leading-5 text-[#747288]">{reply.exclusions_note}</p>

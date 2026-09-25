@@ -11,6 +11,7 @@ from agent.enums.routing import Route
 from agent.graphs.runtime import models_for
 from agent.memory.read.prompt_text import append_memory_notes
 from agent.reply.clarify import Question, next_question
+from agent.reply.figures import reply_blocks
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import (
     QueryRoute,
@@ -278,6 +279,7 @@ def _draft_structured(
         return None
     reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
     payload = reply.model_dump()
+    payload.update(reply_blocks(reply, list(fields.get("rows") or []), list(fields.get("columns") or [])))
     payload["question"] = question.payload() if question is not None else None
     if question is not None:
         # The question already has its own tap options; a chip repeating it is noise.

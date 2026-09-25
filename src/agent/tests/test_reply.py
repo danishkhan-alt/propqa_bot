@@ -7,7 +7,8 @@ import pytest
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.reply.clarify import merge_profile, next_question
 from agent.schemas.profile import ProfileSignals
-from agent.schemas.reply import StructuredReply
+from agent.reply.figures import build_explainer, build_figures, format_figure, reply_blocks
+from agent.schemas.reply import Explainer, FigureColumn, FigureSpec, ReplyCard, StructuredReply
 from agent.schemas.routes import QueryRoute
 from agent.services.llm import REPLY_FALLBACK, stream_structured_reply
 from agent.sql.cards import listing_cards, listing_facts
@@ -199,3 +200,107 @@ def test_the_fallback_reply_is_used_when_every_attempt_fails():
     reply = stream_structured_reply(_Stream([], fail_after=0), [], None, shown.append)
     assert reply == REPLY_FALLBACK
     assert shown == [REPLY_FALLBACK.intro_text]
+
+
+# Figures and explainers
+
+
+def _spec(layout: str, columns: list[tuple[str, str, str]], label_column: str = "", label_title: str = ""):
+    return FigureSpec(
+        layout=layout,
+        label_column=label_column,
+        label_title=label_title,
+        columns=[FigureColumn(column=c, label=label, unit=unit) for c, label, unit in columns],
+    )
+
+
+def test_stats_copy_values_from_the_single_row():
+    rows = [{"avg_sale_price": "4331780.836442786070", "transaction_count": 3216}]
+    figures = build_figures(
+        _spec("stats", [("avg_sale_price", "Average sale price", "aed"), ("transaction_count", "Sales", "count")]),
+        rows,
+        ["avg_sale_price", "transaction_count"],
+    )
+    assert figures == {
+        "layout": "stats",
+        "tiles": [
+            {"label": "Average sale price", "value": "AED 4.33M"},
+            {"label": "Sales", "value": "3,216"},
+        ],
+    }
+
+
+def test_a_column_the_rows_do_not_have_is_dropped():
+    rows = [{"sold_count": 7316}]
+    spec = _spec("stats", [("sold_count", "Sales", "count"), ("avg_price", "Average price", "aed")])
+    assert build_figures(spec, rows, ["sold_count"])["tiles"] == [{"label": "Sales", "value": "7,316"}]
+    assert build_figures(_spec("stats", [("avg_price", "Average price", "aed")]), rows, ["sold_count"]) is None
+
+
+def test_stats_need_exactly_one_row():
+    rows = [{"n": 1}, {"n": 2}]
+    assert build_figures(_spec("stats", [("n", "Count", "count")]), rows, ["n"]) is None
+
+
+def test_a_table_names_each_row_and_caps_its_length():
+    rows = [{"area_en": f"Area {i}", "avg_rent": 50000 + i, "yield_pct": "6.25"} for i in range(10)]
+    table = build_figures(
+        _spec("table", [("avg_rent", "Average rent", "aed"), ("yield_pct", "Yield", "percent")], "area_en", "Area"),
+        rows,
+        ["area_en", "avg_rent", "yield_pct"],
+    )
+    assert table["headers"] == ["Area", "Average rent", "Yield"]
+    assert table["rows"][0] == ["Area 0", "AED 50,000", "6.25%"]
+    assert len(table["rows"]) == 8 and table["hidden_rows"] == 2
+
+
+def test_a_bar_chart_needs_numbers_and_row_names():
+    rows = [{"year": 2023, "sales": "120"}, {"year": 2024, "sales": "180"}, {"year": 2025, "sales": None}]
+    bar = build_figures(_spec("bar", [("sales", "Sales", "count")], "year"), rows, ["year", "sales"])
+    assert bar["bars"] == [
+        {"label": "2023", "value": 120.0, "display": "120"},
+        {"label": "2024", "value": 180.0, "display": "180"},
+    ]
+    assert build_figures(_spec("bar", [("sales", "Sales", "count")]), rows, ["year", "sales"]) is None
+
+
+@pytest.mark.parametrize(
+    "value, unit, shown",
+    [
+        ("56103.7013", "aed", "AED 56,104"),
+        (1250.4, "aed_per_sqft", "AED 1,250/sqft"),
+        ("0.065", "fraction", "6.5%"),
+        (2027, "year", "2027"),
+        ("AED 79,000", "aed", "AED 79,000"),
+        ("4.00", "number", "4"),
+        ("986.684", "aed", "AED 986.68"),
+    ],
+)
+def test_figures_read_the_way_a_buyer_reads_them(value, unit, shown):
+    assert format_figure(value, unit) == shown
+
+
+def test_only_one_block_is_shown_under_the_text():
+    rows = [{"n": 5}]
+    reply = StructuredReply(
+        intro_text="x",
+        figures=_spec("stats", [("n", "Count", "count")]),
+        explainer=Explainer(kind="callout", title="Watch", points=["One thing"]),
+    )
+    blocks = reply_blocks(reply, rows, ["n"])
+    assert blocks["figures"]["tiles"] == [{"label": "Count", "value": "5"}]
+    assert blocks["explainer"] is None
+
+    carded = reply.model_copy(update={"cards": [ReplyCard(title="JVC")]})
+    assert reply_blocks(carded, rows, ["n"]) == {
+        "cards": [ReplyCard(title="JVC").model_dump()],
+        "figures": None,
+        "explainer": None,
+    }
+
+
+def test_an_explainer_without_points_is_dropped():
+    assert build_explainer(Explainer(kind="steps", title="How it works")) is None
+    assert build_explainer(Explainer(kind="none", points=["a"])) is None
+    shown = build_explainer(Explainer(kind="steps", title="Buying off-plan", points=["Reserve"], cautions=["x"]))
+    assert shown == {"kind": "steps", "title": "Buying off-plan", "points": ["Reserve"], "cautions": []}
