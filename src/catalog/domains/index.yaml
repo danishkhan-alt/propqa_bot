@@ -141,11 +141,14 @@ domains:
 - id: market
   file: market.yaml
   name: Price indices and construction statistics
-  description: Official DSC price indices, construction-cost series, and community average sale and rent
-    prices. Use for market movement, not a single deal.
+  description: Official DSC price indices, construction-cost series, community average sale and rent
+    prices, and community rental yields. Use for market movement and yield or ROI by area, not a single deal.
   synonyms:
   - price index
   - rent index
+  - rental yield
+  - rental return
+  - ROI
   - construction cost
   - market trend
   - inflation

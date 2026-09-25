@@ -51,6 +51,7 @@ chatbot_ai.metro_stations:
     filled: 1.0
   station_opening_date:
     filled: 1.0
+    covers: 2009-09-09 to 2021-01-01
   station_closing_date:
     filled: 0.0
 chatbot_ai.metro_stations_gis:
@@ -476,6 +477,7 @@ chatbot_ai.tram_stations:
     filled: 1.0
   station_opening_date:
     filled: 1.0
+    covers: 2014-11-11 to 2014-11-11
   station_closing_date:
     filled: 0.0
 chatbot_ai.tram_stations_gis:
@@ -813,6 +815,7 @@ chatbot_ai.bus_stops_gis:
 chatbot_ai.bus_stop_details:
   report_date:
     filled: 1.0
+    covers: 2020-07-13 to 2026-03-29
   stop_name:
     filled: 1.0
   stop_location_latitude:
@@ -839,10 +842,13 @@ chatbot_ai.bus_stop_details:
     - 'Yes'
   last_survey_date:
     filled: 0.005
+    covers: 2018-03-09 to 2019-04-30
   valid_from:
     filled: 1.0
+    covers: 1970-01-01 to 2024-11-29
   valid_until:
     filled: 1.0
+    covers: 2036-01-01 to 2036-01-01
   stop_id:
     filled: 1.0
   street_name:
@@ -850,19 +856,19 @@ chatbot_ai.bus_stop_details:
     common_values:
     - Khalid bin waleed road
     - Al Nahda Road
-    - Amman Street
     - 22 street
     - Damascus Street
-    - Jumeirah road
-    - Doha Road
-    - Al wasl road
-    - Sheikh khalifa bin zayed road
-    - 25 Street
-    - Oud metha road
-    - 23 street
+    - Amman Street
     - No name no number
-    - Al geria street
-    - Abraj Nakheel Street
+    - Sheikh khalifa bin zayed road
+    - 23 street
+    - Jumeirah road
+    - Oud metha road
+    - Doha Road
+    - Omer Bin Khattab Road
+    - 25 Street
+    - Al Mina road
+    - 13 Street
   route_name:
     filled: 1.0
   stop_location_longitude:
@@ -936,6 +942,7 @@ chatbot_ai.bus_routes:
 chatbot_ai.bus_network_coverage:
   report_date:
     filled: 1.0
+    covers: 2024-12-31 to 2024-12-31
   community_num:
     filled: 1.0
   community_name:
@@ -1034,6 +1041,7 @@ chatbot_ai.public_transportation_stations:
 chatbot_ai.public_transportation_routes_stops:
   report_date:
     filled: 1.0
+    covers: 2020-12-27 to 2022-10-31
   transport_mode:
     filled: 0.993
     values:
@@ -1158,6 +1166,7 @@ chatbot_ai.public_transportation_routes_stops:
     - 'Yes'
   last_survey_date:
     filled: 0.205
+    covers: 2020-04-02 to 2020-04-02
   pattern:
     filled: 0.0
 chatbot_ai.marine_stations:
@@ -1209,8 +1218,10 @@ chatbot_ai.marine_stations:
     filled: 1.0
   valid_from:
     filled: 1.0
+    covers: 2020-01-01 to 2020-04-24
   valid_until:
     filled: 1.0
+    covers: 2025-01-01 to 2036-01-01
 chatbot_ai.marine_stations_gis:
   id:
     filled: 1.0
@@ -1393,6 +1404,7 @@ chatbot_ai.marine_stations_gis:
 chatbot_ai.marine_lines:
   date:
     filled: 1.0
+    covers: 2024-12-31 to 2024-12-31
   route_name:
     filled: 1.0
     common_values:

@@ -34,6 +34,8 @@ pitfalls:
 - rent_contracts are registered tenancies, not listing rents.
 - Filter by procedure / group to separate sales from mortgages and other DLD procedures.
 - meter_sale_price is AED per sqm; do not mix with actual_worth totals.
+- A rent contract's annual_amount can cover several units (no_of_prop). Do not divide an average rent by an
+  average sale price for a yield; the market domain holds community yields computed on a matched basis.
 tables:
 - name: real_estate_transactions
   description: Real estate transactions from Dubai Land Department

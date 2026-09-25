@@ -68,6 +68,7 @@ public.properties:
     filled: 0.088
   deleted_at:
     filled: 0.138
+    covers: 2025-10-21 to 2026-09-23
   is_free_hold:
     filled: 0.911
   ownership:
@@ -146,8 +147,8 @@ chatbot_ai.building_property_records:
     - Public Facilities
     - Agricultural
     - Hospitality
-    - Educational
     - Public Facility
+    - Educational
   land_type_ar:
     filled: 0.911
     values:
@@ -162,13 +163,13 @@ chatbot_ai.building_property_records:
   land_type_id:
     filled: 0.911
   project_name_en:
-    filled: 0.573
-  project_name_ar:
-    filled: 0.573
-  project_id:
     filled: 0.574
+  project_name_ar:
+    filled: 0.574
+  project_id:
+    filled: 0.575
   master_project_ar:
-    filled: 0.505
+    filled: 0.506
     common_values:
     - داماك هيليز 2
     - ذا فالي
@@ -186,12 +187,12 @@ chatbot_ai.building_property_records:
     - داماك هيلز
     - تلال الغاف
   master_project_en:
-    filled: 0.505
+    filled: 0.506
     common_values:
     - DAMAC HILLS 2
     - The Valley
-    - Emirates Living
     - Dubai World Central
+    - Emirates Living
     - Dubai Investment Park First
     - Al Furjan
     - Arabian Ranches - 1
@@ -204,22 +205,25 @@ chatbot_ai.building_property_records:
     - DAMAC HILLS
     - TILAL AL GHAF
   master_project_id:
-    filled: 0.505
+    filled: 0.506
   pre_registration_number:
     filled: 0.0
     values:
     - '12110.18'
+    - '2140.07'
+    - JLT-PH1-E1
     - PJCH01
   is_registered:
     filled: 0.701
   is_lease_hold:
-    filled: 0.584
+    filled: 0.585
   is_free_hold:
     filled: 0.982
   parcel_id:
     filled: 0.985
   creation_date:
     filled: 0.963
+    covers: 2009-02-15 to 2026-05-13
   parent_property_id:
     filled: 0.95
   property_sub_type_en:
@@ -230,9 +234,9 @@ chatbot_ai.building_property_records:
     - Factory
     - Education
     - Nursery
-    - Warehouse
     - Clinic
     - Hospital
+    - Warehouse
     - Land
   property_sub_type_ar:
     filled: 1.0
@@ -288,8 +292,8 @@ chatbot_ai.building_property_records:
     - 2 B/R
     - 6 B/R
     - 2 bed rooms+hall
-    - 6 bed rooms+hall
     - NA
+    - 6 bed rooms+hall
     - 1 B/R
     - 7 bed rooms+hall
     - 7 B/R
@@ -315,7 +319,7 @@ chatbot_ai.building_property_records:
   rooms:
     filled: 0.878
   floors:
-    filled: 0.843
+    filled: 0.844
     common_values:
     - '2'
     - '3'
@@ -333,11 +337,11 @@ chatbot_ai.building_property_records:
     - '11'
     - '13'
   actual_common_area:
-    filled: 0.485
+    filled: 0.486
   common_area:
-    filled: 0.691
+    filled: 0.692
   building_number:
-    filled: 0.864
+    filled: 0.865
   land_sub_number:
     filled: 1.0
   land_number:
@@ -386,7 +390,7 @@ chatbot_ai.building_property_records:
     filled: 1.0
 chatbot_ai.registered_freehold_real_estate_units:
   land_type_en:
-    filled: 0.841
+    filled: 0.838
     values:
     - Commercial
     - Industrial
@@ -395,8 +399,10 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Public Facilities
     - Hospitality
     - Agricultural
+    - Educational
+    - Public Facility
   land_type_ar:
-    filled: 0.841
+    filled: 0.838
     values:
     - تجارى
     - صناعى
@@ -405,17 +411,16 @@ chatbot_ai.registered_freehold_real_estate_units:
     - مرافق عامة
     - Hospitality
     - زراعى
-    - Public Facility
   land_type_id:
-    filled: 0.841
+    filled: 0.838
   project_name_en:
-    filled: 0.359
+    filled: 0.355
   project_name_ar:
-    filled: 0.359
+    filled: 0.355
   project_id:
-    filled: 0.359
+    filled: 0.355
   master_project_ar:
-    filled: 0.481
+    filled: 0.476
     common_values:
     - قرية جميرا الدائرية
     - الخليج التجاري
@@ -425,39 +430,41 @@ chatbot_ai.registered_freehold_real_estate_units:
     - مجمع دبي للاستثمار الاول
     - داون تاون دبي
     - مجمع دبي لاند السكني
-    - واحة السيليكون
     - أرجان
+    - واحة السيليكون
     - مجمع دبي للاستثمار الثاني
     - دبي ورلد سنترال
     - مدينة دبي الرياضية
-    - المنطقة العالمية للإنتاج الإعلامي
     - نخلة جميرا
+    - المنطقة العالمية للإنتاج الإعلامي
   master_project_en:
-    filled: 0.481
+    filled: 0.476
     common_values:
     - Jumeirah Village Circle
     - Business Bay
     - International City Phase 1
     - Dubai Marina
-    - DMCC Master Community
     - Dubai Investment Park First
+    - DMCC Master Community
     - DownTown Dubai
     - Dubai Land Residence Complex
+    - Arjan
     - Silicon Oasis
     - Dubai Investment Park Second
-    - Arjan
     - Dubai World Central
     - Dubai Sports City
-    - International Media Production Zone
     - Palm Jumeirah
+    - International Media Production Zone
   master_project_id:
-    filled: 0.481
+    filled: 0.476
   pre_registration_number:
     filled: 0.0
+    values:
+    - JPA4LX023
   is_registered:
-    filled: 0.528
+    filled: 0.522
   is_lease_hold:
-    filled: 0.515
+    filled: 0.51
   is_free_hold:
     filled: 0.985
   parcel_id:
@@ -467,8 +474,8 @@ chatbot_ai.registered_freehold_real_estate_units:
   munc_zip_code:
     filled: 1.0
     common_values:
-    - '681'
     - '599'
+    - '681'
     - '346'
     - '264'
     - '392'
@@ -476,20 +483,21 @@ chatbot_ai.registered_freehold_real_estate_units:
     - '521'
     - '621'
     - '118'
-    - '393'
     - '365'
-    - '598'
     - '117'
     - '318'
-    - '345'
+    - '393'
+    - '373'
+    - '598'
   creation_date:
     filled: 0.958
+    covers: 2008-10-16 to 2026-05-22
   grandparent_property_id:
-    filled: 0.826
+    filled: 0.823
   parent_property_id:
-    filled: 0.624
+    filled: 0.618
   property_sub_type_en:
-    filled: 0.528
+    filled: 0.522
     values:
     - Flat
     - Office
@@ -504,12 +512,13 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Show Rooms
     - Hotel
     - Clinic
-    - Stacked Townhouses
     - Gymnasium
+    - Stacked Townhouses
     - Sized Partition
-    - Unit
+    - Opera House
+    - Building
   property_sub_type_ar:
-    filled: 0.528
+    filled: 0.522
     values:
     - شقه سكنيه
     - مكتب
@@ -527,24 +536,25 @@ chatbot_ai.registered_freehold_real_estate_units:
     - جمانيزيوم
     - منازل متلاصقة
     - تقسيم حجمى
-    - تعليمي
+    - دار أوبرا
     - مسجد
+    - مستشفى
   property_sub_type_id:
-    filled: 0.528
+    filled: 0.522
   property_type_en:
-    filled: 0.89
+    filled: 0.888
     values:
     - Unit
   property_type_ar:
-    filled: 0.89
+    filled: 0.888
     values:
     - وحدة
   property_type_id:
-    filled: 0.89
+    filled: 0.888
   actual_area:
-    filled: 0.873
+    filled: 0.871
   rooms_en:
-    filled: 0.879
+    filled: 0.876
     common_values:
     - 1 B/R
     - Studio
@@ -562,7 +572,7 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Hotel
     - 4 B/R
   rooms_ar:
-    filled: 0.879
+    filled: 0.876
     common_values:
     - غرفة
     - غرفتان
@@ -580,13 +590,13 @@ chatbot_ai.registered_freehold_real_estate_units:
     - مستودع
     - Hotel
   rooms:
-    filled: 0.879
+    filled: 0.876
   floor:
-    filled: 0.823
+    filled: 0.82
   actual_common_area:
-    filled: 0.381
+    filled: 0.377
   common_area:
-    filled: 0.804
+    filled: 0.802
   parking_allocation_type_en:
     filled: 0.002
     values:
@@ -600,9 +610,9 @@ chatbot_ai.registered_freehold_real_estate_units:
   parking_allocation_type:
     filled: 0.003
   unit_parking_number:
-    filled: 0.38
+    filled: 0.375
   unit_balcony_area:
-    filled: 0.486
+    filled: 0.481
   unit_number:
     filled: 1.0
   building_number:
@@ -626,14 +636,14 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Al Goze Industrial Second
     - Al Thanyah Fifth
     - Al Mararr
+    - Burj Khalifa
     - Dubai Investment Park First
-    - Al Karama
     - Dubai Investment Park Second
   area_name_ar:
     filled: 1.0
     common_values:
-    - جبل على الصناعية الأولى
     - البرشاء جنوب الرابعة
+    - جبل على الصناعية الأولى
     - الخليج التجارى
     - محيصنه الثانيه
     - مرسى دبي
@@ -641,12 +651,12 @@ chatbot_ai.registered_freehold_real_estate_units:
     - مدينة المطار
     - ورسان الاولى
     - نايف
+    - الثنيه الخامسة
     - المرر
     - القوز الصناعيه الثانيه
-    - البرشاء الاولى
-    - الكرامه
-    - الثنيه الخامسة
     - مجمع دبي للاستثمار الاول
+    - الكرامه
+    - برج خليفة
   zone_id:
     filled: 1.0
   area_id:
@@ -661,9 +671,9 @@ chatbot_ai.land_registry:
   project_name_en:
     filled: 0.354
   master_project_id:
-    filled: 0.417
+    filled: 0.416
   master_project_en:
-    filled: 0.417
+    filled: 0.416
     common_values:
     - DAMAC HILLS 2
     - DAMAC Lagoons
@@ -672,8 +682,8 @@ chatbot_ai.land_registry:
     - DAMAC HILLS
     - JABEL ALI HILLS
     - Mudon
-    - Dubai World Central
     - The Valley
+    - Dubai World Central
     - Jumeirah Park
     - Palm Jumeirah
     - Arabian Ranches - 1
@@ -685,8 +695,8 @@ chatbot_ai.land_registry:
     common_values:
     - داماك هيليز 2
     - داماك لاغون
-    - الفرجان
     - روعة الإمارات
+    - الفرجان
     - داماك هيلز
     - جبل علي هيلز
     - مدن
@@ -715,11 +725,11 @@ chatbot_ai.land_registry:
     - Public Facility
     - Future Development
     - Transport
-    - Transportation
     - Facilities
-    - Hospitality
+    - Transportation
     - Educational
     - Water Body
+    - Hospitality
     - Healthcare
   land_type_en:
     filled: 0.922
@@ -736,10 +746,10 @@ chatbot_ai.land_registry:
     - Public Facility
     - Future Development
     - Transport
-    - Transportation
     - Facilities
-    - Educational
+    - Transportation
     - Water Body
+    - Educational
     - Hospitality
     - Healthcare
   property_id:
@@ -752,20 +762,20 @@ chatbot_ai.land_registry:
     filled: 1.0
     common_values:
     - مدينة هند 4
-    - الحبيه الخامسة
     - العوير الأولى
+    - الحبيه الخامسة
     - اليلايس 1
     - اليلايس 5
     - جبل علي الأولى
     - وادي الصفا 5
-    - ند الشبا الاولى
     - اليفره 1
+    - ند الشبا الاولى
     - الخوانيج الثانية
     - الثنيه الخامسة
     - مدينة المطار
     - الثنيه الرابعة
-    - الحبية الثالثة
     - حدائق الشيخ محمد بن راشد
+    - الحبية الثالثة
   area_name_en:
     filled: 1.0
     common_values:
@@ -782,8 +792,8 @@ chatbot_ai.land_registry:
     - Al Thanyah Fifth
     - Madinat Al Mataar
     - Al Thanayah Fourth
-    - Hadaeq Sheikh Mohammed Bin Rashid
     - Al Hebiah Third
+    - Hadaeq Sheikh Mohammed Bin Rashid
   land_number:
     filled: 1.0
   land_sub_number:
@@ -839,7 +849,7 @@ chatbot_ai.land_registry:
     - Agricultural
     - Labor Camp
   munc_zip_code:
-    filled: 0.876
+    filled: 0.875
     common_values:
     - '683'
     - '921'
@@ -851,21 +861,21 @@ chatbot_ai.land_registry:
     - '393'
     - '394'
     - '591'
-    - '915'
     - '521'
+    - '915'
     - '281'
     - '711'
     - '682'
   munc_number:
-    filled: 0.876
+    filled: 0.875
   parcel_id:
-    filled: 0.876
+    filled: 0.875
   is_free_hold:
     filled: 0.973
   is_registered:
     filled: 0.975
   pre_registration_number:
-    filled: 0.456
+    filled: 0.455
   separated_from:
     filled: 0.425
   separated_reference:
@@ -882,15 +892,15 @@ chatbot_ai.building_summary_information:
     - HADAEQ SHEIKH MOHAMMED BIN RASHID
     - AL THANYAH  FOURTH
     - AL AWIR FIRST
-    - AL YALAYIS 1
     - WADI AL SAFA 3
+    - AL YALAYIS 1
     - DUBAI INVESTMENT PARK SECOND
     - JUMEIRA FIRST
     - AL KHWANEEJ FIRST
     - AL YALAYIS 2
-    - AL KHWANEEJ SECOND
     - WADI AL SAFA 7
-    - WADI AL SAFA 6
+    - AL KHWANEEJ SECOND
+    - AL BADA
   community_name_arabic:
     filled: 0.954
     common_values:
@@ -900,21 +910,22 @@ chatbot_ai.building_summary_information:
     - حدائق الشيخ محمد بن راشد
     - جميرا الأولى
     - العوير الأولى
+    - اليلايس 1
     - مجمع دبي للاستثمار الثاني
     - وادي الصفا 3
-    - اليلايس 1
     - جبل علي الصناعية الأولى
-    - البدع
     - الخوانيج الأولى
+    - البدع
     - اليلايس 2
     - وادي الصفا 6
     - الخوانيج الثانية
   no_of_buildings_on_plot:
     filled: 1.0
   building_serial_no:
-    filled: 0.988
+    filled: 0.987
   building_permitted_date:
     filled: 0.392
+    covers: 1992-01-22 to 2026-04-10
   building_type_english:
     filled: 1.0
     values:
@@ -953,13 +964,14 @@ chatbot_ai.building_summary_information:
     - 'NO'
     - 'YES'
   building_usages_english:
-    filled: 0.961
+    filled: 0.96
   building_usages_arabic:
-    filled: 0.961
+    filled: 0.96
   plot_area:
     filled: 0.848
   building_completion_date:
-    filled: 0.36
+    filled: 0.361
+    covers: 1950-01-01 to 2026-04-09
   building_status_english:
     filled: 1.0
     values:
@@ -969,8 +981,8 @@ chatbot_ai.building_summary_information:
     - Building Cancelled
     - Approved
     - Request For Demolition
-    - On Hold for Card Cancellation
     - On Hold For Design Change
+    - On Hold for Card Cancellation
     - Demolition Approved
   building_status_arabic:
     filled: 1.0
@@ -989,11 +1001,11 @@ chatbot_ai.building_summary_information:
   no_of_lifts:
     filled: 0.911
   electrical_load_for_ac:
-    filled: 0.996
+    filled: 0.997
   soil_barring_capacity:
     filled: 0.996
   ac_unit_type:
-    filled: 0.465
+    filled: 0.464
     values:
     - '2'
     - '1'
@@ -1015,7 +1027,7 @@ chatbot_ai.building_summary_information:
     - unidentified
     - Reserved
   building_construction_year:
-    filled: 0.36
+    filled: 0.361
   project_no:
     filled: 1.0
   permit_no:
@@ -1030,8 +1042,10 @@ chatbot_ai.building_summary_information:
     filled: 1.0
   building_demolition_date:
     filled: 0.012
+    covers: 2007-12-05 to 2026-05-14
   building_cancellation_date:
     filled: 0.006
+    covers: 2007-04-16 to 2026-01-14
 chatbot_ai.building_floor_level_information:
   building_id:
     filled: 1.0
@@ -1066,8 +1080,8 @@ chatbot_ai.building_floor_level_information:
     - Employees /Students Accommodation
     - Mosques
     - Hospitals
-    - Petrol Station /Car Services
     - Banks
+    - Petrol Station /Car Services
     - Cinema
     - Theatre
   floor_type_arabic:
@@ -1101,12 +1115,12 @@ chatbot_ai.building_floor_level_information:
     - المستشفيات
     - البنوك
     - محطة بترول/خدمة السيارات
-    - السينما
     - المسارح
+    - السينما
   no_of_units:
-    filled: 0.254
+    filled: 0.255
   usages_area:
-    filled: 0.444
+    filled: 0.445
 chatbot_ai.building_usage_classifications:
   building_id:
     filled: 1.0
@@ -1190,8 +1204,8 @@ chatbot_ai.building_types:
     - بيت عربي
     - '''أخرى (شبرة، كرفان ، صندقة)'''
     - مبنى مستوى واحد
-    - مبنى صناعي
     - أخرى (شبرة، كرفان ، صندقة)
+    - مبنى صناعي
     - مبنى نسب طابقية
 chatbot_ai.building_characteristics:
   english_classification:
@@ -1327,12 +1341,11 @@ chatbot_ai.housing_units:
     values:
     - Apartment
     - Villa
-    - Arabic House
     - Room
+    - Arabic House
     - Collective Household
     - Other
     - Attached to Villa
-    - Part of Arabic House
   year:
     filled: 1.0
   unittypear:
@@ -1344,8 +1357,8 @@ chatbot_ai.housing_units:
     - بيت عربي
     - مسكن جماعي
     - أخرى
-    - جزء بيت عربي
     - ملحق فيلا
+    - جزء بيت عربي
 chatbot_ai.household_types:
   english_classification:
     filled: 1.0
@@ -1506,8 +1519,10 @@ public.dda_plots:
     filled: 0.0
   site_plan_issue_date:
     filled: 0.753
+    covers: 2017-10-10 to 2026-02-02
   site_plan_expiry_date:
     filled: 0.753
+    covers: 2020-10-17 to 2031-02-01
   land_use:
     filled: 1.0
   land_use_type:

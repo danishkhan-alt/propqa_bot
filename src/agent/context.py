@@ -85,6 +85,8 @@ class RouterModels(Protocol):
         listing_ids: list[str] | None = None,
         data_note: str = "",
         search_notes: list[str] | None = None,
+        filters: list[str] | None = None,
+        coverage: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ) -> str: ...
 

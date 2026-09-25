@@ -58,6 +58,34 @@ def load_prompt(domain_ids: list[str]) -> str:
     return "\n---\n".join(parts)
 
 
+def date_coverage(tables: set[str] | list[str]) -> list[dict]:
+    """Measured date spans of the given tables, as {table, column, covers}."""
+    index = _coverage_index()
+    return [dict(span) for name in sorted({str(t).lower() for t in tables}) for span in index.get(name, ())]
+
+
+@lru_cache(maxsize=1)
+def _coverage_index() -> dict[str, tuple[dict, ...]]:
+    index: dict[str, tuple[dict, ...]] = {}
+    for domain in list_domains():
+        profiles = load_column_profiles(domain["id"])
+        for table in load_domain(domain["id"]).get("tables") or []:
+            qualified = str(table.get("qualified_name") or "")
+            measured = profiles.get(qualified) or {}
+            spans = tuple(
+                {
+                    "table": table.get("description") or qualified,
+                    "column": column.get("meaning") or column.get("name"),
+                    "covers": covers,
+                }
+                for column in table.get("columns") or []
+                if (covers := (measured.get(column.get("name")) or {}).get("covers"))
+            )
+            if spans:
+                index[qualified.lower()] = spans
+    return index
+
+
 def named_columns() -> list[dict]:
     """Every `named_values` declaration across the catalog."""
     declared: list[dict] = []
@@ -98,5 +126,7 @@ def _with_profile(table: dict, profiles: dict) -> dict:
             if facts.get(listed):
                 shown.pop("examples", None)
                 shown[listed] = facts[listed]
+        if facts.get("covers"):
+            shown["covers"] = facts["covers"]
         columns.append(shown)
     return {**table, "columns": columns}

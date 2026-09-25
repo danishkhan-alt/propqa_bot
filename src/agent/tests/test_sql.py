@@ -16,7 +16,7 @@ from agent.graphs.chat import build_chat_graph
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage, json_ready
-from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
+from agent.sql.guard import SqlRejected, applied_conditions, prepare_select, tables_in_domains
 from agent.sql.listings import listing_ids_from
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY, run_sql_lookup
 from agent.sql.trace import trace_sql_attempt
@@ -146,6 +146,38 @@ def test_an_empty_result_is_retried_once():
     assert draft.errors[1] == "The query returned no rows."
     assert update["sql_result"]["status"] == "rows"
     assert len(runner.calls) == 2
+
+
+def test_applied_conditions_lists_every_filter_but_not_joins_or_presence_checks():
+    sql = (
+        "WITH rents AS (SELECT area_name_en, avg(annual_amount) AS rent FROM chatbot_ai.rent_contracts "
+        "WHERE contract_start_date >= CURRENT_DATE - INTERVAL '2 years' AND annual_amount > 0 "
+        "AND area_name_en IS NOT NULL GROUP BY 1 HAVING count(*) >= 20) "
+        "SELECT r.area_name_en FROM rents r JOIN chatbot_ai.real_estate_transactions t "
+        "ON t.area_name_en = r.area_name_en WHERE t.area_name_en = r.area_name_en"
+    )
+
+    assert applied_conditions(sql) == [
+        "contract_start_date >= CURRENT_DATE - INTERVAL '2 YEARS'",
+        "annual_amount > 0",
+        "COUNT(*) >= 20",
+    ]
+    assert applied_conditions("not sql at all (") == []
+
+
+def test_an_empty_lookup_carries_its_filters_and_the_data_span():
+    draft = _Draft(
+        "SELECT avg(annual_amount) AS rent FROM chatbot_ai.rent_contracts "
+        "WHERE contract_start_date >= CURRENT_DATE - INTERVAL '2 years'"
+    )
+    runner = _Rows([SqlPage(columns=[], rows=[], truncated=False, duration_ms=1)])
+    update = run_sql_lookup(_state(), draft, runner, row_cap=100)
+
+    result = update["sql_result"]
+    assert result["status"] == "empty"
+    assert result["filters"] == ["contract_start_date >= CURRENT_DATE - INTERVAL '2 YEARS'"]
+    spans = {span["column"]: span["covers"] for span in result["coverage"]}
+    assert any("start" in column.lower() for column in spans), spans
 
 
 def test_a_warehouse_failure_does_not_invent_a_number():

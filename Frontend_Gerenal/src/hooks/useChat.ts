@@ -160,6 +160,13 @@ function waitForAuth(timeoutMs = 3000): Promise<void> {
   });
 }
 
+/** The profile of the chat a message is sent in, never another chat's. */
+function profileFor(sessionId: string) {
+  const store = useSessionProfileStore.getState();
+  store.activate(sessionId || null);
+  return useSessionProfileStore.getState().profile;
+}
+
 /** Build the React message list from backend turn records. Dedupes consecutive identical pairs. */
 function buildMessagesFromTurns(turns: {
   turn_id: string;
@@ -281,6 +288,10 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [sessionId, setSessionId] = useState<string>(() => getStoredSessionId());
+  // Each chat keeps its own buyer profile; a new chat starts without one.
+  useEffect(() => {
+    useSessionProfileStore.getState().activate(sessionId || null);
+  }, [sessionId]);
   const [guestBanner, setGuestBanner] = useState<BannerTrigger | null>(null);
   const [searchCount, setSearchCount] = useState(0);
 
@@ -1011,7 +1022,7 @@ export function useChat() {
           userId,
           accessToken,
           buyerPreferences: buyerPrefs,
-          sessionProfile: useSessionProfileStore.getState().profile,
+          sessionProfile: profileFor(sessionId),
           focusedPropertyIds: focusedIds,
           signal: abort.signal,
           onFrame: handleFrame,

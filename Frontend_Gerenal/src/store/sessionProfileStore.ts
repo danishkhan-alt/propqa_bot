@@ -21,18 +21,43 @@ const LABELS: Record<string, string> = {
   off_plan: "Open to off-plan",
 };
 
+// Chats whose profile is kept; the oldest is dropped beyond this.
+const MAX_KEPT_SESSIONS = 50;
+
 interface SessionProfileState {
+  /** The chat the profile below belongs to. */
+  sessionId: string | null;
   profile: SessionProfile;
+  bySession: Record<string, SessionProfile>;
+  /** Switch to a chat's own profile. A new chat starts empty. */
+  activate: (sessionId: string | null) => void;
   merge: (patch: Record<string, unknown>) => void;
   clear: () => void;
 }
 
-type PersistedProfile = Pick<SessionProfileState, "profile">;
+type PersistedProfile = Pick<SessionProfileState, "sessionId" | "profile" | "bySession">;
+
+function keep(bySession: Record<string, SessionProfile>, sessionId: string | null, profile: SessionProfile) {
+  if (!sessionId) return bySession;
+  const { [sessionId]: _previous, ...rest } = bySession;
+  const next = Object.keys(profile).length ? { ...rest, [sessionId]: profile } : rest;
+  const ids = Object.keys(next);
+  for (const id of ids.slice(0, Math.max(0, ids.length - MAX_KEPT_SESSIONS))) delete next[id];
+  return next;
+}
 
 export const useSessionProfileStore = create<SessionProfileState>()(
   persist<SessionProfileState, [], [], PersistedProfile>(
     (set) => ({
+      sessionId: null,
       profile: {},
+      bySession: {},
+      activate: (sessionId) =>
+        set((state) =>
+          state.sessionId === sessionId
+            ? state
+            : { sessionId, profile: (sessionId && state.bySession[sessionId]) || {} },
+        ),
       merge: (patch) =>
         set((state) => {
           const next: SessionProfile = { ...state.profile };
@@ -43,20 +68,17 @@ export const useSessionProfileStore = create<SessionProfileState>()(
               (next as Record<string, unknown>)[key] = value;
             }
           }
-          return { profile: next };
+          return { profile: next, bySession: keep(state.bySession, state.sessionId, next) };
         }),
-      clear: () => set({ profile: {} }),
+      clear: () => set((state) => ({ profile: {}, bySession: keep(state.bySession, state.sessionId, {}) })),
     }),
     {
       name: "propqa:session-profile",
-      version: 1,
-      partialize: (state) => ({ profile: state.profile }),
-      // v0 stored the live/invest answer as `purpose`.
-      migrate: (persisted) => {
-        const stored = ((persisted ?? {}) as { profile?: SessionProfile & { purpose?: string } }).profile ?? {};
-        const { purpose, ...rest } = stored;
-        return { profile: purpose ? { ...rest, goal: purpose } : rest };
-      },
+      version: 2,
+      partialize: (state) => ({ sessionId: state.sessionId, profile: state.profile, bySession: state.bySession }),
+      // v0 and v1 kept one profile for every chat, so it leaked into new ones. It is not
+      // known which chat it came from, so it is dropped rather than guessed.
+      migrate: () => ({ sessionId: null, profile: {}, bySession: {} }),
     },
   ),
 );

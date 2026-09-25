@@ -304,6 +304,8 @@ def _answer_from_lookup(
     columns = [] if listing_ids else list(result.get("columns") or [])
     note = _data_note(result.get("domain_ids") or [])
     search_notes = [str(item) for item in (result.get("notes") or [])]
+    filters = [str(item) for item in (result.get("filters") or [])]
+    coverage = list(result.get("coverage") or [])
     listing_count = int(result.get("total") or len(listing_ids))
     question = None
     structured = None
@@ -325,6 +327,8 @@ def _answer_from_lookup(
             lookup_status=status,
             data_note=note,
             search_notes=search_notes,
+            filters=filters,
+            coverage=coverage,
             session_profile=state.get("session_profile") or {},
             question=question,
             config=config,
@@ -347,6 +351,8 @@ def _answer_from_lookup(
             listing_ids=listing_ids or None,
             data_note=note,
             search_notes=search_notes,
+            filters=filters,
+            coverage=coverage,
             config=config,
         )
     elif status == "empty":

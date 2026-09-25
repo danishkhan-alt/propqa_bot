@@ -823,6 +823,7 @@ public.dld_community_avg_sale_price:
     - Industrial / Commercial
   date_updated:
     filled: 1.0
+    covers: 2026-01-15 to 2026-01-15
 public.mv_community_dld_market_metrics:
   community_name:
     filled: 1.0
@@ -858,6 +859,7 @@ public.mv_community_dld_market_metrics:
     filled: 1.0
   metrics_as_of_date:
     filled: 1.0
+    covers: 2026-09-23 to 2026-09-23
 public.mv_community_landing_page_stats:
   community_name:
     filled: 1.0
@@ -923,20 +925,23 @@ public.mv_community_landing_page_stats:
     filled: 1.0
   metrics_as_of_date:
     filled: 1.0
+    covers: 2026-09-23 to 2026-09-23
 public.price_trend_buy_fact:
   instance_date:
     filled: 1.0
+    covers: 2002-10-28 to 2026-04-29
   month:
     filled: 1.0
+    covers: 1999-09-01 to 2026-05-01
   building_name_en:
-    filled: 0.718
+    filled: 0.715
   project_name_en:
-    filled: 0.724
+    filled: 0.732
   master_project_en:
-    filled: 0.832
+    filled: 0.83
     common_values:
-    - Jumeirah Village Circle
     - Business Bay
+    - Jumeirah Village Circle
     - Dubai Marina
     - Jumeirah Lakes Towers
     - Burj Khalifa
@@ -947,9 +952,9 @@ public.price_trend_buy_fact:
     - Al Furjan
     - Arjan
     - TOWN SQUARE
-    - International Media Production Zone
+    - The Greens
     - DAMAC HILLS 2
-    - Motor City
+    - International Media Production Zone
   rooms_en:
     filled: 0.788
     values:
@@ -959,15 +964,15 @@ public.price_trend_buy_fact:
     - 3 B/R
     - Office
     - 4 B/R
-    - Shop
     - 5 B/R
+    - Shop
     - PENTHOUSE
+    - 6 B/R
     - Single Room
     - Store
-    - 6 B/R
     - 7 B/R
     - GYM
-    - 9 B/R
+    - 10 B/R
   sale_price:
     filled: 1.0
   area_sqft:
@@ -977,28 +982,30 @@ public.price_trend_buy_fact:
 public.price_trend_rent_fact:
   contract_start_date:
     filled: 1.0
+    covers: 2011-08-15 to 2026-01-29
   month:
     filled: 1.0
+    covers: 2011-10-01 to 2026-01-01
   project_name_en:
-    filled: 0.171
+    filled: 0.166
   master_project_en:
-    filled: 0.388
+    filled: 0.377
     common_values:
     - International City Phase 1
     - Silicon Oasis
     - Business Bay
     - Discovery Gardens
-    - Jumeirah Village Circle
     - Dubai Marina
+    - Jumeirah Village Circle
+    - Dubai Investment Park Second
     - Dubai Investment Park First
     - Jumeirah Lakes Towers
-    - Dubai Investment Park Second
     - Barsha Heights
-    - Burj Khalifa
     - Dubai Sports City
-    - The Gardens
-    - Dubai Land Residence Complex
+    - Burj Khalifa
     - International City Phase 3
+    - Dubai Land Residence Complex
+    - International Media Production Zone
   property_sub_type_en:
     filled: 0.991
     common_values:
@@ -1007,16 +1014,16 @@ public.price_trend_rent_fact:
     - Studio
     - Office
     - Shop
-    - Room in labor Camp
     - 3 bed rooms+hall
+    - Room in labor Camp
     - 4 bed rooms+hall
     - Warehouse
     - 5 bed rooms+hall
     - Hotel
     - Shop with a mezzanine
     - Showroom
-    - 6 bed rooms+hall
     - Restaurant
+    - 6 bed rooms+hall
   area_sqft:
     filled: 1.0
   annual_rent:

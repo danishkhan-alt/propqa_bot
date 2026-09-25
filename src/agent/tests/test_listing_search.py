@@ -286,3 +286,16 @@ def test_a_failed_retry_keeps_the_answer_it_was_retrying():
     update = run_sql_lookup(_sales_state(), models, lambda sql: page)
     assert update["sql_result"]["status"] == "rows"
     assert update["sql_rows"] == [{"n": 0}]
+
+
+def test_the_reply_is_told_only_the_filters_the_user_gave():
+    from agent.schemas.grounding import GroundedPlace
+    from agent.sql.lookup import _listing_conditions
+
+    search = ListingSearch(
+        filters=ListingFilters(purpose="sale", price_max=2_000_000),
+        places=[GroundedPlace(title="Dubai Marina")],
+    )
+
+    assert _listing_conditions(search) == ["purpose: sale", "price_max: 2000000.0", "place: Dubai Marina"]
+    assert _listing_conditions(ListingSearch(filters=ListingFilters())) == []

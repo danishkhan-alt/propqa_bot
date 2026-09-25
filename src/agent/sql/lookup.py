@@ -13,12 +13,13 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import Intent
+from catalog import date_coverage
 from agent.schemas.grounding import Grounding, as_grounding
 from agent.schemas.listing import ListingFilters, MentionKind
 from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
 from agent.schemas.sql import SqlDraft
 from agent.sql.execute import SqlFailed, SqlPage
-from agent.sql.guard import SqlRejected, prepare_select, tables_in_domains
+from agent.sql.guard import SqlRejected, applied_conditions, prepare_select, referenced_tables, tables_in_domains
 from agent.sql.listing_rules import LISTINGS_TABLE
 from agent.sql.listing_search import ListingSearch, search_listings
 from agent.sql.listings import is_listing_list, listing_ids_from
@@ -96,6 +97,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
         params=found.query.params,
         total=found.total,
         notes=[*grounding.notes(), *found.notes],
+        filters=_listing_conditions(search),
     )
     trace_sql_attempt(last, client)
     return {"sql_result": last, "sql_rows": rows, "listing_ids": found.ids}
@@ -201,6 +203,8 @@ def run_sql_lookup(
             duration_ms=page.duration_ms,
             error=None if page.rows else NO_ROWS,
         )
+        last["filters"] = applied_conditions(guarded)
+        last["coverage"] = date_coverage(referenced_tables(guarded))
         if grounding is not None:
             last["notes"] = grounding.notes()
         trace_sql_attempt(last, client)
@@ -230,6 +234,16 @@ def _listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSe
         developers=grounding.stored_in(LISTINGS_TABLE, "developer"),
         unmatched_places=[name.text for name in places if name.place is None],
     )
+
+
+def _listing_conditions(search: ListingSearch) -> list[str]:
+    """The user's own listing filters, as `field: value`, for the reply to name."""
+    stated = search.filters.model_dump(mode="json", exclude_defaults=True)
+    conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
+    conditions.extend(f"place: {place.title}" for place in search.places)
+    conditions.extend(f"place text: {text}" for text in search.unmatched_places)
+    conditions.extend(f"developer: {name}" for name in search.developers)
+    return conditions
 
 
 def _only_zero_values(rows: list[dict]) -> bool:

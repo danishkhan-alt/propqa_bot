@@ -120,6 +120,7 @@ chatbot_ai.khda_school_search:
     filled: 0.975
   establishedon:
     filled: 0.941
+    covers: 1972-09-16 to 2024-11-15
   overallperformanceen:
     filled: 1.0
     values:
@@ -407,6 +408,7 @@ chatbot_ai.khda_hep_search:
     filled: 1.0
   establishedon:
     filled: 0.814
+    covers: 1991-01-31 to 2025-04-04
   areaen:
     filled: 0.837
     values:
@@ -1622,6 +1624,7 @@ chatbot_ai.schools:
     - Weak
   established_on:
     filled: 0.941
+    covers: 1972-09-16 to 2024-11-15
   longitude:
     filled: 1.0
   latitude:

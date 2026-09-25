@@ -200,8 +200,8 @@ chatbot_ai.property_map_requests:
     - Lease to Own Release
     - Heirs Ownership
     - Ownership Transfer
-    - Ownership Change
     - Sell Development
+    - Ownership Change
     - Development Registration
     - Bestowal
     - Lease Finance Registration
@@ -271,5 +271,6 @@ chatbot_ai.property_map_requests:
     filled: 1.0
   request_date:
     filled: 1.0
+    covers: 2006-04-22 to 2026-06-19
   request_id:
     filled: 1.0

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import yaml
 
-from catalog import domain_prompt, list_domains, load_domain, named_columns
+from catalog import date_coverage, domain_prompt, list_domains, load_domain, named_columns
 
 
 def _columns(prompt: str, table: str) -> dict[str, dict]:
@@ -40,3 +40,17 @@ def test_a_loaded_domain_is_a_copy_the_caller_may_change():
     first = load_domain("listings")
     first["tables"].clear()
     assert load_domain("listings")["tables"]
+
+
+def test_the_sql_model_sees_how_far_a_date_column_reaches():
+    prompt = domain_prompt(load_domain("transactions"))
+    columns = _columns(prompt, "chatbot_ai.rent_contracts")
+    first, _, last = columns["contract_start_date"]["covers"].partition(" to ")
+    assert first < last
+
+
+def test_date_coverage_names_the_data_not_the_table():
+    spans = date_coverage({"CHATBOT_AI.rent_contracts"})
+    assert spans
+    assert all("rent_contracts" not in span["table"] for span in spans)
+    assert date_coverage({"no.such_table"}) == []

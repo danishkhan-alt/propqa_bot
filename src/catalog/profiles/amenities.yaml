@@ -207,6 +207,7 @@ chatbot_ai.sheryan_health_facilities:
     filled: 0.0
   expiry_date:
     filled: 0.186
+    covers: 1990-01-01 to 2020-08-12
   status:
     filled: 1.0
     values:
@@ -329,6 +330,7 @@ chatbot_ai.sheryan_facility_detail:
     filled: 0.0
   expiry_date:
     filled: 0.189
+    covers: 1990-01-01 to 2020-08-12
   status:
     filled: 1.0
     values:

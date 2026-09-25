@@ -1,4 +1,5 @@
 from catalog.registry import (
+    date_coverage,
     domain_prompt,
     list_domains,
     load_domain,
@@ -9,6 +10,7 @@ from catalog.registry import (
 )
 
 __all__ = [
+    "date_coverage",
     "domain_prompt",
     "list_domains",
     "load_domain",

@@ -62,6 +62,48 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     return capped.sql(dialect="postgres")
 
 
+def applied_conditions(sql: str) -> list[str]:
+    """Every WHERE and HAVING condition in a statement, one per AND term, in order.
+
+    These are what narrowed the rows, so the reply can name them instead of guessing.
+    Join equalities between two columns and IS NOT NULL checks are left out.
+    """
+    try:
+        statement = sqlglot.parse_one(sql or "", read="postgres")
+    except sqlglot.errors.ParseError:
+        return []
+    if statement is None:
+        return []
+    conditions: list[str] = []
+    for clause in [*statement.find_all(exp.Where), *statement.find_all(exp.Having)]:
+        for term in clause.this.flatten() if isinstance(clause.this, exp.And) else [clause.this]:
+            if _is_join_or_presence(term):
+                continue
+            text = term.sql(dialect="postgres")
+            if text not in conditions:
+                conditions.append(text)
+    return conditions
+
+
+def referenced_tables(sql: str) -> set[str]:
+    try:
+        statement = sqlglot.parse_one(sql or "", read="postgres")
+    except sqlglot.errors.ParseError:
+        return set()
+    return _referenced_tables(statement) if statement is not None else set()
+
+
+def _is_join_or_presence(term: exp.Expression) -> bool:
+    if isinstance(term, exp.EQ) and isinstance(term.this, exp.Column) and isinstance(term.expression, exp.Column):
+        return True
+    # `a IS NOT NULL` parses as a negated Is; `NOT a IS NULL` as Not wrapping one.
+    negated = isinstance(term, exp.Not)
+    check = term.this if negated else term
+    if not isinstance(check, exp.Is) or not isinstance(check.expression, exp.Null):
+        return False
+    return negated != bool(check.args.get("negate"))
+
+
 def _referenced_tables(statement: exp.Expression) -> set[str]:
     cte_names = {cte.alias.lower() for cte in statement.find_all(exp.CTE) if cte.alias}
     referenced: set[str] = set()

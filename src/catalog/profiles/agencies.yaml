@@ -74,8 +74,10 @@ chatbot_ai.real_estate_offices:
     filled: 0.997
   license_issue_date:
     filled: 0.995
+    covers: 1976-12-30 to 2022-06-24
   license_expiry_date:
     filled: 0.997
+    covers: 2009-06-28 to 2027-12-14
   is_branch:
     filled: 0.7
   main_office_id:
@@ -131,8 +133,10 @@ chatbot_ai.real_estate_brokers:
     filled: 1.0
   license_start_date:
     filled: 1.0
+    covers: 2007-05-11 to 2025-09-24
   license_end_date:
     filled: 1.0
+    covers: 2025-10-03 to 2028-04-02
   webpage:
     filled: 0.631
   phone:
@@ -292,10 +296,13 @@ chatbot_ai.real_estate_licenses:
     filled: 0.874
   cancel_date:
     filled: 0.044
+    covers: 2010-05-31 to 2026-05-05
   expiry_date:
     filled: 0.999
+    covers: 2002-07-13 to 2028-06-24
   issue_date:
     filled: 0.997
+    covers: 1972-07-04 to 2017-04-10
   trade_name_english:
     filled: 1.0
   trade_name_arabic:
@@ -443,8 +450,10 @@ chatbot_ai.real_estate_permits:
     filled: 0.012
   end_date:
     filled: 1.0
+    covers: 2016-12-03 to 2027-06-10
   start_date:
     filled: 1.0
+    covers: 2016-10-26 to 2026-06-30
   permit_number:
     filled: 1.0
 chatbot_ai.licensed_real_estate_valuators:

@@ -4,7 +4,8 @@
     python -m catalog.profiler listings     # one domain
 
 For each column: the share of rows that are filled; for a text column with few distinct
-values, all of them; and for a categorical column with more, the most common ones.
+values, all of them; for a categorical column with more, the most common ones; and for a
+date column, the span that holds almost all of its rows.
 Large tables are sampled. Read-only. The output is one YAML file per domain under
 catalog/profiles/, which `domain_prompt` merges into the schema context.
 """
@@ -32,6 +33,9 @@ MAX_VALUE_LENGTH = 80
 SAMPLE_TARGET_ROWS = 200_000
 PROFILE_TIMEOUT_MS = 120_000
 _TEXT_TYPES = ("char", "text")
+_DATE_TYPES = ("date", "timestamp")
+# A date span drops this share of rows at each end, so a stray 1900 or 2109 does not stretch it.
+COVERAGE_TAIL = 0.005
 
 
 def profile_domain(domain_id: str, runner) -> dict:
@@ -78,6 +82,8 @@ def _profile_table(qualified: str, columns: list[dict], runner) -> dict:
         facts: dict = {"filled": round(filled, 3)}
         if filled and _is_text(column):
             facts.update(_value_facts(column["name"], source, runner))
+        elif filled and _is_date(column):
+            facts.update(_date_facts(column["name"], source, runner))
         profile[column["name"]] = facts
     return profile
 
@@ -109,6 +115,30 @@ def _value_facts(column: str, source: sql.Composable, runner) -> dict:
     if len(values) <= MAX_LISTED_VALUES:
         return {"values": values}
     return {"common_values": values[:COMMON_VALUES_SHOWN]}
+
+
+def _date_facts(column: str, source: sql.Composable, runner) -> dict:
+    """`covers`: the first and last date once the outlying rows at each end are dropped."""
+    row = runner(
+        sql.SQL(
+            "SELECT percentile_disc({low}) WITHIN GROUP (ORDER BY {col})::date AS first, "
+            "percentile_disc({high}) WITHIN GROUP (ORDER BY {col})::date AS last "
+            "FROM {source} WHERE {col} IS NOT NULL"
+        ).format(
+            col=sql.Identifier(column),
+            source=source,
+            low=sql.Literal(COVERAGE_TAIL),
+            high=sql.Literal(1 - COVERAGE_TAIL),
+        )
+    )[0]
+    if not row["first"] or not row["last"]:
+        return {}
+    return {"covers": f"{row['first'].isoformat()} to {row['last'].isoformat()}"}
+
+
+def _is_date(column: dict) -> bool:
+    kind = str(column.get("type") or "").lower()
+    return kind.startswith(_DATE_TYPES)
 
 
 def _is_text(column: dict) -> bool:

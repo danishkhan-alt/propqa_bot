@@ -2,10 +2,14 @@ id: market
 name: Price indices and construction statistics
 schema: chatbot_ai
 description: Official DSC price indices, rent indices, construction-cost series, building-stock aggregates,
-  and community average sale and rent prices. Use for market movement, not individual deals.
+  community average sale and rent prices, and community rental yields. Use for market movement and yield
+  or ROI by area, not individual deals.
 synonyms:
 - price index
 - rent index
+- rental yield
+- rental return
+- ROI
 - construction cost
 - market trend
 - inflation
@@ -18,6 +22,8 @@ pitfalls:
 - avg_price_type is sale or rent. Filter it before comparing communities.
 - price_trend_buy_fact and price_trend_rent_fact are deal-level facts for trends. Aggregate them; do not list every row.
 - Ignore leftover column_* fields; they are extract artifacts.
+- For rental yield or ROI by community, use the yield columns of mv_community_dld_market_metrics or
+  mv_community_landing_page_stats. They match rent and price on the same basis; do not divide one average by another.
 - Qualify public tables as public.<table>.
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16

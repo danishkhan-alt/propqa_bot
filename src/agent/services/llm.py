@@ -336,6 +336,8 @@ class AnthropicRouterModels:
         listing_ids: list[str] | None = None,
         data_note: str = "",
         search_notes: list[str] | None = None,
+        filters: list[str] | None = None,
+        coverage: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ):
         payload = {
@@ -351,6 +353,8 @@ class AnthropicRouterModels:
             "listing_ids": listing_ids,
             "data_note": data_note,
             "search_notes": search_notes or [],
+            "filters": filters or [],
+            "coverage": coverage or [],
         }
         yield from _llm_deltas(
             self._sql_answer,
@@ -376,6 +380,8 @@ class AnthropicRouterModels:
         listing_ids: list[str] | None = None,
         data_note: str = "",
         search_notes: list[str] | None = None,
+        filters: list[str] | None = None,
+        coverage: list[dict] | None = None,
         config: RunnableConfig | None = None,
     ) -> str:
         return "".join(
@@ -392,6 +398,8 @@ class AnthropicRouterModels:
                 listing_ids=listing_ids,
                 data_note=data_note,
                 search_notes=search_notes,
+                filters=filters,
+                coverage=coverage,
                 config=config,
             )
         ).strip()
@@ -413,6 +421,8 @@ class AnthropicRouterModels:
         lookup_status: str | None = None,
         data_note: str = "",
         search_notes: list[str] | None = None,
+        filters: list[str] | None = None,
+        coverage: list[dict] | None = None,
         session_profile: dict | None = None,
         follow_up_question: str | None = None,
         on_text: Callable[[str], None] | None = None,
@@ -434,6 +444,8 @@ class AnthropicRouterModels:
             "truncated": truncated,
             "data_note": data_note,
             "search_notes": search_notes or [],
+            "filters": filters or [],
+            "coverage": coverage or [],
             "follow_up_question": follow_up_question,
         }
         messages = [
