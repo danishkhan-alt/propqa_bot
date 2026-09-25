@@ -41,22 +41,34 @@ class FigureColumn(BaseModel):
     unit: FigureUnit = "number"
 
 
+class FigureSeries(BaseModel):
+    """One value of series_column, shown as its own column or line."""
+
+    value: str
+    label: str
+
+
 class FigureSpec(BaseModel):
     """Which rows and columns to lay out. The model picks them; code copies the values.
 
     stats: one row, its figures as tiles. table: a few rows side by side.
     bar: one figure compared across rows, each row named by label_column.
     line: one to three figures over periods, each row a period named by label_column.
+
+    Rows with two dimensions (one per year and bedroom count) name the second one in
+    series_column; code turns the first figure into one column or line per series value.
     """
 
     layout: Literal["none", "stats", "table", "bar", "line"] = "none"
     label_column: str = ""
     label_title: str = ""
     columns: list[FigureColumn] = Field(default_factory=list)
+    series_column: str = ""
+    series: list[FigureSeries] = Field(default_factory=list)
 
-    @field_validator("columns")
+    @field_validator("columns", "series")
     @classmethod
-    def cap_columns(cls, value: list[FigureColumn]) -> list[FigureColumn]:
+    def cap_columns(cls, value: list) -> list:
         return value[:MAX_FIGURE_COLUMNS]
 
 

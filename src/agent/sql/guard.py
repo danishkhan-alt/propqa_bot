@@ -184,8 +184,26 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     unknown = sorted(name for name in referenced if name not in allowed_tables)
     if unknown:
         raise SqlRejected("Query uses tables outside the loaded catalog")
+    if _unbracketed_or(statement):
+        raise SqlRejected(
+            "A WHERE mixes AND and OR without parentheses. AND binds first, so the other conditions "
+            "do not apply to every OR branch. Put the OR alternatives in parentheses."
+        )
     capped = _cap_rows(statement, row_cap)
     return capped.sql(dialect="postgres")
+
+
+def _unbracketed_or(statement: exp.Expression) -> bool:
+    """An OR with an unparenthesized AND beneath it: `a AND b OR c` reads as `(a AND b) OR c`.
+
+    Written that way it is nearly always a slip that drops a filter from one branch. sqlglot
+    keeps explicit parentheses as Paren nodes, so a bracketed grouping is not flagged.
+    """
+    for clause in [*statement.find_all(exp.Where), *statement.find_all(exp.Having)]:
+        for node in clause.find_all(exp.Or):
+            if isinstance(node.this, exp.And) or isinstance(node.expression, exp.And):
+                return True
+    return False
 
 
 def applied_conditions(sql: str) -> list[str]:

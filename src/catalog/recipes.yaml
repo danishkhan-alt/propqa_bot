@@ -46,7 +46,7 @@ recipes:
       ORDER BY type, year DESC, quarter_number DESC
     ), overview AS (
       SELECT 1 AS position, 'Apartment prices' AS market, y.value AS yearly_change_pct,
-        q.value AS latest_change_pct, 'Q' || y.period || ' ' || y.year AS as_of
+        q.value AS change_last_quarter_or_month_pct, 'Q' || y.period || ' ' || y.year AS as_of
       FROM price_y y LEFT JOIN price_q q ON q.type = y.type AND q.year = y.year AND q.period = y.period
       WHERE y.type = 'Flats'
       UNION ALL
@@ -66,7 +66,7 @@ recipes:
       FROM commercial_y y LEFT JOIN commercial_q q ON q.type = y.type AND q.year = y.year AND q.period = y.period
       WHERE y.type = 'General Index'
     )
-    SELECT market, yearly_change_pct, latest_change_pct, as_of
+    SELECT market, yearly_change_pct, change_last_quarter_or_month_pct, as_of
     FROM overview
     ORDER BY position
 

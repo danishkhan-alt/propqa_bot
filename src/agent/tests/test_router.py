@@ -12,6 +12,7 @@ from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.catalog import catalog_load, finalize
 from agent.graphs.chat import build_chat_graph
+from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
     DomainRoute,
     QueryRoute,
@@ -434,3 +435,16 @@ def test_a_chosen_recipe_loads_its_own_pack_and_an_unknown_one_is_dropped():
 )
 def test_only_reasoning_models_are_sent_an_effort(model, reasons):
     assert openai_model_reasons(model) is reasons
+
+
+def test_the_city_itself_is_never_a_place_to_filter_on():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        names=[NameMention(text="Dubai"), NameMention(text=" dubai  UAE"), NameMention(text="Dubai Marina")],
+        confidence=0.9,
+        rationale="Trend.",
+    )
+    updated, notes = apply_query_policy(route, None)
+    assert [name.text for name in updated.names] == ["Dubai Marina"]
+    assert "dropped_region_name" in notes

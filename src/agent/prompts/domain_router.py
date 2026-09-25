@@ -15,7 +15,8 @@ Rules:
 
 Confusions:
 - What exists (units, plots, buildings, freehold) -> listings. Sold prices, volumes, registered rents -> transactions.
-- City-wide "is the market up" or a price index -> market. A community average price -> transactions, not market.
+- City-wide "is the market up" or a price index -> market. A community average sale price -> transactions, not market.
+- Rents in a community, or how rents moved over time -> market. Its rent facts run to this year; the rent contracts in transactions end in 2021.
 - Rental yield, rental return, or ROI by area -> market, which holds community yields. Not transactions.
 - Schools, KHDA, fees, nurseries -> schools. Metro, parking, Salik, commute -> rta. Parks, beaches, hospitals -> amenities.
 - Handover, off-plan, who is building -> developers. Brokers and owners associations -> agencies. Service charges -> regulations.

@@ -7,10 +7,11 @@ from the rows here, so a figure on screen always matches the data.
 from __future__ import annotations
 
 import re
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
-from agent.schemas.reply import Explainer, FigureColumn, FigureSpec, StructuredReply
+from agent.schemas.reply import Explainer, FigureColumn, FigureSeries, FigureSpec, StructuredReply
 
 MAX_FIGURE_ROWS = 8
 MAX_LINE_POINTS = 36
@@ -28,12 +29,18 @@ def build_figures(
     if spec is None or spec.layout == "none" or not rows:
         return None
     known = set(columns) or set(rows[0])
-    figures = [
+    figures = _unique(
         _as_change(item) for item in spec.columns if item.column in known and item.column != spec.label_column
-    ]
+    )
     if not figures:
         return None
     label_column = spec.label_column if spec.label_column in known else ""
+    if spec.series_column:
+        if spec.series_column not in known or not label_column or not spec.series:
+            return None
+        rows, figures = _pivot(rows, label_column, spec.series_column, figures[0], spec.series)
+        if not rows:
+            return None
     if spec.layout == "stats":
         return _stats(figures, rows)
     if spec.layout == "table":
@@ -43,6 +50,45 @@ def build_figures(
     if spec.layout == "line":
         return _line(figures, label_column, rows)
     return None
+
+
+def _unique(items) -> list[FigureColumn]:
+    """Each data column once. Two headers over the same values would show one figure as two."""
+    seen: set[str] = set()
+    kept: list[FigureColumn] = []
+    for item in items:
+        if item.column not in seen:
+            seen.add(item.column)
+            kept.append(item)
+    return kept
+
+
+def _pivot(
+    rows: list[dict[str, Any]],
+    label_column: str,
+    series_column: str,
+    figure: FigureColumn,
+    series: list[FigureSeries],
+) -> tuple[list[dict[str, Any]], list[FigureColumn]]:
+    """Rows of (label, series value, figure) as one row per label with a column per series value.
+
+    Labels keep the order the rows gave them. The first row for a label and value wins.
+    """
+    wanted = {_text(item.value): f"series_{index}" for index, item in enumerate(series)}
+    pivoted: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        label = _text(row.get(label_column))
+        key = wanted.get(_text(row.get(series_column)))
+        if not label or key is None:
+            continue
+        target = pivoted.setdefault(label, {label_column: row.get(label_column)})
+        target.setdefault(key, row.get(figure.column))
+    figures = [
+        FigureColumn(column=f"series_{index}", label=item.label, unit=figure.unit)
+        for index, item in enumerate(series)
+        if any(f"series_{index}" in row for row in pivoted.values())
+    ]
+    return list(pivoted.values()), figures
 
 
 def _as_change(item: FigureColumn) -> FigureColumn:
@@ -94,7 +140,9 @@ def _table(
 ) -> dict[str, Any] | None:
     if len(rows) < 2:
         return None
-    shown = rows[:MAX_FIGURE_ROWS]
+    ordered = _oldest_first(rows, label_column) if label_column else rows
+    # A run of periods keeps its latest ones; other rows keep the order the lookup gave them.
+    shown = ordered[-MAX_FIGURE_ROWS:] if ordered is not rows else rows[:MAX_FIGURE_ROWS]
     figures, caption = _lift_repeated(figures, shown)
     if not figures:
         return None
@@ -113,7 +161,7 @@ def _table(
         "headers": headers,
         "rows": body,
         "caption": caption,
-        "hidden_rows": len(rows) - len(shown),
+        "hidden_rows": len(ordered) - len(shown),
     }
 
 
@@ -188,16 +236,21 @@ def _line(figures: list[FigureColumn], label_column: str, rows: list[dict[str, A
         "title": series[0]["name"] if len(series) == 1 else "",
         "labels": labels,
         "series": series,
-        "hidden_rows": len(rows) - len(shown),
+        "hidden_rows": len(ordered) - len(shown),
     }
 
 
 def _oldest_first(rows: list[dict[str, Any]], label_column: str) -> list[dict[str, Any]]:
-    """Rows in time order. Periods written as ISO dates or years sort as text; others keep their order."""
+    """Rows in time order when every label is a period written as an ISO date or a year.
+
+    Those sort correctly as text. Any other rows come back as the same list, unchanged.
+    """
     labels = [_text(row.get(label_column)) for row in rows]
-    if len(labels) > 1 and all(_PERIOD.match(label) for label in labels) and labels[0] > labels[-1]:
-        return list(reversed(rows))
-    return list(rows)
+    if len(labels) > 1 and all(_PERIOD.match(label) for label in labels):
+        # Records dated after today (a contract keyed in as 2028) are entry errors, not a period.
+        today = date.today().isoformat()
+        return [row for label, row in sorted(zip(labels, rows), key=lambda pair: pair[0]) if label[:10] <= today]
+    return rows
 
 
 _PERIOD = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?( Q[1-4])?$")

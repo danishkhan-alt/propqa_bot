@@ -547,3 +547,21 @@ def test_a_recipe_that_finds_nothing_falls_back_to_a_draft():
     assert draft.calls == 1
     assert "recipe" not in update["sql_result"]
     assert update["sql_result"]["status"] == "rows"
+
+
+def test_an_or_that_escapes_the_other_filters_is_sent_back():
+    allowed = tables_in_domains(["market"])
+    with pytest.raises(SqlRejected, match="parentheses"):
+        prepare_select(
+            "SELECT annual_rent FROM public.price_trend_rent_fact WHERE master_project_en = 'Dubai Marina' "
+            "AND property_sub_type_en ILIKE '%bed%' OR property_sub_type_en = 'Studio'",
+            allowed,
+            100,
+        )
+    kept = prepare_select(
+        "SELECT annual_rent FROM public.price_trend_rent_fact WHERE master_project_en = 'Dubai Marina' "
+        "AND (property_sub_type_en ILIKE '%bed%' OR property_sub_type_en = 'Studio')",
+        allowed,
+        100,
+    )
+    assert "OR" in kept

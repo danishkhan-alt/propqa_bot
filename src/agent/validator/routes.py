@@ -22,7 +22,22 @@ def apply_query_policy(
     if updated.confidence < 0.7:
         notes.append("low_confidence")
 
+    # The whole city is the scope of every lookup, not a place to filter on. Kept as a name,
+    # it matches dozens of stored values ("Dubai Marina", "Dubai Hills") and narrows wrongly.
+    region = _region_names()
+    kept = [name for name in updated.names if " ".join(name.text.casefold().split()) not in region]
+    if len(kept) != len(updated.names):
+        updated = updated.model_copy(update={"names": kept})
+        notes.append("dropped_region_name")
+
     return updated, notes
+
+
+def _region_names() -> set[str]:
+    from config import ActiveConfig
+
+    region = ActiveConfig.GROUNDING_REGION.casefold().strip()
+    return {region, f"{region} city", f"{region}, uae", f"{region} uae", f"all of {region}", f"all {region}"}
 
 
 def sanitize_domain_route(route: DomainRoute) -> tuple[DomainRoute, list[str]]:
