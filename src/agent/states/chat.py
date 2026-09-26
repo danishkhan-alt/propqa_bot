@@ -38,6 +38,8 @@ class ChatState(TypedDict, total=False):
     listing_cards: list
     profile_asked: list
     session_profile: dict
+    focused_property_ids: list[int]
+    focused_listings: list
 
 
 class ChatInput(TypedDict, total=False):
@@ -45,3 +47,4 @@ class ChatInput(TypedDict, total=False):
 
     messages: Annotated[list, add_messages]
     session_profile: dict
+    focused_property_ids: list[int]

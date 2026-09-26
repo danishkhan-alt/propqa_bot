@@ -13,6 +13,7 @@ from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext, RouterModels
 from agent.graphs.answer import answer
 from agent.graphs.catalog import catalog_load, finalize
+from agent.graphs.focus import listing_focus, route_after_load
 from agent.graphs.memory import (
     apply_defaults,
     confirm_forget,
@@ -44,9 +45,13 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
 
     Memory runs around that path: load working state, recall long-term items, refine the
     query frame, then queue extraction after the answer.
+
+    A turn about listings the user picked on screen skips routing and lookup: it loads
+    those listings' adverts and answers from them.
     """
     builder = StateGraph(ChatState, context_schema=AgentContext, input_schema=ChatInput)
     builder.add_node("load_context", timed("load_context", load_context))
+    builder.add_node("listing_focus", timed("listing_focus", listing_focus))
     builder.add_node("recall_memory", timed("recall_memory", recall_memory))
     builder.add_node("refine_or_new", timed("refine_or_new", refine_or_new))
     builder.add_node("confirm_forget", timed("confirm_forget", confirm_forget))
@@ -61,7 +66,8 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     builder.add_node("finalize", timed("finalize", finalize))
 
     builder.add_edge(START, "load_context")
-    builder.add_edge("load_context", "recall_memory")
+    builder.add_conditional_edges("load_context", route_after_load, ["listing_focus", "recall_memory"])
+    builder.add_edge("listing_focus", "answer")
     builder.add_edge("recall_memory", "refine_or_new")
     builder.add_conditional_edges("refine_or_new", route_after_refine, ["confirm_forget", "query_router"])
     builder.add_edge("confirm_forget", END)
@@ -117,6 +123,7 @@ def run_turn(
     thread_id: str,
     user_id: str,
     models: RouterModels | None = None,
+    focused_property_ids: list[int] | None = None,
 ) -> dict:
     """Run one user turn. `thread_id` reloads and updates that chat."""
     client = langfuse_client()
@@ -124,7 +131,7 @@ def run_turn(
 
     def invoke() -> dict:
         result = get_chat_graph().invoke(
-            {"messages": [HumanMessage(content=message)]},
+            _turn_input(message, focused_property_ids=focused_property_ids),
             config={
                 "configurable": {"thread_id": thread_id, "user_id": user_id},
                 "callbacks": callbacks,
@@ -154,8 +161,10 @@ async def stream_turn(
     models: RouterModels | None = None,
     sql_runner=None,
     listing_loader=None,
+    listing_detail_loader=None,
     graph: CompiledStateGraph | None = None,
     session_profile: dict | None = None,
+    focused_property_ids: list[int] | None = None,
 ) -> AsyncIterator[dict]:
     """Yield listing cards and text deltas as the turn runs, then a done event."""
     compiled = graph or get_chat_graph()
@@ -166,7 +175,11 @@ async def stream_turn(
         "metadata": {"user_id": user_id, "session_id": thread_id},
     }
     context = AgentContext(
-        user_id=user_id, models=models, sql_runner=sql_runner, listing_loader=listing_loader
+        user_id=user_id,
+        models=models,
+        sql_runner=sql_runner,
+        listing_loader=listing_loader,
+        listing_detail_loader=listing_detail_loader,
     )
 
     async def events() -> AsyncIterator[dict]:
@@ -174,10 +187,10 @@ async def stream_turn(
         graph_input = (
             Command(resume=message)
             if paused_at_start
-            else {"messages": [HumanMessage(content=message)]}
+            else _turn_input(
+                message, session_profile=session_profile, focused_property_ids=focused_property_ids
+            )
         )
-        if session_profile is not None and not paused_at_start:
-            graph_input["session_profile"] = session_profile
         async for item in compiled.astream(
             graph_input,
             config=config,
@@ -213,6 +226,22 @@ async def stream_turn(
         async for event in events():
             yield event
     client.flush()
+
+
+def _turn_input(
+    message: str,
+    *,
+    session_profile: dict | None = None,
+    focused_property_ids: list[int] | None = None,
+) -> dict:
+    """A new turn. The picked listings are always set, so a turn without them leaves listing mode."""
+    graph_input: dict = {
+        "messages": [HumanMessage(content=message)],
+        "focused_property_ids": list(focused_property_ids or []),
+    }
+    if session_profile is not None:
+        graph_input["session_profile"] = session_profile
+    return graph_input
 
 
 async def _is_paused(graph: CompiledStateGraph, config: dict) -> bool:

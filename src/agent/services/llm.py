@@ -12,7 +12,7 @@ from agent.memory.session.follow_up import FrameClass
 from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
-from agent.prompts.reply import STRUCTURED_REPLY_SYSTEM
+from agent.prompts.reply import LISTING_FOCUS_SYSTEM, STRUCTURED_REPLY_SYSTEM
 from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
@@ -575,6 +575,33 @@ class RouterModels:
         }
         messages = [
             cached_system(STRUCTURED_REPLY_SYSTEM),
+            HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
+        ]
+        return stream_structured_reply(self._reply, messages, config, on_text)
+
+    def draft_listing_reply(
+        self,
+        *,
+        message: str,
+        history: str,
+        listings: list[dict],
+        memory_block: str = "",
+        data_note: str = "",
+        session_profile: dict | None = None,
+        on_text: Callable[[str], None] | None = None,
+        config: RunnableConfig | None = None,
+    ) -> StructuredReply:
+        """Answer about listings the user picked on screen, from their full advert details."""
+        payload = {
+            "message": message,
+            "history": history,
+            "session_profile": session_profile or {},
+            "memory_block": memory_block,
+            "listings": listings,
+            "data_note": data_note,
+        }
+        messages = [
+            cached_system(LISTING_FOCUS_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
         ]
         return stream_structured_reply(self._reply, messages, config, on_text)

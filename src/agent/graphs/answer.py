@@ -28,6 +28,13 @@ from common.logger import get_logger
 
 logger = get_logger("agent.router")
 
+FOCUS_DATA_NOTE = "the listing's advert and nearby places"
+MISSING_LISTINGS_REPLY = (
+    "I couldn't find the listings you selected. They may have been taken off the market. "
+    "Remove them from the chat and pick another listing to ask about."
+)
+FAILED_FOCUS_REPLY = "I couldn't put the details of those listings together just now. Could you ask me again?"
+
 
 def answer(
     state: ChatState,
@@ -37,6 +44,8 @@ def answer(
     query = as_query_route(state.get("query_route"))
     messages = state.get("messages") or []
     message = latest_user_text(messages)
+    if state.get("focused_property_ids"):
+        return _answer_about_listings(state, runtime, message, messages, config)
     if query is None:
         return _unavailable(state, runtime, message, messages, config)
 
@@ -171,6 +180,47 @@ def _answer_from_lookup(
     return _reply_update(state, text, question if structured is not None else None)
 
 
+def _answer_about_listings(
+    state: ChatState,
+    runtime: Runtime[AgentContext],
+    message: str,
+    messages: list,
+    config: RunnableConfig,
+) -> dict:
+    """Answer from the full advert of each listing the user picked. Photo cards are already on screen."""
+    listings = list(state.get("focused_listings") or [])
+    structured = None
+    if listings:
+        structured = _draft_structured(
+            models_for(runtime),
+            method="draft_listing_reply",
+            message=message,
+            messages=messages,
+            listings=listings,
+            memory_block=state.get("memory_block") or "",
+            data_note=FOCUS_DATA_NOTE,
+            session_profile=state.get("session_profile") or {},
+            question=None,
+            config=config,
+        )
+    if structured is not None:
+        text = structured
+    else:
+        text = FAILED_FOCUS_REPLY if listings else MISSING_LISTINGS_REPLY
+        publish("text", delta=text)
+    logger.info(
+        "answer.focus",
+        extra={
+            "extra_data": {
+                "listings": len(listings),
+                "structured": structured is not None,
+                "user_id": runtime.context.user_id,
+            }
+        },
+    )
+    return _reply_update(state, text, None)
+
+
 def _unavailable(
     state: ChatState,
     runtime: Runtime[AgentContext],
@@ -259,6 +309,7 @@ def _reply_update(state: ChatState, text: str, question: Question | None) -> dic
 def _draft_structured(
     models: RouterModels,
     *,
+    method: str = "draft_reply",
     message: str,
     messages: list,
     session_profile: dict,
@@ -267,15 +318,16 @@ def _draft_structured(
     **fields,
 ) -> str | None:
     """Stream a structured reply when the model supports it. Otherwise the caller streams prose."""
-    draft = getattr(models, "draft_reply", None)
+    draft = getattr(models, method, None)
     if not callable(draft):
         return None
+    if question is not None:
+        fields["follow_up_question"] = question.prompt
     try:
         parsed = draft(
             message=message,
             history=history_summary(messages, limit=ANSWER_HISTORY),
             session_profile=session_profile,
-            follow_up_question=question.prompt if question is not None else None,
             on_text=lambda delta: publish("text", delta=delta),
             config=config,
             **fields,

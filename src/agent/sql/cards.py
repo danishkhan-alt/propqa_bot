@@ -161,10 +161,10 @@ def listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "type": card.get("type"),
             "bedrooms": card.get("rooms"),
             "bathrooms": card.get("baths"),
-            "size_sqft": _number(card.get("area")),
+            "size_sqft": plain_number(card.get("area")),
             "purpose": card.get("purpose"),
-            "asking_price_aed": _number(card.get("price_min")),
-            "asking_price_max_aed": _number(card.get("price_max")),
+            "asking_price_aed": plain_number(card.get("price_min")),
+            "asking_price_max_aed": plain_number(card.get("price_max")),
             "rent_aed": _rent(card),
             "completion": card.get("completion_status"),
             "furnished": card.get("furnished"),
@@ -218,13 +218,14 @@ def _rent(card: dict[str, Any]) -> dict[str, Any] | None:
     if "rent" not in str(card.get("purpose") or ""):
         return None
     period = str(card.get("rental_period") or "yearly")
-    amount = _number(card.get(f"{period}_price"))
+    amount = plain_number(card.get(f"{period}_price"))
     if amount is None:
         return None
     return {"amount": amount, "period": period}
 
 
-def _number(value: Any) -> int | float | None:
+def plain_number(value: Any) -> int | float | None:
+    """A stored amount as a JSON number: whole values as int, the rest as float."""
     if value is None or isinstance(value, bool):
         return None
     try:

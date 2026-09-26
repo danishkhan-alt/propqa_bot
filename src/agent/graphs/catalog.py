@@ -48,6 +48,7 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
         "grounding": None,
         "listing_ids": [],
         "listing_cards": [],
+        "focused_listings": [],
     }
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))

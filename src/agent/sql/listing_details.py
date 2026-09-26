@@ -1,0 +1,199 @@
+"""What an advert says beyond its card: description, features, amenities, views, and surroundings.
+
+Read when the user picks listings in the UI and asks about them. One fixed statement, so the
+turn needs no SQL model. Distances come from PostGIS, measured from the listing's pin.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+from agent.sql.cards import ListingLoader, listing_cards, listing_facts, plain_number
+from common.logger import get_logger
+
+logger = get_logger("agent.sql")
+
+# Matches the frontend's attach limit. Each listing adds its description to the prompt.
+MAX_FOCUSED_LISTINGS = 8
+DESCRIPTION_CHARS = 1500
+NEARBY_PER_KIND = 3
+
+_COORDINATE = r"^\s*-?[0-9]+(\.[0-9]+)?\s*$"
+
+LISTING_DETAILS_SQL = f"""
+WITH wanted AS (
+    SELECT id, ord FROM unnest(%(ids)s::bigint[]) WITH ORDINALITY AS w(id, ord)
+)
+SELECT
+    p.id,
+    NULLIF(TRIM(REPLACE(LEFT(p.detail_en, %(description_chars)s), E'\\r', '')), '') AS description,
+    p.is_free_hold,
+    p.ownership,
+    p.is_parking_available,
+    p.no_of_parkings,
+    p.floors,
+    p.layout_type,
+    p.is_corner,
+    p.property_age,
+    p.plot_area,
+    p.rent_availability,
+    p.no_of_cheques,
+    p.permit_number,
+    p.is_verified,
+    amenity.names AS amenities,
+    outlook.names AS views,
+    nearby.places AS nearby_places,
+    metro.name AS metro_station,
+    metro.line AS metro_line,
+    metro.km AS metro_km
+FROM wanted w
+JOIN public.properties p ON p.id = w.id AND p.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT ST_SetSRID(ST_MakePoint(p.lng::float8, p.lat::float8), 4326) AS pin
+    WHERE p.lat ~ '{_COORDINATE}' AND p.lng ~ '{_COORDINATE}'
+      AND p.lat::float8 <> 0 AND p.lng::float8 <> 0
+) here ON true
+LEFT JOIN LATERAL (
+    SELECT array_agg(DISTINCT a.title_en) AS names
+    FROM public.amenity_property ap
+    JOIN public.amenities a ON a.id = ap.amenity_id
+    WHERE ap.property_id = p.id AND NULLIF(TRIM(a.title_en), '') IS NOT NULL
+) amenity ON true
+LEFT JOIN LATERAL (
+    SELECT array_agg(DISTINCT v.title_en) AS names
+    FROM public.property_view pv
+    JOIN public.views v ON v.id = pv.view_id
+    WHERE pv.property_id = p.id AND NULLIF(TRIM(v.title_en), '') IS NOT NULL
+) outlook ON true
+LEFT JOIN LATERAL (
+    SELECT jsonb_object_agg(kind, places) AS places
+    FROM (
+        SELECT kind.key AS kind, jsonb_agg(jsonb_build_object('name', near.name, 'km', near.km) ORDER BY near.km) AS places
+        FROM jsonb_each(
+            CASE WHEN json_typeof(p.near_by_locations) = 'object' THEN p.near_by_locations::jsonb END
+        ) kind
+        CROSS JOIN LATERAL (
+            SELECT
+                place->>'name' AS name,
+                ROUND((ST_DistanceSphere(
+                    here.pin,
+                    ST_SetSRID(ST_MakePoint((place->>'longitude')::float8, (place->>'latitude')::float8), 4326)
+                ) / 1000)::numeric, 1) AS km
+            FROM jsonb_array_elements(CASE WHEN jsonb_typeof(kind.value) = 'array' THEN kind.value END) place
+            WHERE NULLIF(TRIM(place->>'name'), '') IS NOT NULL
+              AND place->>'latitude' ~ '{_COORDINATE}' AND place->>'longitude' ~ '{_COORDINATE}'
+            ORDER BY km NULLS LAST
+            LIMIT %(nearby_per_kind)s
+        ) near
+        GROUP BY kind.key
+    ) grouped
+) nearby ON true
+LEFT JOIN LATERAL (
+    SELECT
+        m.location_name_english AS name,
+        m.line_name AS line,
+        ROUND((ST_DistanceSphere(
+            here.pin,
+            ST_SetSRID(ST_MakePoint(m.station_location_longitude::float8, m.station_location_latitude::float8), 4326)
+        ) / 1000)::numeric, 1) AS km
+    FROM chatbot_ai.metro_stations m
+    WHERE here.pin IS NOT NULL
+      AND m.station_closing_date IS NULL
+      AND m.station_location_latitude IS NOT NULL
+      AND m.station_location_longitude IS NOT NULL
+    ORDER BY km
+    LIMIT 1
+) metro ON true
+ORDER BY w.ord
+"""
+
+
+class ListingDetailLoader(Protocol):
+    """Returns one warehouse row of advert details per listing id it found. Tests pass a fake."""
+
+    def __call__(self, ids: list[int]) -> list[dict[str, Any]]: ...
+
+
+def load_details_from_warehouse(ids: list[int]) -> list[dict[str, Any]]:
+    from agent.sql.execute import run_against_warehouse
+
+    page = run_against_warehouse(
+        LISTING_DETAILS_SQL,
+        {
+            "ids": ids,
+            "description_chars": DESCRIPTION_CHARS,
+            "nearby_per_kind": NEARBY_PER_KIND,
+        },
+    )
+    return page.rows
+
+
+def focused_listing_facts(
+    ids: list[int],
+    card_loader: ListingLoader,
+    detail_loader: ListingDetailLoader,
+) -> list[dict[str, Any]]:
+    """Card facts plus advert details for each listing that still exists, in the order given."""
+    ids = ids[:MAX_FOCUSED_LISTINGS]
+    if not ids:
+        return []
+    try:
+        details = {str(row.get("id")): row for row in detail_loader(ids) or [] if row.get("id") is not None}
+    except Exception:
+        logger.warning("listing.details failed", exc_info=True)
+        details = {}
+    # An id the loader could not fill comes back as an id-only card: that listing is gone.
+    cards = [card for card in listing_cards([str(item) for item in ids], card_loader) if len(card) > 1]
+    facts: list[dict[str, Any]] = []
+    for card, fact in zip(cards, listing_facts(cards)):
+        fact.update(_detail_facts(details.get(card["id"]) or {}))
+        facts.append(fact)
+    return facts
+
+
+def _detail_facts(row: dict[str, Any]) -> dict[str, Any]:
+    fact: dict[str, Any] = {
+        "description": row.get("description"),
+        "freehold": row.get("is_free_hold"),
+        "ownership": row.get("ownership"),
+        "parking_available": row.get("is_parking_available"),
+        "parking_spaces": row.get("no_of_parkings"),
+        "floor": row.get("floors"),
+        "layout": row.get("layout_type"),
+        "corner_unit": row.get("is_corner") or None,
+        "age_years": row.get("property_age"),
+        "plot_size_sqft": plain_number(row.get("plot_area")),
+        "available_from": row.get("rent_availability"),
+        "rent_cheques": row.get("no_of_cheques"),
+        "permit_number": row.get("permit_number"),
+        "verified_listing": row.get("is_verified") or None,
+        "amenities": sorted(row.get("amenities") or []),
+        "views": sorted(row.get("views") or []),
+        "nearby_places": _nearby_places(row.get("nearby_places")),
+        "nearest_metro": _metro(row),
+    }
+    return {key: value for key, value in fact.items() if value not in (None, "", [], {})}
+
+
+def _nearby_places(value: Any) -> dict[str, list[dict[str, Any]]]:
+    """Nearest few places of each kind (schools, parks, ...) with their distance in km."""
+    if not isinstance(value, dict):
+        return {}
+    places: dict[str, list[dict[str, Any]]] = {}
+    for kind, items in value.items():
+        named = [_place(item) for item in items or [] if isinstance(item, dict) and item.get("name")]
+        if named:
+            places[str(kind)] = named
+    return places
+
+
+def _place(item: dict[str, Any]) -> dict[str, Any]:
+    place = {"name": item["name"], "km": plain_number(item.get("km"))}
+    return {key: value for key, value in place.items() if value is not None}
+
+
+def _metro(row: dict[str, Any]) -> dict[str, Any] | None:
+    if not row.get("metro_station"):
+        return None
+    metro = {"station": row["metro_station"], "line": row.get("metro_line"), "km": plain_number(row.get("metro_km"))}
+    return {key: value for key, value in metro.items() if value is not None}

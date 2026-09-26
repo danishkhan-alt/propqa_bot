@@ -148,9 +148,15 @@ def _cards(ids: list[int]) -> list[dict]:
     return [known[item] for item in ids if item in known]
 
 
-def _client(models, runner=None, loader=_cards):
+def _client(models, runner=None, loader=_cards, detail_loader=None):
     graph = build_chat_graph(InMemorySaver())
-    app = create_app(graph=graph, models=models, sql_runner=runner, listing_loader=loader)
+    app = create_app(
+        graph=graph,
+        models=models,
+        sql_runner=runner,
+        listing_loader=loader,
+        listing_detail_loader=detail_loader,
+    )
     return TestClient(app), graph
 
 
@@ -496,3 +502,47 @@ def test_a_follow_up_chip_never_repeats_the_question():
     with client:
         _, _, body = _read(client, "Apartments in Dubai Marina")
     assert _reply(_parse_sse(body))["suggested_followups"] == ["Compare with JVC"]
+
+
+class _ListingQuestion:
+    def __init__(self) -> None:
+        self.listings: list[dict] = []
+
+    def route_query(self, **kwargs) -> QueryRoute:
+        raise AssertionError("a question about picked listings is not routed")
+
+    def draft_listing_reply(self, **kwargs) -> StructuredReply:
+        self.listings = kwargs["listings"]
+        kwargs["on_text"]("It has a shared pool.")
+        return StructuredReply(intro_text="It has a shared pool.", suggested_followups=["How far is the metro"])
+
+
+def _details(ids: list[int]) -> list[dict]:
+    return [{"id": item, "amenities": ["Shared Pool"]} for item in ids]
+
+
+def test_a_question_about_a_picked_listing_answers_from_its_advert():
+    models = _ListingQuestion()
+    client, _ = _client(models, detail_loader=_details)
+    with client:
+        with client.stream(
+            "POST",
+            "/api/chat",
+            json={"message": "What amenities does it have?", "focused_property_ids": [15802, 15802]},
+        ) as response:
+            body = "".join(response.iter_text())
+    events = _parse_sse(body)
+    assert [event for event, _ in events] == ["text", "reply", "done"]
+    assert events[1][1]["reply"]["message_type"] == "factual_answer"
+    assert events[1][1]["reply"]["data_source_note"] == "the listing's advert and nearby places"
+    assert events[2][1]["route"] is None
+    assert [listing["property_id"] for listing in models.listings] == ["15802"]
+    assert models.listings[0]["amenities"] == ["Shared Pool"]
+
+
+@pytest.mark.parametrize("ids", [[0], [-4], list(range(1, 10))])
+def test_invalid_picked_listings_are_rejected(ids):
+    client, _ = _client(_Greeting())
+    with client:
+        response = client.post("/api/chat", json={"message": "Tell me more", "focused_property_ids": ids})
+    assert response.status_code == 422

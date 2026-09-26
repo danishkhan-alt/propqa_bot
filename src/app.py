@@ -25,13 +25,20 @@ UI_ORIGINS = (
 
 
 def create_app(
-    *, graph=None, models=None, sql_runner=None, listing_loader=None, contact_loader=None
+    *,
+    graph=None,
+    models=None,
+    sql_runner=None,
+    listing_loader=None,
+    listing_detail_loader=None,
+    contact_loader=None,
 ) -> FastAPI:
     app = FastAPI(title="Propqa")
     app.state.chat_graph = graph
     app.state.chat_models = models
     app.state.sql_runner = sql_runner
     app.state.listing_loader = listing_loader
+    app.state.listing_detail_loader = listing_detail_loader
     app.state.contact_loader = contact_loader
     register_exception_handlers(app)
     app.include_router(chat_router, prefix="/api")

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent.graphs.chat import stream_turn
+from agent.sql.listing_details import MAX_FOCUSED_LISTINGS
 from common.identity import Caller
 from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
 from common.ratelimit.keys import by_caller
@@ -22,7 +23,10 @@ router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    """The chat UI sends ``session_id`` and ``user_id``. ``thread_id`` stays for callers that already use it."""
+    """The chat UI sends ``session_id`` and ``user_id``. ``thread_id`` stays for callers that already use it.
+
+    ``focused_property_ids`` are the listings the user picked on screen to ask about.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -31,6 +35,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     user_id: str | None = Field(default=None, max_length=80)
     session_profile: dict | None = None
+    focused_property_ids: list[int] = Field(default_factory=list, max_length=MAX_FOCUSED_LISTINGS)
 
     @field_validator("message")
     @classmethod
@@ -55,6 +60,13 @@ class ChatRequest(BaseModel):
     def user_id_is_safe(cls, value: str | None) -> str | None:
         return safe_user_id(value)
 
+    @field_validator("focused_property_ids")
+    @classmethod
+    def focused_ids_are_listings(cls, value: list[int]) -> list[int]:
+        if any(item <= 0 for item in value):
+            raise ValueError("Listing ids must be positive.")
+        return list(dict.fromkeys(value))
+
 
 def chat_rule(caller: Caller | None) -> RateLimit:
     if isinstance(caller, Caller) and caller.is_registered:
@@ -77,6 +89,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
     models = getattr(request.app.state, "chat_models", None)
     sql_runner = getattr(request.app.state, "sql_runner", None)
     listing_loader = getattr(request.app.state, "listing_loader", None)
+    listing_detail_loader = getattr(request.app.state, "listing_detail_loader", None)
 
     async def events() -> AsyncIterator[str]:
         yield ": ok\n\n"
@@ -88,8 +101,10 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
                 models=models,
                 sql_runner=sql_runner,
                 listing_loader=listing_loader,
+                listing_detail_loader=listing_detail_loader,
                 graph=graph,
                 session_profile=body.session_profile,
+                focused_property_ids=body.focused_property_ids,
             ):
                 yield _sse(event)
         except Exception:
