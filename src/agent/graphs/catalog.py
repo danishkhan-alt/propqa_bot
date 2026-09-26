@@ -68,14 +68,18 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
         if sql_result:
             meta["row_count"] = sql_result.get("row_count", meta.get("row_count"))
             meta["truncated"] = bool(sql_result.get("truncated"))
-        listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
+        listing_ids = [
+            str(item) for item in (state.get("listing_ids") or []) if str(item).strip()
+        ]
         if listing_ids:
             meta["ids"] = listing_ids
         # A refine starts from these, so "cheaper" keeps the place and the filters.
         if query.names:
             meta["names"] = [name.model_dump(mode="json") for name in query.names]
         if query.listing_filters is not None:
-            meta["listing_filters"] = query.listing_filters.model_dump(mode="json", exclude_defaults=True)
+            meta["listing_filters"] = query.listing_filters.model_dump(
+                mode="json", exclude_defaults=True
+            )
         update["last_need_db"] = LastNeedDb(
             domain_ids=list(domain.domain_ids),
             join_ids=list(domain.join_ids),

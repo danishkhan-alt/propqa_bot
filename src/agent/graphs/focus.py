@@ -28,7 +28,13 @@ def listing_focus(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
     )
     logger.info(
         "listing.focus",
-        extra={"extra_data": {"ids": ids, "found": len(listings), "user_id": runtime.context.user_id}},
+        extra={
+            "extra_data": {
+                "ids": ids,
+                "found": len(listings),
+                "user_id": runtime.context.user_id,
+            }
+        },
     )
     # No lookup runs this turn. Clearing the route keeps finalize from recording the
     # previous search again, so a later "cheaper" still refines that search.

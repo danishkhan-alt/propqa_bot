@@ -92,10 +92,14 @@ def _answer_from_lookup(
     status = result.get("status")
     query = as_query_route(state.get("query_route"))
     assumptions = as_assumptions(state.get("assumptions"))
-    listing_ids = [str(item) for item in (state.get("listing_ids") or []) if str(item).strip()]
+    listing_ids = [
+        str(item) for item in (state.get("listing_ids") or []) if str(item).strip()
+    ]
     # A listing turn answers from the filled cards. Rows stay only for columns the cards
     # lack, such as a permit number, and only for the listings the model reads.
-    listings = listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
+    listings = (
+        listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
+    )
     rows = list(result.get("rows") or [])
     columns = list(result.get("columns") or [])
     if listing_ids:
@@ -172,7 +176,9 @@ def _answer_from_lookup(
                 "truncated": result.get("truncated"),
                 "columns": result.get("columns"),
                 "listing_facts": len(listings),
-                "question": question.id if question and structured is not None else None,
+                "question": (
+                    question.id if question and structured is not None else None
+                ),
                 "user_id": runtime.context.user_id,
             }
         },
@@ -258,8 +264,10 @@ def _speak(models: RouterModels, name: str, **kwargs) -> str:
 
 
 def _with_memory_notes(text: str, state: ChatState) -> str:
-    noted = append_memory_notes(text, state.get("disclosure") or "", state.get("memory_question") or "")
-    extra = noted[len(text):] if noted.startswith(text) else ""
+    noted = append_memory_notes(
+        text, state.get("disclosure") or "", state.get("memory_question") or ""
+    )
+    extra = noted[len(text) :] if noted.startswith(text) else ""
     if extra.strip():
         publish("text", delta=extra)
     return noted
@@ -288,7 +296,9 @@ def _data_note(domain_ids: list) -> str:
     return "; ".join(phrases)
 
 
-def _question(state: ChatState, query: QueryRoute | None, *, has_listings: bool) -> Question | None:
+def _question(
+    state: ChatState, query: QueryRoute | None, *, has_listings: bool
+) -> Question | None:
     return next_question(
         query,
         state.get("session_profile") or {},
@@ -335,7 +345,11 @@ def _draft_structured(
     except Exception:
         logger.warning("answer.structured failed", exc_info=True)
         return None
-    reply = parsed if isinstance(parsed, StructuredReply) else StructuredReply.model_validate(parsed)
+    reply = (
+        parsed
+        if isinstance(parsed, StructuredReply)
+        else StructuredReply.model_validate(parsed)
+    )
     payload = reply.model_dump()
     # Listings have their own photo cards, so their rows are never laid out as figures.
     figure_rows = [] if fields.get("listings") else list(fields.get("rows") or [])

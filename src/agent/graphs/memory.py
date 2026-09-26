@@ -17,7 +17,13 @@ from agent.memory.read.prompt_text import disclosure_line
 from agent.memory.maintenance.privacy import forget_memory
 from agent.memory.read.recall import recall_for_user
 from agent.memory.session.follow_up import update_search_from_message
-from agent.memory.session.bootstrap import get_hot, get_repository, load_profile, load_working, save_working
+from agent.memory.session.bootstrap import (
+    get_hot,
+    get_repository,
+    load_profile,
+    load_working,
+    save_working,
+)
 from agent.services.events import publish
 from agent.memory.models.types import clone_frame
 from agent.schemas.routes import as_query_route
@@ -25,7 +31,9 @@ from agent.services.transcript import latest_user_text
 from agent.states.chat import ChatState
 
 
-def read_context(runtime: Runtime[AgentContext] | None, config: RunnableConfig | None) -> dict:
+def read_context(
+    runtime: Runtime[AgentContext] | None, config: RunnableConfig | None
+) -> dict:
     user_id = _user_id({}, runtime, config)
     working = load_working(_thread_id(config))
     update: dict[str, Any] = {}
@@ -56,7 +64,9 @@ def recall_memory(
     return recalled
 
 
-def refine_or_new(state: ChatState, runtime: Runtime[AgentContext], config: RunnableConfig) -> dict:
+def refine_or_new(
+    state: ChatState, runtime: Runtime[AgentContext], config: RunnableConfig
+) -> dict:
     del config
     message = latest_user_text(state.get("messages") or [])
     update = update_search_from_message(
@@ -130,7 +140,11 @@ def enqueue_extraction(
         return {}
     user_id = _user_id(state, runtime, config)
     repository = _repository(runtime)
-    if repository is not None and user_id and not repository.get_settings(user_id).memory_enabled:
+    if (
+        repository is not None
+        and user_id
+        and not repository.get_settings(user_id).memory_enabled
+    ):
         return {}
     frame = clone_frame(state.get("query_frame"))
     frame.pop("sql", None)
@@ -138,7 +152,14 @@ def enqueue_extraction(
     meta.pop("sql", None)
     frame["result_meta"] = meta
     messages = state.get("messages") or []
-    human = next((message for message in reversed(messages) if getattr(message, "type", None) == "human"), None)
+    human = next(
+        (
+            message
+            for message in reversed(messages)
+            if getattr(message, "type", None) == "human"
+        ),
+        None,
+    )
     hot.push(
         {
             "user_id": user_id,
@@ -207,7 +228,11 @@ def _repository(runtime: Runtime[AgentContext] | None):
     return get_repository()
 
 
-def _user_id(state: ChatState, runtime: Runtime[AgentContext] | None, config: RunnableConfig | None) -> str:
+def _user_id(
+    state: ChatState,
+    runtime: Runtime[AgentContext] | None,
+    config: RunnableConfig | None,
+) -> str:
     if runtime is not None and runtime.context is not None and runtime.context.user_id:
         return runtime.context.user_id
     configurable = (config or {}).get("configurable") or {}

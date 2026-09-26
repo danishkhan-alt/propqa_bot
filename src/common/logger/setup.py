@@ -5,7 +5,6 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from common.logger.app_logger import JsonFormatter
-from common.logger.category_filter import CategoryFilter
 
 
 def configure_logging(
@@ -16,7 +15,10 @@ def configure_logging(
     max_bytes: int = 100 * 1024 * 1024,
     backup_count: int = 10,
 ) -> None:
-    """JSON logs to stderr, and optionally rotating files per category."""
+    """JSON logs to stderr, and optionally one rotating file.
+
+    Each line carries a `category` field, so filter on that instead of splitting files.
+    """
 
     root = logging.getLogger()
     root.handlers.clear()
@@ -31,20 +33,10 @@ def configure_logging(
 
     Path(logs_dir).mkdir(parents=True, exist_ok=True)
 
-    combined = RotatingFileHandler(
-        Path(logs_dir) / "combined.log",
+    file_handler = RotatingFileHandler(
+        Path(logs_dir) / "app.log",
         maxBytes=max_bytes,
         backupCount=backup_count,
     )
-    combined.setFormatter(JsonFormatter())
-    root.addHandler(combined)
-
-    for category in ("app", "agent", "chat", "sessions", "auth", "common"):
-        handler = RotatingFileHandler(
-            Path(logs_dir) / f"{category}.log",
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-        )
-        handler.setFormatter(JsonFormatter())
-        handler.addFilter(CategoryFilter([category]))
-        root.addHandler(handler)
+    file_handler.setFormatter(JsonFormatter())
+    root.addHandler(file_handler)

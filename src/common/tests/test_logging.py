@@ -5,8 +5,7 @@ import logging
 
 from common.context import request_id_var, subject_id_var, user_kind_var
 from common.enums.user_kind import UserKind
-from common.logger.app_logger import JsonFormatter, get_logger
-from common.logger.category_filter import CategoryFilter
+from common.logger.app_logger import JsonFormatter
 from common.logger.redact import redact_headers, redact_token
 from common.middleware.request_id import request_id_var as middleware_var
 
@@ -38,16 +37,6 @@ def test_unserialisable_extras_do_not_break_logging():
     record = logging.LogRecord("app", logging.INFO, __file__, 1, "hi", None, None)
     record.extra_data = {"when": object()}
     assert "extra_data" in json.loads(JsonFormatter().format(record))
-
-
-def test_category_filter_routes_by_prefix():
-    filter_ = CategoryFilter(["agent"])
-    matching = logging.LogRecord("agent.router", logging.INFO, __file__, 1, "", None, None)
-    other = logging.LogRecord("chat.turn", logging.INFO, __file__, 1, "", None, None)
-
-    assert filter_.filter(matching)
-    assert not filter_.filter(other)
-    assert get_logger("agent.router").name == "agent.router"
 
 
 def test_a_token_never_appears_whole():
