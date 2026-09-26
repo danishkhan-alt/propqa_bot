@@ -28,7 +28,7 @@ from common.logger import get_logger
 logger = get_logger("agent.grounding")
 
 
-def ground_message_names(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
+def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
     """Match each name the router found to places and stored values in the loaded tables."""
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
@@ -70,7 +70,7 @@ def ground_message_names(state: ChatState, runtime: Runtime[AgentContext]) -> di
     return {"grounding": grounding}
 
 
-def sql_lookup(
+def run_warehouse_lookup(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,

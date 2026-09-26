@@ -25,11 +25,11 @@ def run_turn(
 ) -> dict:
     """Run one user turn. `thread_id` reloads and updates that chat."""
     client = langfuse_client()
-    callbacks = _tracing_callbacks(client)
+    callbacks = _langfuse_callbacks(client)
 
     def invoke() -> dict:
         result = get_chat_graph().invoke(
-            _turn_input(message, focused_property_ids=focused_property_ids),
+            _build_turn_input(message, focused_property_ids=focused_property_ids),
             config={
                 "configurable": {"thread_id": thread_id, "user_id": user_id},
                 "callbacks": callbacks,
@@ -69,7 +69,7 @@ async def stream_turn(
     client = langfuse_client()
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id},
-        "callbacks": _tracing_callbacks(client),
+        "callbacks": _langfuse_callbacks(client),
         "metadata": {"user_id": user_id, "session_id": thread_id},
     }
     context = AgentContext(
@@ -81,11 +81,11 @@ async def stream_turn(
     )
 
     async def events() -> AsyncIterator[dict]:
-        paused_at_start = await _is_paused(compiled, config)
+        paused_at_start = await _is_waiting_for_user_reply(compiled, config)
         graph_input = (
             Command(resume=message)
             if paused_at_start
-            else _turn_input(
+            else _build_turn_input(
                 message, session_profile=session_profile, focused_property_ids=focused_property_ids
             )
         )
@@ -96,12 +96,12 @@ async def stream_turn(
             stream_mode=["custom", "updates"],
             version="v2",
         ):
-            mode, chunk = _stream_item(item)
+            mode, chunk = _unpack_stream_item(item)
             if mode == "custom" and isinstance(chunk, dict) and chunk.get("event"):
                 yield chunk
                 continue
             if mode == "updates" and isinstance(chunk, dict) and "__interrupt__" in chunk:
-                prompt = _interrupt_text(chunk["__interrupt__"])
+                prompt = _interrupt_prompt_text(chunk["__interrupt__"])
                 if prompt:
                     yield {"event": "text", "delta": prompt}
         final = await compiled.aget_state(config)
@@ -126,7 +126,7 @@ async def stream_turn(
     client.flush()
 
 
-def _turn_input(
+def _build_turn_input(
     message: str,
     *,
     session_profile: dict | None = None,
@@ -142,7 +142,7 @@ def _turn_input(
     return graph_input
 
 
-async def _is_paused(graph: CompiledStateGraph, config: dict) -> bool:
+async def _is_waiting_for_user_reply(graph: CompiledStateGraph, config: dict) -> bool:
     try:
         snapshot = await graph.aget_state(config)
     except Exception:
@@ -150,7 +150,7 @@ async def _is_paused(graph: CompiledStateGraph, config: dict) -> bool:
     return bool(getattr(snapshot, "interrupts", None))
 
 
-def _stream_item(item) -> tuple:
+def _unpack_stream_item(item) -> tuple:
     """LangGraph v2 yields `{type, data}`. Older runs yield `(mode, data)`."""
     if isinstance(item, dict) and "type" in item and "data" in item:
         return item["type"], item["data"]
@@ -161,7 +161,7 @@ def _stream_item(item) -> tuple:
     return None, None
 
 
-def _interrupt_text(raw) -> str:
+def _interrupt_prompt_text(raw) -> str:
     items = raw if isinstance(raw, (list, tuple)) else [raw]
     for item in items:
         value = getattr(item, "value", item)
@@ -174,7 +174,7 @@ def _interrupt_text(raw) -> str:
     return ""
 
 
-def _tracing_callbacks(client) -> list:
+def _langfuse_callbacks(client) -> list:
     if client is None:
         return []
     try:

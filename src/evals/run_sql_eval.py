@@ -133,19 +133,19 @@ def _record(update: dict, outcome: TurnOutcome) -> None:
     for node, value in update.items():
         if not isinstance(value, dict):
             continue
-        if node == "query_router" and value.get("query_route") is not None:
+        if node == "choose_query_route" and value.get("query_route") is not None:
             query = value["query_route"]
             outcome.route = query.model_dump(
                 mode="json", include={"intent", "purpose", "limit", "names", "listing_filters"}
             )
-        if node == "domain_router" and value.get("domain_route") is not None:
+        if node == "choose_data_domains" and value.get("domain_route") is not None:
             outcome.route["domains"] = [*value["domain_route"].domain_ids, *value["domain_route"].join_ids]
-        if node == "ground_names" and value.get("grounding") is not None:
+        if node == "resolve_mentioned_names" and value.get("grounding") is not None:
             outcome.names = [
                 {"text": name.text, "place": name.place.title if name.place else None, "stored": len(name.stored)}
                 for name in value["grounding"].names
             ]
-        if node == "sql_lookup":
+        if node == "run_warehouse_lookup":
             result = value.get("sql_result") or {}
             outcome.sql = str(result.get("sql") or "")
             outcome.status = str(result.get("status") or "")
@@ -153,7 +153,7 @@ def _record(update: dict, outcome: TurnOutcome) -> None:
             outcome.total = result.get("total")
             outcome.notes = list(result.get("notes") or [])
             outcome.listing_ids = [str(item) for item in value.get("listing_ids") or []]
-        if node == "answer" and value.get("messages"):
+        if node == "write_reply" and value.get("messages"):
             outcome.reply = str(value["messages"][-1].content)
 
 

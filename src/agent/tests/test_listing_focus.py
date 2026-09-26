@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.answer import MISSING_LISTINGS_REPLY
-from agent.graphs.chat import _turn_input
+from agent.graphs.chat import _build_turn_input
 from agent.graphs.workflow import build_chat_graph
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
@@ -170,11 +170,11 @@ def test_a_question_about_picked_listings_skips_routing_and_reads_the_advert():
             ),
             "domain_route": DomainRoute(domain_ids=["listings"], join_ids=[], confidence=0.9, rationale="Listings."),
         },
-        as_node="finalize",
+        as_node="record_search_and_clear_turn_state",
     )
 
     state = graph.invoke(
-        _turn_input("Tell me about this property", focused_property_ids=[201]),
+        _build_turn_input("Tell me about this property", focused_property_ids=[201]),
         config=config,
         context=context,
     )
@@ -194,8 +194,8 @@ def test_a_turn_without_picked_listings_goes_back_to_routing():
     graph, context = _graph_and_context(models)
     config = {"configurable": {"thread_id": "focus-then-chat", "user_id": "user-1"}}
 
-    graph.invoke(_turn_input("What about parking?", focused_property_ids=[201]), config=config, context=context)
-    state = graph.invoke(_turn_input("Hi again"), config=config, context=context)
+    graph.invoke(_build_turn_input("What about parking?", focused_property_ids=[201]), config=config, context=context)
+    state = graph.invoke(_build_turn_input("Hi again"), config=config, context=context)
 
     assert models.routed == 1
     assert len(models.drafts) == 1

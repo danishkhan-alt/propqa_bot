@@ -8,25 +8,25 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext
-from agent.graphs.answer import answer
-from agent.graphs.catalog import catalog_load, finalize
-from agent.graphs.focus import listing_focus, route_after_load
+from agent.graphs.answer import write_reply
+from agent.graphs.catalog import load_domain_catalog, record_search_and_clear_turn_state
+from agent.graphs.focus import load_focused_listings, next_step_after_session_context
 from agent.graphs.memory import (
-    apply_defaults,
-    confirm_forget,
-    enqueue_extraction,
-    recall_memory,
-    refine_or_new,
-    route_after_refine,
+    personalize_search_frame,
+    ask_before_forgetting_memory,
+    queue_memory_extraction,
+    recall_long_term_memories,
+    update_search_frame,
+    next_step_after_search_frame_update,
 )
 from agent.graphs.router import (
-    domain_router,
-    load_context,
-    query_router,
-    route_after_domain,
-    route_after_query,
+    choose_data_domains,
+    load_session_context,
+    choose_query_route,
+    next_step_after_domain_choice,
+    next_step_after_query_route,
 )
-from agent.graphs.sql import ground_message_names, sql_lookup
+from agent.graphs.sql import resolve_mentioned_names, run_warehouse_lookup
 from agent.states.chat import ChatInput, ChatState
 from common.logger import get_logger
 
@@ -36,49 +36,53 @@ _graph: CompiledStateGraph | None = None
 
 
 def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
-    """Query router, then domain router, catalog load, name grounding, and a read-only SQL lookup.
+    """Choose the query route, then the data domains, load their catalog, resolve the names
+    the message mentions, and run a read-only warehouse lookup.
 
-    Memory runs around that path: load working state, recall long-term items, refine the
-    query frame, then queue extraction after the answer.
+    Memory runs around that path: load the session context, recall long-term memories,
+    update the search frame, then queue memory extraction after the reply.
 
     A turn about listings the user picked on screen skips routing and lookup: it loads
-    those listings' adverts and answers from them.
+    those listings' adverts and replies from them.
     """
     builder = StateGraph(ChatState, context_schema=AgentContext, input_schema=ChatInput)
-    builder.add_node("load_context", timed("load_context", load_context))
-    builder.add_node("listing_focus", timed("listing_focus", listing_focus))
-    builder.add_node("recall_memory", timed("recall_memory", recall_memory))
-    builder.add_node("refine_or_new", timed("refine_or_new", refine_or_new))
-    builder.add_node("confirm_forget", timed("confirm_forget", confirm_forget))
-    builder.add_node("query_router", timed("query_router", query_router))
-    builder.add_node("domain_router", timed("domain_router", domain_router))
-    builder.add_node("apply_defaults", timed("apply_defaults", apply_defaults))
-    builder.add_node("catalog_load", timed("catalog_load", catalog_load))
-    builder.add_node("ground_names", timed("ground_names", ground_message_names))
-    builder.add_node("sql_lookup", timed("sql_lookup", sql_lookup))
-    builder.add_node("answer", timed("answer", answer))
-    builder.add_node("enqueue_extraction", timed("enqueue_extraction", enqueue_extraction))
-    builder.add_node("finalize", timed("finalize", finalize))
+    for node in (
+        load_session_context,
+        load_focused_listings,
+        recall_long_term_memories,
+        update_search_frame,
+        ask_before_forgetting_memory,
+        choose_query_route,
+        choose_data_domains,
+        personalize_search_frame,
+        load_domain_catalog,
+        resolve_mentioned_names,
+        run_warehouse_lookup,
+        write_reply,
+        queue_memory_extraction,
+        record_search_and_clear_turn_state,
+    ):
+        builder.add_node(node.__name__, with_node_timing(node))
 
-    builder.add_edge(START, "load_context")
-    builder.add_conditional_edges("load_context", route_after_load, ["listing_focus", "recall_memory"])
-    builder.add_edge("listing_focus", "answer")
-    builder.add_edge("recall_memory", "refine_or_new")
-    builder.add_conditional_edges("refine_or_new", route_after_refine, ["confirm_forget", "query_router"])
-    builder.add_edge("confirm_forget", END)
-    builder.add_conditional_edges("query_router", route_after_query, ["domain_router", "answer"])
-    builder.add_conditional_edges("domain_router", route_after_domain, ["apply_defaults", "answer"])
-    builder.add_edge("apply_defaults", "catalog_load")
-    builder.add_edge("catalog_load", "ground_names")
-    builder.add_edge("ground_names", "sql_lookup")
-    builder.add_edge("sql_lookup", "answer")
-    builder.add_edge("answer", "enqueue_extraction")
-    builder.add_edge("enqueue_extraction", "finalize")
-    builder.add_edge("finalize", END)
+    builder.add_edge(START, "load_session_context")
+    builder.add_conditional_edges("load_session_context", next_step_after_session_context, ["load_focused_listings", "recall_long_term_memories"])
+    builder.add_edge("load_focused_listings", "write_reply")
+    builder.add_edge("recall_long_term_memories", "update_search_frame")
+    builder.add_conditional_edges("update_search_frame", next_step_after_search_frame_update, ["ask_before_forgetting_memory", "choose_query_route"])
+    builder.add_edge("ask_before_forgetting_memory", END)
+    builder.add_conditional_edges("choose_query_route", next_step_after_query_route, ["choose_data_domains", "write_reply"])
+    builder.add_conditional_edges("choose_data_domains", next_step_after_domain_choice, ["personalize_search_frame", "write_reply"])
+    builder.add_edge("personalize_search_frame", "load_domain_catalog")
+    builder.add_edge("load_domain_catalog", "resolve_mentioned_names")
+    builder.add_edge("resolve_mentioned_names", "run_warehouse_lookup")
+    builder.add_edge("run_warehouse_lookup", "write_reply")
+    builder.add_edge("write_reply", "queue_memory_extraction")
+    builder.add_edge("queue_memory_extraction", "record_search_and_clear_turn_state")
+    builder.add_edge("record_search_and_clear_turn_state", END)
     return builder.compile(checkpointer=checkpointer, store=store)
 
 
-def timed(name: str, node):
+def with_node_timing(node):
     """Log how long a graph node took, so a slow turn shows which step it spent its time in.
 
     functools.wraps keeps the node's signature visible, so LangGraph still injects
@@ -92,7 +96,7 @@ def timed(name: str, node):
             return node(*args, **kwargs)
         finally:
             elapsed_ms = int((time.perf_counter() - started) * 1000)
-            logger.info("node.timing", extra={"extra_data": {"node": name, "ms": elapsed_ms}})
+            logger.info("node.timing", extra={"extra_data": {"node": node.__name__, "ms": elapsed_ms}})
 
     return run
 

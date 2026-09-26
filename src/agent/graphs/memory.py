@@ -31,11 +31,11 @@ from agent.services.transcript import latest_user_text
 from agent.states.chat import ChatState
 
 
-def read_context(
+def load_working_memory_and_profile(
     runtime: Runtime[AgentContext] | None, config: RunnableConfig | None
 ) -> dict:
-    user_id = _user_id({}, runtime, config)
-    working = load_working(_thread_id(config))
+    user_id = _resolve_user_id({}, runtime, config)
+    working = load_working(_thread_id_from_config(config))
     update: dict[str, Any] = {}
     if working:
         update["query_frame"] = working.get("query_frame")
@@ -47,16 +47,16 @@ def read_context(
     return update
 
 
-def recall_memory(
+def recall_long_term_memories(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
 ) -> dict:
-    repository = _repository(runtime)
+    repository = _memory_repository(runtime)
     query = latest_user_text(state.get("messages") or [])
     recalled = recall_for_user(
         repository,
-        _user_id(state, runtime, config),
+        _resolve_user_id(state, runtime, config),
         query,
         store=runtime.store if runtime is not None else None,
         hot=get_hot(),
@@ -64,7 +64,7 @@ def recall_memory(
     return recalled
 
 
-def refine_or_new(
+def update_search_frame(
     state: ChatState, runtime: Runtime[AgentContext], config: RunnableConfig
 ) -> dict:
     del config
@@ -74,14 +74,14 @@ def refine_or_new(
         state.get("query_frame"),
         state.get("goal"),
         ignore_defaults=bool(state.get("ignore_defaults")),
-        classify=_frame_classifier(runtime),
+        classify=_build_frame_classifier(runtime),
     )
     update["disclosure"] = ""
     update["applied_defaults"] = []
     return update
 
 
-def confirm_forget(
+def ask_before_forgetting_memory(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
@@ -89,11 +89,11 @@ def confirm_forget(
     pending = state.get("pending_forget") or {}
     answer = interrupt(pending.get("prompt") or "Forget this memory? yes/no")
     if str(answer).strip().lower() in {"yes", "y"}:
-        repository = _repository(runtime)
+        repository = _memory_repository(runtime)
         if repository is not None:
             forget_memory(
                 repository,
-                _user_id(state, runtime, config),
+                _resolve_user_id(state, runtime, config),
                 cluster=pending.get("cluster"),
                 memory_id=pending.get("memory_id"),
                 all_clusters=bool(pending.get("all")),
@@ -105,7 +105,7 @@ def confirm_forget(
     return {"pending_forget": None, "messages": [AIMessage(content=text)]}
 
 
-def apply_defaults(state: ChatState) -> dict:
+def personalize_search_frame(state: ChatState) -> dict:
     frame = clone_frame(state.get("query_frame"))
     query = as_query_route(state.get("query_route"))
     if query is not None:
@@ -130,7 +130,7 @@ def apply_defaults(state: ChatState) -> dict:
     }
 
 
-def enqueue_extraction(
+def queue_memory_extraction(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
@@ -138,8 +138,8 @@ def enqueue_extraction(
     hot = get_hot()
     if hot is None:
         return {}
-    user_id = _user_id(state, runtime, config)
-    repository = _repository(runtime)
+    user_id = _resolve_user_id(state, runtime, config)
+    repository = _memory_repository(runtime)
     if (
         repository is not None
         and user_id
@@ -163,7 +163,7 @@ def enqueue_extraction(
     hot.push(
         {
             "user_id": user_id,
-            "thread_id": _thread_id(config),
+            "thread_id": _thread_id_from_config(config),
             "turn": frame.get("turn") or 0,
             "message": latest_user_text(messages),
             "message_id": getattr(human, "id", None),
@@ -175,7 +175,7 @@ def enqueue_extraction(
     return {}
 
 
-def persist_working(state: ChatState, config: RunnableConfig | None) -> dict:
+def save_working_memory(state: ChatState, config: RunnableConfig | None) -> dict:
     update: dict[str, Any] = {}
     frame = clone_frame(state.get("query_frame")) if state.get("query_frame") else None
     rows = state.get("sql_rows")
@@ -185,7 +185,7 @@ def persist_working(state: ChatState, config: RunnableConfig | None) -> dict:
         frame["result_meta"] = summarize_search_results(list(rows))
         update["query_frame"] = frame
         update["sql_rows"] = []
-    thread_id = _thread_id(config)
+    thread_id = _thread_id_from_config(config)
     if thread_id:
         save_working(
             thread_id,
@@ -196,13 +196,13 @@ def persist_working(state: ChatState, config: RunnableConfig | None) -> dict:
     return update
 
 
-def route_after_refine(state: ChatState) -> str:
+def next_step_after_search_frame_update(state: ChatState) -> str:
     if state.get("pending_forget"):
-        return "confirm_forget"
-    return "query_router"
+        return "ask_before_forgetting_memory"
+    return "choose_query_route"
 
 
-def _frame_classifier(runtime: Runtime[AgentContext] | None):
+def _build_frame_classifier(runtime: Runtime[AgentContext] | None):
     """Use Haiku only when this run has a model that knows how to classify a frame."""
     if runtime is None or runtime.context is None:
         return None
@@ -221,14 +221,14 @@ def _frame_classifier(runtime: Runtime[AgentContext] | None):
     return classify
 
 
-def _repository(runtime: Runtime[AgentContext] | None):
+def _memory_repository(runtime: Runtime[AgentContext] | None):
     store = runtime.store if runtime is not None else None
     if store is not None and getattr(store, "repository", None) is not None:
         return store.repository
     return get_repository()
 
 
-def _user_id(
+def _resolve_user_id(
     state: ChatState,
     runtime: Runtime[AgentContext] | None,
     config: RunnableConfig | None,
@@ -239,6 +239,6 @@ def _user_id(
     return str(state.get("user_id") or configurable.get("user_id") or "")
 
 
-def _thread_id(config: RunnableConfig | None) -> str:
+def _thread_id_from_config(config: RunnableConfig | None) -> str:
     configurable = (config or {}).get("configurable") or {}
     return str(configurable.get("thread_id") or "")

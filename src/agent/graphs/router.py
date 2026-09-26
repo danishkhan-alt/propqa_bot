@@ -7,7 +7,7 @@ from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.memory import read_context
+from agent.graphs.memory import load_working_memory_and_profile
 from agent.graphs.runtime import models_for
 from agent.reply.clarify import merge_profile
 from agent.schemas.routes import (
@@ -30,20 +30,20 @@ from common.schemas.pagination import page_request
 logger = get_logger("agent.router")
 
 # Row results share one page window. An average or a single lookup does not.
-_PAGED = frozenset({Intent.LIST, Intent.RANK})
+_PAGED_INTENTS = frozenset({Intent.LIST, Intent.RANK})
 
 
-def load_context(
+def load_session_context(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
 ) -> dict:
     update = {"user_id": runtime.context.user_id}
-    update.update(read_context(runtime, config))
+    update.update(load_working_memory_and_profile(runtime, config))
     return update
 
 
-def query_router(
+def choose_query_route(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
@@ -81,7 +81,7 @@ def query_router(
     )
     assumptions = None
     if route.route is Route.NEED_DB:
-        assumptions = _assumptions(route)
+        assumptions = _build_lookup_assumptions(route)
     update: dict = {
         "query_route": route,
         "assumptions": assumptions,
@@ -93,7 +93,7 @@ def query_router(
     return update
 
 
-def domain_router(
+def choose_data_domains(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
@@ -144,23 +144,23 @@ def domain_router(
     return {"query_route": query, "domain_route": route}
 
 
-def route_after_query(state: ChatState) -> str:
+def next_step_after_query_route(state: ChatState) -> str:
     query = as_query_route(state.get("query_route"))
     if query is not None and query.route is Route.NEED_DB:
-        return "domain_router"
-    return "answer"
+        return "choose_data_domains"
+    return "write_reply"
 
 
-def route_after_domain(state: ChatState) -> str:
+def next_step_after_domain_choice(state: ChatState) -> str:
     domain = as_domain_route(state.get("domain_route"))
     if domain is not None and domain.domain_ids:
-        return "apply_defaults"
-    return "answer"
+        return "personalize_search_frame"
+    return "write_reply"
 
 
-def _assumptions(route: QueryRoute) -> Assumptions:
+def _build_lookup_assumptions(route: QueryRoute) -> Assumptions:
     """Keep the model's purpose and order. Page a list with the shared window."""
-    if route.intent not in _PAGED:
+    if route.intent not in _PAGED_INTENTS:
         return Assumptions(purpose=route.purpose, limit=route.limit, order=route.order)
     window = page_request(per_page=route.limit)
     return Assumptions(

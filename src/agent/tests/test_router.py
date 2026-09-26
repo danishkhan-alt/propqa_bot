@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.catalog import catalog_load, finalize
+from agent.graphs.catalog import load_domain_catalog, record_search_and_clear_turn_state
 from agent.graphs.workflow import build_chat_graph
 from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
@@ -264,10 +264,10 @@ def test_catalog_yaml_is_loaded_for_the_turn_and_not_kept():
             rationale="Sold prices.",
         ),
     }
-    loaded = catalog_load(state)
+    loaded = load_domain_catalog(state)
     assert "real_estate_transactions" in loaded["catalog_context"]
     assert "# join: locations" in loaded["catalog_context"]
-    final = finalize({**state, **loaded}, {"configurable": {"thread_id": "t-catalog"}})
+    final = record_search_and_clear_turn_state({**state, **loaded}, {"configurable": {"thread_id": "t-catalog"}})
     assert final["catalog_context"] == ""
     assert final["loaded_domains"] == []
     assert final["last_need_db"].domain_ids == ["transactions"]

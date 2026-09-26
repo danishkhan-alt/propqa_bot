@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import Route
-from agent.graphs.memory import persist_working
+from agent.graphs.memory import save_working_memory
 from agent.memory.session.search_results import summarize_search_results
 from agent.schemas.routes import (
     LastNeedDb,
@@ -21,7 +21,7 @@ from common.logger import get_logger
 logger = get_logger("agent.router")
 
 
-def catalog_load(state: ChatState) -> dict:
+def load_domain_catalog(state: ChatState) -> dict:
     domain = as_domain_route(state.get("domain_route"))
     if domain is None:
         return {"catalog_context": "", "loaded_domains": []}
@@ -40,7 +40,7 @@ def catalog_load(state: ChatState) -> dict:
     return {"catalog_context": context, "loaded_domains": loaded}
 
 
-def finalize(state: ChatState, config: RunnableConfig) -> dict:
+def record_search_and_clear_turn_state(state: ChatState, config: RunnableConfig) -> dict:
     """Drop catalog YAML and grounded ids so the checkpointer does not keep them."""
     update: dict = {
         "catalog_context": "",
@@ -99,5 +99,5 @@ def finalize(state: ChatState, config: RunnableConfig) -> dict:
         )
     else:
         update["awaiting_sql"] = False
-    update.update(persist_working({**state, **update}, config))
+    update.update(save_working_memory({**state, **update}, config))
     return update

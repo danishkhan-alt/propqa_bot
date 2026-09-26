@@ -28,15 +28,15 @@ from common.logger import get_logger
 
 logger = get_logger("agent.router")
 
-FOCUS_DATA_NOTE = "the listing's advert and nearby places"
+FOCUSED_LISTINGS_DATA_NOTE = "the listing's advert and nearby places"
 MISSING_LISTINGS_REPLY = (
     "I couldn't find the listings you selected. They may have been taken off the market. "
     "Remove them from the chat and pick another listing to ask about."
 )
-FAILED_FOCUS_REPLY = "I couldn't put the details of those listings together just now. Could you ask me again?"
+FAILED_FOCUSED_LISTINGS_REPLY = "I couldn't put the details of those listings together just now. Could you ask me again?"
 
 
-def answer(
+def write_reply(
     state: ChatState,
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
@@ -45,13 +45,13 @@ def answer(
     messages = state.get("messages") or []
     message = latest_user_text(messages)
     if state.get("focused_property_ids"):
-        return _answer_about_listings(state, runtime, message, messages, config)
+        return _reply_about_focused_listings(state, runtime, message, messages, config)
     if query is None:
-        return _unavailable(state, runtime, message, messages, config)
+        return _reply_without_data(state, runtime, message, messages, config)
 
     if query.route is Route.DIRECT_ANSWER:
-        question = _question(state, query, has_listings=False)
-        structured = _draft_structured(
+        question = _next_profile_question(state, query, has_listings=False)
+        structured = _stream_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -61,7 +61,7 @@ def answer(
             config=config,
         )
         if structured is None:
-            text = _speak(
+            text = _stream_prose_reply(
                 models_for(runtime),
                 "answer_direct",
                 message=message,
@@ -71,17 +71,17 @@ def answer(
             )
         else:
             text = structured
-        text = _with_memory_notes(text, state)
-        return _reply_update(state, text, question if structured is not None else None)
+        text = _append_and_stream_memory_notes(text, state)
+        return _reply_state_update(state, text, question if structured is not None else None)
 
     domain = as_domain_route(state.get("domain_route"))
     if domain is None or not domain.domain_ids:
-        return _unavailable(state, runtime, message, messages, config)
+        return _reply_without_data(state, runtime, message, messages, config)
 
-    return _answer_from_lookup(state, runtime, message, messages, config)
+    return _reply_from_lookup_results(state, runtime, message, messages, config)
 
 
-def _answer_from_lookup(
+def _reply_from_lookup_results(
     state: ChatState,
     runtime: Runtime[AgentContext],
     message: str,
@@ -107,7 +107,7 @@ def _answer_from_lookup(
             rows, columns = [], []
         else:
             rows = rows[:PROMPT_LISTING_LIMIT]
-    note = _data_note(result.get("domain_ids") or [])
+    note = _describe_data_sources(result.get("domain_ids") or [])
     search_notes = [str(item) for item in (result.get("notes") or [])]
     filters = [str(item) for item in (result.get("filters") or [])]
     coverage = list(result.get("coverage") or [])
@@ -115,8 +115,8 @@ def _answer_from_lookup(
     question = None
     structured = None
     if status in ("rows", "empty"):
-        question = _question(state, query, has_listings=bool(listing_ids))
-        structured = _draft_structured(
+        question = _next_profile_question(state, query, has_listings=bool(listing_ids))
+        structured = _stream_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -141,7 +141,7 @@ def _answer_from_lookup(
     if structured is not None:
         text = structured
     elif status == "rows":
-        text = _speak(
+        text = _stream_prose_reply(
             models_for(runtime),
             "answer_from_sql",
             message=message,
@@ -166,7 +166,7 @@ def _answer_from_lookup(
     else:
         text = FAILED_LOOKUP_REPLY
         publish("text", delta=text)
-    text = _with_memory_notes(text, state)
+    text = _append_and_stream_memory_notes(text, state)
     logger.info(
         "answer.synthesize",
         extra={
@@ -183,10 +183,10 @@ def _answer_from_lookup(
             }
         },
     )
-    return _reply_update(state, text, question if structured is not None else None)
+    return _reply_state_update(state, text, question if structured is not None else None)
 
 
-def _answer_about_listings(
+def _reply_about_focused_listings(
     state: ChatState,
     runtime: Runtime[AgentContext],
     message: str,
@@ -197,14 +197,14 @@ def _answer_about_listings(
     listings = list(state.get("focused_listings") or [])
     structured = None
     if listings:
-        structured = _draft_structured(
+        structured = _stream_structured_reply(
             models_for(runtime),
             method="draft_listing_reply",
             message=message,
             messages=messages,
             listings=listings,
             memory_block=state.get("memory_block") or "",
-            data_note=FOCUS_DATA_NOTE,
+            data_note=FOCUSED_LISTINGS_DATA_NOTE,
             session_profile=state.get("session_profile") or {},
             question=None,
             config=config,
@@ -212,7 +212,7 @@ def _answer_about_listings(
     if structured is not None:
         text = structured
     else:
-        text = FAILED_FOCUS_REPLY if listings else MISSING_LISTINGS_REPLY
+        text = FAILED_FOCUSED_LISTINGS_REPLY if listings else MISSING_LISTINGS_REPLY
         publish("text", delta=text)
     logger.info(
         "answer.focus",
@@ -224,28 +224,28 @@ def _answer_about_listings(
             }
         },
     )
-    return _reply_update(state, text, None)
+    return _reply_state_update(state, text, None)
 
 
-def _unavailable(
+def _reply_without_data(
     state: ChatState,
     runtime: Runtime[AgentContext],
     message: str,
     messages: list,
     config: RunnableConfig,
 ) -> dict:
-    text = _speak(
+    text = _stream_prose_reply(
         models_for(runtime),
         "answer_unavailable",
         message=message,
         history=history_summary(messages, limit=ANSWER_HISTORY),
         config=config,
     )
-    text = _with_memory_notes(text, state)
+    text = _append_and_stream_memory_notes(text, state)
     return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
 
-def _speak(models: RouterModels, name: str, **kwargs) -> str:
+def _stream_prose_reply(models: RouterModels, name: str, **kwargs) -> str:
     """Stream each text piece as the model produces it, and return the reply."""
     stream = getattr(models, f"stream_{name}", None)
     if callable(stream):
@@ -263,7 +263,7 @@ def _speak(models: RouterModels, name: str, **kwargs) -> str:
     return text
 
 
-def _with_memory_notes(text: str, state: ChatState) -> str:
+def _append_and_stream_memory_notes(text: str, state: ChatState) -> str:
     noted = append_memory_notes(
         text, state.get("disclosure") or "", state.get("memory_question") or ""
     )
@@ -273,7 +273,7 @@ def _with_memory_notes(text: str, state: ChatState) -> str:
     return noted
 
 
-_SOURCE_PHRASES = {
+_SOURCE_PHRASE_BY_DOMAIN = {
     "listings": "live asking prices and registered property records",
     "transactions": "registered sales and rent contracts",
     "market": "official price indices and community averages",
@@ -287,16 +287,16 @@ _SOURCE_PHRASES = {
 }
 
 
-def _data_note(domain_ids: list) -> str:
+def _describe_data_sources(domain_ids: list) -> str:
     phrases: list[str] = []
     for domain_id in domain_ids:
-        phrase = _SOURCE_PHRASES.get(str(domain_id))
+        phrase = _SOURCE_PHRASE_BY_DOMAIN.get(str(domain_id))
         if phrase and phrase not in phrases:
             phrases.append(phrase)
     return "; ".join(phrases)
 
 
-def _question(
+def _next_profile_question(
     state: ChatState, query: QueryRoute | None, *, has_listings: bool
 ) -> Question | None:
     return next_question(
@@ -307,7 +307,7 @@ def _question(
     )
 
 
-def _reply_update(state: ChatState, text: str, question: Question | None) -> dict:
+def _reply_state_update(state: ChatState, text: str, question: Question | None) -> dict:
     """Store the question with the reply, so history reads the way the user saw it."""
     content = f"{text}\n\n{question.prompt}" if question is not None else text
     update: dict = {"messages": [AIMessage(content=content)], "awaiting_sql": False}
@@ -316,7 +316,7 @@ def _reply_update(state: ChatState, text: str, question: Question | None) -> dic
     return update
 
 
-def _draft_structured(
+def _stream_structured_reply(
     models: RouterModels,
     *,
     method: str = "draft_reply",

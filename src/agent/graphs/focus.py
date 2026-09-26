@@ -17,7 +17,7 @@ from common.logger import get_logger
 logger = get_logger("agent.router")
 
 
-def listing_focus(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
+def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
     if runtime.context is None:
         raise RuntimeError("AgentContext is required")
     ids = list(state.get("focused_property_ids") or [])
@@ -36,10 +36,10 @@ def listing_focus(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
             }
         },
     )
-    # No lookup runs this turn. Clearing the route keeps finalize from recording the
+    # No lookup runs this turn. Clearing the route keeps record_search_and_clear_turn_state from recording the
     # previous search again, so a later "cheaper" still refines that search.
     return {"focused_listings": listings, "query_route": None}
 
 
-def route_after_load(state: ChatState) -> str:
-    return "listing_focus" if state.get("focused_property_ids") else "recall_memory"
+def next_step_after_session_context(state: ChatState) -> str:
+    return "load_focused_listings" if state.get("focused_property_ids") else "recall_long_term_memories"
