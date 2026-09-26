@@ -7,6 +7,8 @@ domains:
   name: Properties, units, and buildings
   description: Live asking-price listings in public.properties, plus DLD plots, freehold units, and buildings.
     Use this for beds, price, and what is for sale or rent.
+  not_for: Sold prices, sale volumes, and registered rents (transactions). Community average prices, rents,
+    and yields (market).
   synonyms:
   - listings
   - units
@@ -26,6 +28,9 @@ domains:
   name: Sales, rents, and valuations
   description: DLD sales, Ejari-style rent contracts, official valuations, and the residential sale index.
     Use for transacted prices, volumes, and rents.
+  not_for: What is on the market now (listings). Rents in a community or how rents moved, since its rent
+    contracts end in 2021 (market). Rental yield or ROI (market). City-wide market direction or a price
+    index (market).
   synonyms:
   - sales
   - sold
@@ -43,6 +48,8 @@ domains:
   name: Communities, areas, and geo hierarchy
   description: Dubai communities, subcommunities, the public location tree, community facility JSON, Makani
     entrances, and population. This is the usual join bridge for other domains.
+  not_for: Being the place another subject is filtered on. Only when the user asks where something is, which
+    community it belongs to, or facts about the area itself such as population.
   synonyms:
   - community
   - area
@@ -58,6 +65,7 @@ domains:
   name: Developers, projects, and construction
   description: Off-plan and master projects, developer profiles, consultants, contractors, building permits,
     and MRHE housing projects. Use for handover, completion, and who is building what.
+  not_for: Service charges (regulations). Brokers and owners associations (agencies).
   synonyms:
   - developer
   - project
@@ -74,6 +82,7 @@ domains:
   name: Schools, nurseries, and universities
   description: KHDA private schools, ratings, fees, nearby schools per community, early-childhood centres,
     and universities. Use for education near a property.
+  not_for: Parks, beaches, and hospitals (amenities). Metro and commute (rta).
   synonyms:
   - school
   - KHDA
@@ -88,6 +97,7 @@ domains:
   name: Transport, parking, and roads
   description: Metro, tram, bus, marine stations, parking, Salik gates, cycle tracks, and major roads.
     Use for commute and parking around a community.
+  not_for: Schools (schools). Parks, beaches, and hospitals (amenities).
   synonyms:
   - metro
   - tram
@@ -104,6 +114,7 @@ domains:
   name: Parks, healthcare, and lifestyle
   description: Parks, healthcare, things-to-do, and named building or project amenities such as pool and
     gym. Use for lifestyle and facilities, not school or metro lookups.
+  not_for: Schools and nurseries (schools). Metro, parking, and roads (rta).
   synonyms:
   - park
   - beach
@@ -119,6 +130,7 @@ domains:
   name: Brokers, agencies, and valuators
   description: Licensed real-estate offices, brokers, permits, valuators, and owners associations. Use
     for who can sell or manage a building.
+  not_for: Who builds a project (developers). Service charges (regulations).
   synonyms:
   - broker
   - agency
@@ -131,6 +143,7 @@ domains:
   file: regulations.yaml
   name: Service charges and property procedures
   description: Owners-association service charges by community/project and DLD property-map request procedures.
+  not_for: Owners association contacts (agencies). Handover and who is building (developers).
   synonyms:
   - service charge
   - maintenance fee
@@ -143,6 +156,8 @@ domains:
   name: Price indices and construction statistics
   description: Official DSC price indices, construction-cost series, community average sale and rent
     prices, and community rental yields. Use for market movement and yield or ROI by area, not a single deal.
+  not_for: A single deal, sale volumes, or an average sale price over a named period (transactions). What
+    is on the market now (listings).
   synonyms:
   - price index
   - rent index

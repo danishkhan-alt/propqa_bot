@@ -1,0 +1,256 @@
+# Domain router eval: real model, no warehouse. Run with `python -m evals.run_domain_eval`.
+#
+# Truth follows the rules in agent/prompts/domain_router.py.
+# - domains: the primary packs, lead first. The set must match; the lead must be first.
+# - accept_lead: other leads that are also correct (the set then only has to contain one).
+# - joins: expected join packs. Omitted when a place is arguable (a project, a road).
+# - recipe: the recipe id, or null.
+# - turn_kind and last_need_db describe a follow-up.
+
+cases:
+- id: average_sale_price_period
+  message: Average sale price in Dubai Marina last 12 months
+  domains: [transactions]
+  joins: [locations]
+  recipe: null
+
+- id: listings_sale_budget
+  message: 2 bed apartments for sale in JVC under 1.5M
+  domains: [listings]
+  joins: [locations]
+  recipe: null
+
+- id: listings_rent_villas
+  message: show me villas for rent in Dubai Hills
+  domains: [listings]
+  joins: [locations]
+  recipe: null
+
+- id: market_overview
+  message: How is the Dubai property market doing?
+  domains: [market]
+  joins: []
+  recipe: dubai_market_overview
+
+- id: market_prices_up
+  message: Are prices going up in Dubai?
+  domains: [market]
+  joins: []
+  recipe: dubai_market_overview
+
+- id: community_sale_prices
+  message: What are sale prices like in JVC?
+  domains: [market]
+  joins: [locations]
+  recipe: community_sale_prices_by_bedrooms
+
+- id: community_rents
+  message: Rents in Dubai Marina
+  domains: [market]
+  joins: [locations]
+  recipe: community_rents_by_bedrooms
+
+- id: community_rent_bedrooms
+  message: Average rent for a 2 bed in JVC
+  domains: [market]
+  joins: [locations]
+  recipe: null
+
+- id: rental_yield_area
+  message: What is the rental yield in Business Bay?
+  domains: [market]
+  joins: [locations]
+  recipe: null
+
+- id: best_roi_areas
+  message: Which areas have the best ROI?
+  domains: [market]
+  recipe: null
+
+- id: sales_volume
+  message: How many apartments were sold in Downtown Dubai in 2024?
+  domains: [transactions]
+  joins: [locations]
+  recipe: null
+
+- id: schools_near_community
+  message: Best schools near Arabian Ranches
+  domains: [schools]
+  joins: [locations]
+  recipe: null
+
+- id: schools_citywide
+  message: KHDA outstanding schools with fees under 50k
+  domains: [schools]
+  joins: []
+  recipe: null
+
+- id: metro_near
+  message: Nearest metro station to JLT
+  domains: [rta]
+  joins: [locations]
+  recipe: null
+
+- id: salik_count
+  message: How many Salik gates are there in Dubai?
+  domains: [rta]
+  joins: []
+  recipe: null
+
+- id: parks_beaches
+  message: Parks and beaches in Jumeirah
+  domains: [amenities]
+  joins: [locations]
+  recipe: null
+
+- id: hospitals_near
+  message: Hospitals near Dubai Silicon Oasis
+  domains: [amenities]
+  joins: [locations]
+  recipe: null
+
+- id: things_to_do
+  message: Things to do in Dubai Marina
+  domains: [amenities]
+  joins: [locations]
+  recipe: null
+
+- id: project_handover
+  message: When is Emaar's Creek Beach project handing over?
+  domains: [developers]
+  recipe: null
+
+- id: developer_offplan
+  message: Off-plan projects by Sobha
+  domains: [developers]
+  joins: []
+  recipe: null
+
+- id: who_builds
+  message: Which developer is building Sobha Hartland?
+  domains: [developers]
+  recipe: null
+
+- id: brokers_area
+  message: Licensed brokers in Dubai Marina
+  domains: [agencies]
+  joins: [locations]
+  recipe: null
+
+- id: owners_association
+  message: Who is the owners association for Marina Gate?
+  domains: [agencies]
+  recipe: null
+
+- id: service_charges_area
+  message: Service charges in Dubai Hills Estate
+  domains: [regulations]
+  joins: [locations]
+  recipe: null
+
+- id: service_charges_developer
+  message: What are the service charges per sqft for Emaar buildings?
+  domains: [regulations]
+  recipe: null
+
+- id: where_is
+  message: Where is Al Barsha South?
+  domains: [locations]
+  joins: []
+  recipe: null
+
+- id: which_community
+  message: Which community is Damac Hills in?
+  domains: [locations]
+  joins: []
+  recipe: null
+
+- id: population
+  message: What is the population of Al Nahda?
+  domains: [locations]
+  joins: []
+  recipe: null
+
+- id: compare_two_places
+  message: Compare sale prices in JVC and JLT
+  domains: [transactions]
+  accept_lead: [market]
+  joins: [locations]
+  recipe: null
+
+- id: listings_near_schools
+  message: Villas for sale near good schools in Mirdif
+  domains: [listings, schools]
+  accept_lead: [schools]
+  joins: [locations]
+  recipe: null
+
+- id: listings_near_metro
+  message: Apartments for rent near a metro station in Al Barsha
+  domains: [listings, rta]
+  accept_lead: [rta]
+  joins: [locations]
+  recipe: null
+
+- id: price_index_trend
+  message: How has the price index moved over the last 5 years?
+  domains: [market]
+  joins: []
+  recipe: null
+
+- id: construction_cost
+  message: Show me the construction cost index
+  domains: [market]
+  joins: []
+  recipe: null
+
+- id: valuation
+  message: Official valuations of villas on Palm Jumeirah
+  domains: [transactions]
+  joins: [locations]
+  recipe: null
+
+- id: freehold_plots
+  message: How many freehold plots are in Dubai South?
+  domains: [listings]
+  joins: [locations]
+  recipe: null
+
+- id: ejari_contracts
+  message: Ejari rent contracts in Deira in 2019
+  domains: [transactions]
+  joins: [locations]
+  recipe: null
+
+- id: pivot_schools
+  message: what about schools there?
+  turn_kind: pivot
+  last_need_db:
+    domain_ids: [transactions]
+    join_ids: [locations]
+    intent_summary: Average sale price in Dubai Marina
+  domains: [schools]
+  joins: [locations]
+  recipe: null
+
+- id: pivot_service_charges
+  message: and the service charges?
+  turn_kind: pivot
+  last_need_db:
+    domain_ids: [listings]
+    join_ids: [locations]
+    intent_summary: 2 bed apartments for sale in JVC
+  domains: [regulations]
+  joins: [locations]
+  recipe: null
+
+- id: pivot_new_subject
+  message: Now show me metro stations in Business Bay
+  turn_kind: new
+  last_need_db:
+    domain_ids: [schools]
+    join_ids: [locations]
+    intent_summary: Best schools near Arabian Ranches
+  domains: [rta]
+  joins: [locations]
+  recipe: null

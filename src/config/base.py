@@ -123,6 +123,13 @@ class Config:
     AI_SQL_EFFORT = os.getenv("AI_SQL_EFFORT", "medium")
     ROUTER_EFFORT = os.getenv("ROUTER_EFFORT", "low")
 
+    # Who picks the catalog domains: "jev" (TypeSafe, with the router model as fallback)
+    # or "llm" (the router model only). Jev is the default once its key is set.
+    JEV_API_KEY = os.getenv("JEV_API_KEY", "")
+    JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest")
+    JEV_TIMEOUT_MS = _int("JEV_TIMEOUT_MS", 4000)
+    DOMAIN_ROUTER = os.getenv("DOMAIN_ROUTER", "jev" if JEV_API_KEY else "llm").strip().lower()
+
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
     LANGFUSE_BASE_URL = os.getenv(

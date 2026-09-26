@@ -17,6 +17,8 @@ from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
+from agent.services import jev_domain_router
+from agent.services.typesafe import SystemOneClient, TypeSafeError
 from common.logger import get_logger
 
 logger = get_logger("agent.router")
@@ -256,7 +258,7 @@ def build_chat_models():
 class RouterModels:
     """Fast model for routing. The main model drafts SQL and writes the answer."""
 
-    def __init__(self) -> None:
+    def __init__(self, domain_router: str | None = None) -> None:
         router_llm, answer_llm, sql_llm = build_chat_models()
         constrained = constrained_output_options()
         self._query = router_llm.with_structured_output(
@@ -278,6 +280,7 @@ class RouterModels:
         self._frame = router_llm.with_structured_output(
             output_schema(FrameClass), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "memory.frame"})
+        self._jev = build_jev_client(domain_router)
 
     def route_query(
         self,
@@ -314,6 +317,14 @@ class RouterModels:
         recipes_text: str = "",
         config: RunnableConfig | None = None,
     ) -> DomainRoute:
+        if self._jev is not None:
+            try:
+                return _route_domain_jev(self._jev, message, turn_kind, last_need_db)
+            except TypeSafeError as exc:
+                logger.warning(
+                    "router.domain.jev failed; using the router model",
+                    extra={"extra_data": {"error": str(exc)[:300]}},
+                )
         payload = {
             "message": message,
             "turn_kind": turn_kind.value,
@@ -652,6 +663,41 @@ def _message_text(result) -> str:
     if isinstance(content, str):
         return content.strip()
     return str(content).strip()
+
+
+def build_jev_client(domain_router: str | None = None) -> SystemOneClient | None:
+    """The Jev client when the domain router (DOMAIN_ROUTER by default) is jev, else None."""
+    from config import ActiveConfig
+
+    router = domain_router or ActiveConfig.DOMAIN_ROUTER
+    if router == "llm":
+        return None
+    if router != "jev":
+        raise ValueError(f"DOMAIN_ROUTER={router!r} is not supported; use 'jev' or 'llm'")
+    return SystemOneClient(
+        api_key=ActiveConfig.JEV_API_KEY,
+        model=ActiveConfig.JEV_MODEL,
+        timeout_seconds=ActiveConfig.JEV_TIMEOUT_MS / 1000,
+    )
+
+
+def _route_domain_jev(
+    client: SystemOneClient,
+    message: str,
+    turn_kind: TurnKind,
+    last_need_db: LastNeedDb | None,
+) -> DomainRoute:
+    from agent.sql.recipes import recipes
+    from catalog import list_domains
+
+    return jev_domain_router.route_domain(
+        client,
+        message=message,
+        turn_kind=turn_kind,
+        last_need_db=last_need_db,
+        domains=list_domains(),
+        recipes={item.id: item.when for item in recipes().values()},
+    )
 
 
 _models: RouterModels | None = None
