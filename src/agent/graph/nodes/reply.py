@@ -36,7 +36,11 @@ MISSING_LISTINGS_REPLY = (
     "I couldn't find the listings you selected. They may have been taken off the market. "
     "Remove them from the chat and pick another listing to ask about."
 )
-FAILED_FOCUSED_LISTINGS_REPLY = "I couldn't put the details of those listings together just now. Could you ask me again?"
+OUT_OF_SCOPE_REPLY = (
+    "I can only help with Dubai property: buying, renting, prices, areas, projects, and listings. "
+    'Try something like "average rent for a 2-bed in JVC" or "apartments for sale in Dubai Marina under AED 2M".'
+)
+FAILED_FOCUSED_LISTINGS_REPLY ="I couldn't put the details of those listings together just now. Could you ask me again?"
 
 
 def write_reply(
@@ -51,6 +55,12 @@ def write_reply(
         return _reply_about_focused_listings(state, runtime, message, messages, config)
     if query is None:
         return _reply_without_data(state, runtime, message, messages, config)
+
+    if query.route is Route.OUT_OF_SCOPE:
+        # Fixed text: a model asked to decline tends to answer a little first, and this costs nothing.
+        publish_stream_event("text", delta=OUT_OF_SCOPE_REPLY)
+        text = _stream_memory_notes(OUT_OF_SCOPE_REPLY, state)
+        return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
     if query.route is Route.DIRECT_ANSWER:
         question = _next_profile_question(state, query, has_listings=False)

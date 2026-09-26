@@ -2,10 +2,11 @@ from enum import Enum
 
 
 class Route(str, Enum):
-    """Answer from the model, or look the fact up."""
+    """Answer from the model, look the fact up, or decline a request outside Dubai property."""
 
     DIRECT_ANSWER = "direct_answer"
     NEED_DB = "need_db"
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 class TurnKind(str, Enum):

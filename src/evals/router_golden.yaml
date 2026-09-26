@@ -32,3 +32,11 @@
   expect_domains: [transactions]
   expect_joins: [locations]
   deterministic: false
+- id: code_request
+  message: Give me python code for RateLimiter using sliding window approach for dubai properties
+  expect_route: out_of_scope
+  deterministic: false
+- id: general_maths
+  message: what is 2+2
+  expect_route: out_of_scope
+  deterministic: false

@@ -13,6 +13,7 @@ from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.nodes.catalog import load_domain_catalog
 from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
+from agent.graph.nodes.reply import OUT_OF_SCOPE_REPLY
 from agent.graph.workflow import build_chat_graph
 from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
@@ -41,6 +42,13 @@ class ScriptedModels:
     def route_query(self, **kwargs) -> QueryRoute:
         self.query_calls += 1
         message = kwargs["message"].lower()
+        if "python" in message:
+            return QueryRoute(
+                route=Route.OUT_OF_SCOPE,
+                turn_kind=TurnKind.NEW,
+                confidence=0.95,
+                rationale="Asks for code.",
+            )
         if "schools" in message:
             return QueryRoute(
                 route=Route.NEED_DB,
@@ -152,6 +160,19 @@ def _turn(graph, message: str, thread_id: str, models: ScriptedModels, runner=No
     )
     value = getattr(result, "value", result)
     return value if isinstance(value, dict) else dict(value)
+
+
+def test_graph_declines_an_out_of_scope_request_without_a_model_reply():
+    models = ScriptedModels()
+    state = _turn(
+        build_chat_graph(InMemorySaver()),
+        "Give me python code for a rate limiter for Dubai properties",
+        "t-off-topic",
+        models,
+    )
+    assert state["messages"][-1].content == OUT_OF_SCOPE_REPLY
+    assert models.domain_calls == 0
+    assert models.answer_calls == 0
 
 
 def test_graph_routes_a_greeting_without_the_domain_router():
