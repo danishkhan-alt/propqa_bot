@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
+import openai
 import pytest
 import yaml
 from langchain_core.messages import HumanMessage
@@ -22,7 +24,8 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft, SqlPage
-from agent.services.llm import invoke_structured_with_fallback, is_openai_reasoning_model
+from agent.services.llm.calls import invoke_structured_with_fallback
+from agent.services.llm.providers import is_openai_reasoning_model
 from agent.validator import sanitize_domain_route, sanitize_query_route
 
 GOLDEN = Path(__file__).resolve().parents[2] / "evals" / "router_golden.yaml"
@@ -339,6 +342,27 @@ def test_structured_output_retries_once_then_uses_the_fallback():
     assert runnable.calls == 2
 
 
+def _status_error(status: int) -> openai.APIStatusError:
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    return openai.APIStatusError("error", response=httpx.Response(status, request=request), body=None)
+
+
+@pytest.mark.parametrize(("status", "calls"), [(400, 1), (401, 1), (408, 2), (429, 2), (500, 2)])
+def test_a_rejected_request_is_not_sent_twice(status: int, calls: int):
+    class Rejected:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def invoke(self, messages, config=None):
+            self.calls += 1
+            raise _status_error(status)
+
+    runnable = Rejected()
+    fallback = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.3, rationale="Fallback.")
+    assert invoke_structured_with_fallback(runnable, [], None, fallback) is fallback
+    assert runnable.calls == calls
+
+
 def test_golden_file_is_model_routed():
     cases = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     assert {case["id"] for case in cases} >= {"empty", "cheaper", "greeting", "average_price"}
@@ -362,7 +386,7 @@ def _schema_counts(node, counts=None) -> dict:
 def test_the_router_schema_stays_inside_the_structured_output_limits():
     # The API rejects more than 16 union-typed or 24 optional fields, and optional fields
     # slow grammar compilation, so every field is required and unions stay under the cap.
-    from agent.services.llm import build_strict_output_schema
+    from agent.services.llm.output_schema import build_strict_output_schema
 
     counts = _schema_counts(build_strict_output_schema(QueryRoute))
     assert counts["optional"] == 0
@@ -392,7 +416,7 @@ def test_a_reply_of_the_wrong_shape_is_retried_then_replaced():
 
 def test_router_schemas_are_accepted_by_strict_mode():
     # Strict mode needs closed objects and no keywords beside a $ref.
-    from agent.services.llm import build_strict_output_schema
+    from agent.services.llm.output_schema import build_strict_output_schema
 
     def walk(node):
         if isinstance(node, dict):

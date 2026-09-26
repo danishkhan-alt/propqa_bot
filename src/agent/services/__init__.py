@@ -1,4 +1,4 @@
-from agent.services.llm import LangChainAgentModels, get_default_models
+from agent.services.llm.models import LangChainAgentModels, get_default_models
 from agent.services.transcript import format_recent_history, latest_user_text
 
 __all__ = [

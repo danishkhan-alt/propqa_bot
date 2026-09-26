@@ -40,7 +40,7 @@ def derive_search_state_from_message(
     ignore = ignore_defaults or "ignore my defaults" in lowered or "ignore defaults" in lowered
     if not lowered:
         return {"ignore_defaults": ignore, "pending_forget": None}
-    if _FORGET.search(lowered):
+    if is_forget_request(lowered):
         return {
             "ignore_defaults": ignore,
             "pending_forget": build_forget_request(lowered),
@@ -69,6 +69,10 @@ def derive_search_state_from_message(
         "ignore_defaults": ignore,
         "pending_forget": None,
     }
+
+
+def is_forget_request(message: str) -> bool:
+    return bool(_FORGET.search((message or "").strip().lower()))
 
 
 def build_forget_request(text: str) -> dict[str, Any]:

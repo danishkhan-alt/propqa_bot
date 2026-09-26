@@ -16,6 +16,7 @@ from typing import Any
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb
 from agent.services.typesafe import SystemOneClient, TypeSafeError
+from config import ActiveConfig
 
 # The pack every place-filtered lookup joins through.
 PLACE_JOIN_DOMAIN_ID = "locations"
@@ -173,3 +174,18 @@ def _read_noul_score(answers: dict[str, dict], question_id: str) -> float:
     if not isinstance(value, (int, float)):
         raise TypeSafeError(f"{question_id} has no noul")
     return float(value)
+
+
+def build_jev_client(domain_router: str | None = None) -> SystemOneClient | None:
+    """The Jev client when the domain router (DOMAIN_ROUTER by default) is jev, else None."""
+
+    router = domain_router or ActiveConfig.DOMAIN_ROUTER
+    if router == "llm":
+        return None
+    if router != "jev":
+        raise ValueError(f"DOMAIN_ROUTER={router!r} is not supported; use 'jev' or 'llm'")
+    return SystemOneClient(
+        api_key=ActiveConfig.JEV_API_KEY,
+        model=ActiveConfig.JEV_MODEL,
+        timeout_seconds=ActiveConfig.JEV_TIMEOUT_MS / 1000,
+    )

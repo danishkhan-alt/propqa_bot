@@ -6,6 +6,7 @@ An explicit correction replaces a slot. An inferred claim does not.
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from datetime import timedelta
@@ -475,6 +476,37 @@ def test_graph_cheaper_narrows_the_saved_frame_and_forget_asks_first():
         version="v2",
     )
     assert resumed.value["messages"][-1].content == "Kept your saved preferences."
+
+
+def test_graph_classifies_the_follow_up_while_the_query_is_routed():
+    memory_cache = InProcessMemoryCache()
+    set_memory_cache(memory_cache)
+    set_repository(InMemoryMemoryRepository())
+    thread_id = "t-overlap"
+    frame = empty_frame()
+    frame["domain"] = "property_search"
+    frame["turn"] = 1
+    memory_cache.set(f"wm:{thread_id}", {"query_frame": frame, "goal": None, "ignore_defaults": False})
+    # Each call waits for the other, so the turn only completes if both are in flight at once.
+    both_in_flight = threading.Barrier(2, timeout=5)
+
+    class OverlapModels(ScriptedModels):
+        def route_query(self, **kwargs) -> QueryRoute:
+            both_in_flight.wait()
+            return super().route_query(**kwargs)
+
+        def classify_follow_up_kind(self, *, message: str, frame: dict, config=None) -> str:
+            both_in_flight.wait()
+            return "refine"
+
+    graph = build_chat_graph(InMemorySaver())
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="and with a pool?")]},
+        config={"configurable": {"thread_id": thread_id, "user_id": "user-1"}},
+        context=AgentContext(user_id="user-1", models=OverlapModels()),
+        version="v2",
+    )
+    assert result.value["query_frame"]["turn"] == 2
 
 
 def test_worker_drains_the_memory_queue_without_sql():

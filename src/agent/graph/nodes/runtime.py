@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext, AgentModels
-from agent.services.llm import get_default_models
+from agent.services.llm.models import get_default_models
 from agent.states.chat import ChatState
 
 

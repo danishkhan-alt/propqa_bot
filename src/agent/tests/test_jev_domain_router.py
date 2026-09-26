@@ -8,7 +8,7 @@ import pytest
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb
 from agent.services import jev_domain_router
-from agent.services.llm import LangChainAgentModels
+from agent.services.llm.models import LangChainAgentModels
 from agent.services.typesafe import SystemOneClient, TypeSafeError
 
 DOMAINS = [

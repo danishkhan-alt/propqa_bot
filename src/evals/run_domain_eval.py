@@ -19,7 +19,7 @@ import yaml
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb
 from agent.services.catalog_prompt_text import render_domain_index
-from agent.services.llm import LangChainAgentModels
+from agent.services.llm.models import LangChainAgentModels
 from agent.sql.recipes import recipe_index_text
 from agent.validator import sanitize_domain_route
 
