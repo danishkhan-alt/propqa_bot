@@ -19,8 +19,8 @@ from langgraph.store.base import (
     SearchOp,
 )
 
-from agent.memory.storage.repository import InMemoryRepository
-from agent.memory.models.types import MemoryRecord, public_record, utcnow
+from agent.memory.models.records import MemoryRecord, record_to_public_dict, utcnow
+from agent.memory.storage.in_memory_repository import InMemoryMemoryRepository
 
 
 class PropQAMemoryStore(BaseStore):
@@ -30,7 +30,7 @@ class PropQAMemoryStore(BaseStore):
 
     def __init__(
         self,
-        repository: InMemoryRepository,
+        repository: InMemoryMemoryRepository,
         *,
         embed=None,
         dims: int = 1024,
@@ -40,12 +40,12 @@ class PropQAMemoryStore(BaseStore):
         self.dims = dims
 
     def batch(self, ops: Iterable) -> list[Result]:
-        return [self._run(op) for op in ops]
+        return [self._dispatch_store_op(op) for op in ops]
 
     async def abatch(self, ops: Iterable) -> list[Result]:
         return await asyncio.to_thread(self.batch, list(ops))
 
-    def _run(self, op) -> Result:
+    def _dispatch_store_op(self, op) -> Result:
         if isinstance(op, GetOp):
             return self._get(op)
         if isinstance(op, SearchOp):
@@ -54,24 +54,24 @@ class PropQAMemoryStore(BaseStore):
             self._put(op)
             return None
         if isinstance(op, ListNamespacesOp):
-            return self._namespaces(op)
+            return self._list_namespaces(op)
         raise TypeError(f"unsupported store operation: {type(op).__name__}")
 
-    def _user_id(self, namespace: tuple[str, ...]) -> str:
+    def _user_id_from_namespace(self, namespace: tuple[str, ...]) -> str:
         if len(namespace) < 2 or namespace[0] != "users" or not str(namespace[1]).strip():
             raise InvalidNamespaceError("memory namespace must be ('users', user_id)")
         return str(namespace[1])
 
     def _get(self, op: GetOp) -> Item | None:
-        user_id = self._user_id(tuple(op.namespace))
+        user_id = self._user_id_from_namespace(tuple(op.namespace))
         record = self.repository.get(user_id, str(op.key))
         if record is None:
             return None
-        return _item(record)
+        return _record_to_item(record)
 
     def _search(self, op: SearchOp) -> list[SearchItem]:
-        user_id = self._user_id(tuple(op.namespace_prefix))
-        status, clusters = _filter(op.filter)
+        user_id = self._user_id_from_namespace(tuple(op.namespace_prefix))
+        status, clusters = _parse_search_filter(op.filter)
         embedding = None
         if op.query and self._embed is not None:
             embedding = list(self._embed([op.query])[0])
@@ -89,7 +89,7 @@ class PropQAMemoryStore(BaseStore):
         return [_search_item(record, score) for record, score in hits]
 
     def _put(self, op: PutOp) -> None:
-        user_id = self._user_id(tuple(op.namespace))
+        user_id = self._user_id_from_namespace(tuple(op.namespace))
         if op.value is None:
             record = self.repository.get(user_id, str(op.key))
             if record is None:
@@ -139,11 +139,11 @@ class PropQAMemoryStore(BaseStore):
             self.repository.update(record)
             self.repository.add_event(user_id, record.id, "updated", "extractor")
         else:
-            self._retire_slot(record)
+            self._supersede_active_slot_holder(record)
             self.repository.insert(record)
             self.repository.add_event(user_id, record.id, "created", "extractor")
 
-    def _retire_slot(self, record: MemoryRecord) -> None:
+    def _supersede_active_slot_holder(self, record: MemoryRecord) -> None:
         if not record.slot or record.status != "active":
             return
         current = self.repository.get_active_slot(record.user_id, record.slot)
@@ -161,7 +161,7 @@ class PropQAMemoryStore(BaseStore):
             {"memory_id": record.id},
         )
 
-    def _namespaces(self, op: ListNamespacesOp) -> list[tuple[str, ...]]:
+    def _list_namespaces(self, op: ListNamespacesOp) -> list[tuple[str, ...]]:
         namespaces = [("users", user_id) for user_id in self.repository.list_user_ids()]
         for condition in op.match_conditions:
             path = tuple(condition.path)
@@ -175,7 +175,7 @@ class PropQAMemoryStore(BaseStore):
         return namespaces[op.offset : op.offset + op.limit]
 
 
-def _filter(raw: dict[str, Any] | None) -> tuple[str | None, list[str] | None]:
+def _parse_search_filter(raw: dict[str, Any] | None) -> tuple[str | None, list[str] | None]:
     if not raw:
         return "active", None
     status = raw.get("status")
@@ -188,9 +188,9 @@ def _filter(raw: dict[str, Any] | None) -> tuple[str | None, list[str] | None]:
     return (str(status) if status is not None else None), clusters
 
 
-def _item(record: MemoryRecord) -> Item:
+def _record_to_item(record: MemoryRecord) -> Item:
     return Item(
-        value=public_record(record),
+        value=record_to_public_dict(record),
         key=record.id,
         namespace=("users", record.user_id),
         created_at=record.created_at,
@@ -199,7 +199,7 @@ def _item(record: MemoryRecord) -> Item:
 
 
 def _search_item(record: MemoryRecord, score: float) -> SearchItem:
-    value = public_record(record, similarity=score)
+    value = record_to_public_dict(record, similarity=score)
     return SearchItem(
         ("users", record.user_id),
         record.id,

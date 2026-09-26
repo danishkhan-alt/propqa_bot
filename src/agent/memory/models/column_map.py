@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from agent.enums.memory import (
+    EXCLUSIVE_SLOTS_WITHOUT_COLUMN,
     MemoryCluster,
-    NON_COLUMN_EXCLUSIVE_SLOTS,
     PreferenceSlot,
 )
 from agent.schemas.routes import DomainRoute, as_domain_route
@@ -29,7 +29,7 @@ class ColumnSpec:
     exclusive: bool = False
 
 
-SEED: tuple[ColumnSpec, ...] = (
+DEFAULT_COLUMN_SPECS: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "properties.bedrooms",
         "properties.bedrooms",
@@ -92,8 +92,8 @@ SEED: tuple[ColumnSpec, ...] = (
 )
 
 # A column's owner is one domain. Several domains may still inject it.
-DOMAIN_COLUMNS: dict[str, frozenset[str]] = {
-    "property_search": frozenset(spec.logical_col for spec in SEED),
+ALLOWED_COLUMNS_BY_DOMAIN: dict[str, frozenset[str]] = {
+    "property_search": frozenset(spec.logical_col for spec in DEFAULT_COLUMN_SPECS),
     "market_intel": frozenset(
         {"properties.price", "properties.purpose", "properties.location_id_v2"}
     ),
@@ -105,7 +105,7 @@ DOMAIN_COLUMNS: dict[str, frozenset[str]] = {
     "rta_intel": frozenset({"properties.location_id_v2"}),
 }
 
-CATALOG_TO_MEMORY: dict[str, str] = {
+MEMORY_DOMAIN_BY_CATALOG_DOMAIN: dict[str, str] = {
     "listings": "property_search",
     "agencies": "property_search",
     "transactions": "market_intel",
@@ -118,18 +118,18 @@ CATALOG_TO_MEMORY: dict[str, str] = {
     "rta": "rta_intel",
 }
 
-FILTER_COLUMNS = {
-    spec.filter_key: spec.logical_col for spec in SEED if spec.filter_key
+LOGICAL_COLUMN_BY_FILTER_KEY = {
+    spec.filter_key: spec.logical_col for spec in DEFAULT_COLUMN_SPECS if spec.filter_key
 }
 
 EXCLUSIVE_SLOTS = frozenset(
-    {spec.slot.value for spec in SEED if spec.slot and spec.exclusive}
-    | {slot.value for slot in NON_COLUMN_EXCLUSIVE_SLOTS}
+    {spec.slot.value for spec in DEFAULT_COLUMN_SPECS if spec.slot and spec.exclusive}
+    | {slot.value for slot in EXCLUSIVE_SLOTS_WITHOUT_COLUMN}
 )
 
 # One representative column per cluster — used to hide whole clusters off-domain.
 CLUSTER_GATE_COLUMN: dict[MemoryCluster, str] = {}
-for _spec in SEED:
+for _spec in DEFAULT_COLUMN_SPECS:
     if _spec.cluster and _spec.cluster not in CLUSTER_GATE_COLUMN:
         CLUSTER_GATE_COLUMN[_spec.cluster] = _spec.logical_col
 
@@ -158,28 +158,28 @@ def parse_cluster(value: str | MemoryCluster | None) -> MemoryCluster | None:
         return None
 
 
-def seed_map() -> dict[str, ColumnSpec]:
-    return {spec.logical_col: spec for spec in SEED}
+def default_column_specs_by_logical_column() -> dict[str, ColumnSpec]:
+    return {spec.logical_col: spec for spec in DEFAULT_COLUMN_SPECS}
 
 
 def slot_for_filter_key(
     filter_key: str, columns: dict[str, ColumnSpec] | None = None
 ) -> str | None:
     """Map a QueryFrame predicate key (e.g. price) to its preference slot (budget_max)."""
-    for spec in (columns or seed_map()).values():
+    for spec in (columns or default_column_specs_by_logical_column()).values():
         if spec.filter_key == filter_key and spec.slot is not None:
             return spec.slot.value
     return None
 
 
-def logical_for_filter_key(
+def logical_column_for_filter_key(
     filter_key: str, columns: dict[str, ColumnSpec] | None = None
 ) -> str | None:
     """Map a QueryFrame predicate key to the logical column name."""
-    for spec in (columns or seed_map()).values():
+    for spec in (columns or default_column_specs_by_logical_column()).values():
         if spec.filter_key == filter_key:
             return spec.logical_col
-    return FILTER_COLUMNS.get(filter_key)
+    return LOGICAL_COLUMN_BY_FILTER_KEY.get(filter_key)
 
 
 def gate_column_for_cluster(cluster: str | MemoryCluster | None) -> str | None:
@@ -197,7 +197,7 @@ def gate_column_for_cluster(cluster: str | MemoryCluster | None) -> str | None:
 def columns_for_domains(domains: list[str] | set[str]) -> frozenset[str]:
     allowed: set[str] = set()
     for domain in domains:
-        allowed.update(DOMAIN_COLUMNS.get(domain, ()))
+        allowed.update(ALLOWED_COLUMNS_BY_DOMAIN.get(domain, ()))
     return frozenset(allowed)
 
 
@@ -207,13 +207,13 @@ def memory_domains_for(domain_route: DomainRoute | dict | None) -> list[str]:
         return []
     found: list[str] = []
     for domain_id in [*route.domain_ids, *route.join_ids]:
-        mapped = CATALOG_TO_MEMORY.get(domain_id)
+        mapped = MEMORY_DOMAIN_BY_CATALOG_DOMAIN.get(domain_id)
         if mapped and mapped not in found:
             found.append(mapped)
     return found
 
 
-def resolve_column(logical: str, columns: dict[str, ColumnSpec] | None = None) -> str:
-    table = columns if columns is not None else seed_map()
+def physical_column_for(logical: str, columns: dict[str, ColumnSpec] | None = None) -> str:
+    table = columns if columns is not None else default_column_specs_by_logical_column()
     spec = table.get(logical)
     return spec.physical_col if spec else logical

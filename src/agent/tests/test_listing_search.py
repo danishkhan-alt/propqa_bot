@@ -9,23 +9,21 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
+from agent.enums.grounding import Breadth
+from agent.enums.listing import ListingPurpose, ListingSort, MentionKind
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
 from agent.grounding import GroundingIndex
-from agent.grounding.places import Breadth, ListingLinks, LocationNode, build_place_directory
-from agent.grounding.stored_values import StoredValue, StoredValueIndex
+from agent.grounding.places import build_place_directory
+from agent.grounding.stored_values import StoredValueIndex
 from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding
-from agent.schemas.listing import ListingFilters, ListingPurpose, ListingSort, MentionKind, NameMention
+from agent.schemas.grounding_index import ListingCountsByPlaceLink, LocationNode, StoredValue
+from agent.schemas.listing import ListingFilters, NameMention
+from agent.schemas.listing_search import ListingSearch
 from agent.schemas.routes import DomainRoute, QueryRoute
-from agent.schemas.sql import SqlDraft
-from agent.sql.execute import SqlPage
-from agent.sql.listing_search import (
-    ListingSearch,
-    build_listing_query,
-    category_ids,
-    search_listings,
-)
-from agent.sql.lookup import ONLY_ZERO_VALUES, run_sql_lookup
+from agent.schemas.sql import SqlDraft, SqlPage
+from agent.sql.listing_search import build_listing_query, resolve_category_ids, search_listings
+from agent.sql.lookup import ALL_ZERO_ROW_RETRY_REASON, run_sql_lookup
 
 MARINA = GroundedPlace(
     title="Dubai Marina",
@@ -88,7 +86,7 @@ def test_filters_become_parameters_and_price_reads_the_filled_column():
 
 
 def test_types_map_to_catalog_categories_and_unknown_types_are_reported():
-    ids, unknown = category_ids(["Villas", "hotel apartment", "Penthouse", "castle"])
+    ids, unknown = resolve_category_ids(["Villas", "hotel apartment", "Penthouse", "castle"])
     assert ids == [3, 22, 33]
     assert unknown == ["castle"]
 
@@ -141,7 +139,7 @@ def _index() -> GroundingIndex:
         LocationNode(10, 2, "Dubai Marina", Breadth.AREA, lat=25.08, lng=55.14),
         LocationNode(11, 10, "Marina Gate", Breadth.BUILDING, lat=25.09, lng=55.15),
     ]
-    places = build_place_directory(v2, [], ListingLinks(), region="Dubai")
+    places = build_place_directory(v2, [], ListingCountsByPlaceLink(), region="Dubai")
     stored = StoredValueIndex(
         [StoredValue("chatbot_ai.real_estate_transactions", "area_name_en", "Marsa Dubai", "area", 10)],
         {},
@@ -276,7 +274,7 @@ def test_an_all_zero_aggregate_is_retried_with_the_reason():
     )
     update = run_sql_lookup(_sales_state(), models, lambda sql: next(pages))
     assert len(models.calls) == 2
-    assert models.calls[1]["previous_error"] == ONLY_ZERO_VALUES
+    assert models.calls[1]["previous_error"] == ALL_ZERO_ROW_RETRY_REASON
     assert update["sql_rows"] == [{"n": 4091}]
 
 
@@ -290,12 +288,12 @@ def test_a_failed_retry_keeps_the_answer_it_was_retrying():
 
 def test_the_reply_is_told_only_the_filters_the_user_gave():
     from agent.schemas.grounding import GroundedPlace
-    from agent.sql.lookup import _listing_conditions
+    from agent.sql.lookup import _stated_listing_filters
 
     search = ListingSearch(
         filters=ListingFilters(purpose="sale", price_max=2_000_000),
         places=[GroundedPlace(title="Dubai Marina")],
     )
 
-    assert _listing_conditions(search) == ["purpose: sale", "price_max: 2000000.0", "place: Dubai Marina"]
-    assert _listing_conditions(ListingSearch(filters=ListingFilters())) == []
+    assert _stated_listing_filters(search) == ["purpose: sale", "price_max: 2000000.0", "place: Dubai Marina"]
+    assert _stated_listing_filters(ListingSearch(filters=ListingFilters())) == []

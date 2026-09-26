@@ -4,7 +4,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from common.logger.app_logger import JsonFormatter
+from common.logger.json_formatter import JsonFormatter
 
 
 def configure_logging(

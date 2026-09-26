@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from common.utils.helpers import is_valid_uuid
+from common.utils.uuid_validation import is_valid_uuid
 
 _THREAD_MAX = 64
 _USER_MAX = 80

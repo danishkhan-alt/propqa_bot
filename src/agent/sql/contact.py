@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from agent.sql.execute import run_against_warehouse
+
 CONTACT_SQL = """
 SELECT
     p.id AS property_id,
@@ -39,14 +41,12 @@ class ContactLoader(Protocol):
     def __call__(self, property_id: int) -> dict[str, Any] | None: ...
 
 
-def load_from_warehouse(property_id: int) -> dict[str, Any] | None:
-    from agent.sql.execute import run_against_warehouse
-
+def fetch_listing_contact_row(property_id: int) -> dict[str, Any] | None:
     page = run_against_warehouse(CONTACT_SQL, {"property_id": property_id})
     return page.rows[0] if page.rows else None
 
 
-def listing_contact(row: dict[str, Any] | None) -> dict[str, Any] | None:
+def contact_sheet_from_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
     """The shape the UI's contact sheet reads. None when nobody can be reached."""
     if not row:
         return None

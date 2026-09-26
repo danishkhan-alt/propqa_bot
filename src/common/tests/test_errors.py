@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 from common.errors import InvalidRequestBody, RateLimited
-from common.errors.system import InternalError
-from common.http.request_response import api_error, api_response
+from common.errors.standard_errors import InternalError
+from common.http.response_builders import api_error_response, api_response
 
 
 def test_api_response_wraps_result():
@@ -16,7 +16,7 @@ def test_api_response_wraps_result():
 
 
 def test_api_error_is_problem_details():
-    response = api_error(InvalidRequestBody("bad json"))
+    response = api_error_response(InvalidRequestBody("bad json"))
     body = json.loads(response.body)
     assert response.status_code == 422
     assert response.media_type == "application/problem+json"
@@ -26,13 +26,13 @@ def test_api_error_is_problem_details():
 
 
 def test_rate_limited_sets_retry_after():
-    response = api_error(RateLimited(12))
+    response = api_error_response(RateLimited(12))
     assert response.status_code == 429
     assert response.headers["Retry-After"] == "12"
 
 
 def test_internal_error_has_system_codes():
-    response = api_error(InternalError())
+    response = api_error_response(InternalError())
     body = json.loads(response.body)
     assert body["code"] == "SYSTEM"
     assert body["subcode"] == "INTERNAL_ERROR"

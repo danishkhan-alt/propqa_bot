@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from common.context import request_id_var, subject_id_var, user_kind_var
+from common.request_context import request_id_var, subject_id_var, user_kind_var
 
 
 class JsonFormatter(logging.Formatter):

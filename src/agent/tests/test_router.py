@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
 
+import pytest
 import yaml
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -22,10 +21,9 @@ from agent.schemas.routes import (
     as_last_need_db,
     as_query_route,
 )
-from agent.schemas.sql import SqlDraft
-from agent.services.llm import invoke_structured, openai_model_reasons
-from agent.sql.execute import SqlPage
-from agent.validator import apply_query_policy, sanitize_domain_route
+from agent.schemas.sql import SqlDraft, SqlPage
+from agent.services.llm import invoke_structured_with_fallback, is_openai_reasoning_model
+from agent.validator import sanitize_domain_route, sanitize_query_route
 
 GOLDEN = Path(__file__).resolve().parents[2] / "evals" / "router_golden.yaml"
 
@@ -295,7 +293,7 @@ def test_low_confidence_is_logged_and_the_model_route_stands():
         confidence=0.2,
         rationale="Unsure.",
     )
-    updated, notes = apply_query_policy(route, None)
+    updated, notes = sanitize_query_route(route, None)
     assert updated.route is Route.DIRECT_ANSWER
     assert "low_confidence" in notes
 
@@ -336,7 +334,7 @@ def test_structured_output_retries_once_then_uses_the_fallback():
 
     runnable = Boom()
     fallback = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.3, rationale="Fallback.")
-    parsed = invoke_structured(runnable, [], None, fallback)
+    parsed = invoke_structured_with_fallback(runnable, [], None, fallback)
     assert parsed is fallback
     assert runnable.calls == 2
 
@@ -364,9 +362,9 @@ def _schema_counts(node, counts=None) -> dict:
 def test_the_router_schema_stays_inside_the_structured_output_limits():
     # The API rejects more than 16 union-typed or 24 optional fields, and optional fields
     # slow grammar compilation, so every field is required and unions stay under the cap.
-    from agent.services.llm import output_schema
+    from agent.services.llm import build_strict_output_schema
 
-    counts = _schema_counts(output_schema(QueryRoute))
+    counts = _schema_counts(build_strict_output_schema(QueryRoute))
     assert counts["optional"] == 0
     assert counts["unions"] <= 16
 
@@ -387,14 +385,14 @@ def test_a_reply_of_the_wrong_shape_is_retried_then_replaced():
             }
 
     runnable = Wrapped()
-    parsed = invoke_structured(runnable, [], None, DomainRoute(domain_ids=[], confidence=0.3, rationale="Fallback."))
+    parsed = invoke_structured_with_fallback(runnable, [], None, DomainRoute(domain_ids=[], confidence=0.3, rationale="Fallback."))
     assert isinstance(parsed, DomainRoute) and parsed.domain_ids == ["listings"]
     assert runnable.calls == 2
 
 
 def test_router_schemas_are_accepted_by_strict_mode():
     # Strict mode needs closed objects and no keywords beside a $ref.
-    from agent.services.llm import output_schema
+    from agent.services.llm import build_strict_output_schema
 
     def walk(node):
         if isinstance(node, dict):
@@ -409,7 +407,7 @@ def test_router_schemas_are_accepted_by_strict_mode():
                 walk(value)
 
     for model in (QueryRoute, DomainRoute):
-        walk(output_schema(model))
+        walk(build_strict_output_schema(model))
 
 
 def test_a_chosen_recipe_loads_its_own_pack_and_an_unknown_one_is_dropped():
@@ -435,7 +433,7 @@ def test_a_chosen_recipe_loads_its_own_pack_and_an_unknown_one_is_dropped():
     [("gpt-5.5", True), ("gpt-5.4-mini", True), ("o4-mini", True), ("gpt-5-chat-latest", False), ("gpt-4.1", False), ("gpt-4o", False)],
 )
 def test_only_reasoning_models_are_sent_an_effort(model, reasons):
-    assert openai_model_reasons(model) is reasons
+    assert is_openai_reasoning_model(model) is reasons
 
 
 def test_the_city_itself_is_never_a_place_to_filter_on():
@@ -446,6 +444,6 @@ def test_the_city_itself_is_never_a_place_to_filter_on():
         confidence=0.9,
         rationale="Trend.",
     )
-    updated, notes = apply_query_policy(route, None)
+    updated, notes = sanitize_query_route(route, None)
     assert [name.text for name in updated.names] == ["Dubai Marina"]
     assert "dropped_region_name" in notes

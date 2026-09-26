@@ -9,28 +9,28 @@ from agent.schemas.routes import as_domain_route, as_query_route
 from agent.sql.guard import live_listing_id_column
 from agent.states.chat import ChatState
 
-_LIST = frozenset({Intent.LIST, Intent.RANK})
+_LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK})
 _ID_COLUMNS = ("property_id", "building_id")
 
 
-def is_listing_list(state: ChatState) -> bool:
+def is_listing_list_request(state: ChatState) -> bool:
     """The user asked to see properties, and the listings pack is loaded."""
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
     if query is None or domain is None:
         return False
-    if query.intent not in _LIST:
+    if query.intent not in _LISTING_INTENTS:
         return False
     return "listings" in domain.domain_ids
 
 
-def listing_ids_from(state: ChatState, rows: list[dict], sql: str = "") -> list[str]:
+def listing_card_ids_from_rows(state: ChatState, rows: list[dict], sql: str = "") -> list[str]:
     """Ids to render as listing cards, in row order.
 
     Set on a listing list, and on any lookup whose rows are live listings themselves, so a
     property is always shown as its card rather than as a row of figures.
     """
-    if is_listing_list(state):
+    if is_listing_list_request(state):
         columns = _ID_COLUMNS
     else:
         column = live_listing_id_column(sql)
@@ -40,7 +40,7 @@ def listing_ids_from(state: ChatState, rows: list[dict], sql: str = "") -> list[
     ids: list[str] = []
     seen: set[str] = set()
     for row in rows:
-        text = _row_id(row, columns)
+        text = _first_listing_id_in_row(row, columns)
         if text is None or text in seen:
             continue
         seen.add(text)
@@ -48,7 +48,7 @@ def listing_ids_from(state: ChatState, rows: list[dict], sql: str = "") -> list[
     return ids
 
 
-def _row_id(row: dict, columns: tuple[str, ...]) -> str | None:
+def _first_listing_id_in_row(row: dict, columns: tuple[str, ...]) -> str | None:
     for column in columns:
         text = _id_text(row.get(column))
         if text is not None:

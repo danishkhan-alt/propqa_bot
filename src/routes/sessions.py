@@ -5,67 +5,48 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
 
+from agent.checkpointer import delete_thread
+from agent.graph.workflow import get_chat_graph
+from agent.memory.maintenance.privacy import delete_user_memory
+from agent.memory.models.records import ALL_CLUSTERS
+from agent.memory.session.backends import get_repository
 from common.logger import get_logger
 from common.session import (
-    detach_session,
+    list_user_sessions,
     preferences,
+    remove_sidebar_session,
+    restore_turns_from_checkpoint,
     safe_thread_id,
     safe_user_id,
-    sessions_for,
-    turns_from,
 )
+from routes.schemas.sessions import ForgetSessionsRequest, NewSessionRequest, SavePreferencesRequest
 
 logger = get_logger("sessions")
 router = APIRouter()
 
 
-class NewSession(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    previous_session_id: str | None = None
-    user_id: str | None = None
-    carry_over_long_term: bool = True
-
-
-class ForgetBody(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    user_id: str | None = None
-    session_ids: list[str] = Field(default_factory=list)
-    guest_user_id: str | None = None
-    merge_ltm: bool = True
-
-
-class PreferencesBody(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    user_id: str
-    preferences: dict = Field(default_factory=dict)
-
-
 @router.post("/sessions/new")
-def new_session(body: NewSession | None = None) -> dict:
+def new_session(body: NewSessionRequest | None = None) -> dict:
     del body
     return {"session_id": str(uuid.uuid4()), "carried_over": []}
 
 
 @router.get("/sessions")
 def list_sessions(user_id: str | None = None, limit: int = 30) -> dict:
-    return {"sessions": [row.to_row() for row in sessions_for(user_id, limit)]}
+    return {"sessions": [row.to_row() for row in list_user_sessions(user_id, limit)]}
 
 
 @router.get("/sessions/{session_id}/turns")
 async def session_turns(request: Request, session_id: str, limit: int = 30) -> dict:
     thread_id = _require_thread(session_id)
     try:
-        snapshot = await _graph(request).aget_state({"configurable": {"thread_id": thread_id}})
+        snapshot = await _get_chat_graph(request).aget_state({"configurable": {"thread_id": thread_id}})
     except Exception:
         logger.exception("could not read session %s", thread_id)
         raise HTTPException(status_code=503, detail="Could not load this session.") from None
     values = getattr(snapshot, "values", None) or {}
-    turns, messages = turns_from(values, limit=limit)
+    turns, messages = restore_turns_from_checkpoint(values, limit=limit)
     return {
         "session_id": thread_id,
         "turns": turns,
@@ -76,30 +57,30 @@ async def session_turns(request: Request, session_id: str, limit: int = 30) -> d
 
 
 @router.post("/sessions/forget_many")
-def forget_many(request: Request, body: ForgetBody) -> dict:
-    forgotten = [item for item in body.session_ids if _drop(item, request)]
+def forget_many(request: Request, body: ForgetSessionsRequest) -> dict:
+    forgotten = [item for item in body.session_ids if _forget_session(item, request)]
     return {"forgotten": forgotten}
 
 
 @router.post("/sessions/{session_id}/forget")
-def forget_session(request: Request, session_id: str, body: ForgetBody | None = None) -> dict:
+def forget_session(request: Request, session_id: str, body: ForgetSessionsRequest | None = None) -> dict:
     del body
-    if not _drop(session_id, request):
+    if not _forget_session(session_id, request):
         raise HTTPException(status_code=404, detail="Session not found.")
     return {"status": "forgotten"}
 
 
 @router.post("/sessions/{session_id}/forget_all")
-def forget_all(request: Request, session_id: str, body: ForgetBody | None = None) -> dict:
+def forget_session_and_user_memory(request: Request, session_id: str, body: ForgetSessionsRequest | None = None) -> dict:
     user_id = safe_user_id(body.user_id) if body is not None else None
-    _drop(session_id, request)
+    _forget_session(session_id, request)
     if user_id:
-        _wipe_memory(user_id)
+        _delete_all_user_memory(user_id)
     return {"status": "forgotten"}
 
 
 @router.post("/sessions/{session_id}/claim")
-def claim_session(session_id: str, body: ForgetBody | None = None) -> dict:
+def claim_session(session_id: str, body: ForgetSessionsRequest | None = None) -> dict:
     del session_id, body
     return {"status": "ok"}
 
@@ -127,7 +108,7 @@ def get_preferences(user_id: str) -> dict:
 
 
 @router.post("/preferences")
-def save_preferences(body: PreferencesBody) -> dict:
+def save_preferences(body: SavePreferencesRequest) -> dict:
     merged = preferences.merge(_require_user(body.user_id), body.preferences)
     return {"preferences": merged}
 
@@ -139,11 +120,10 @@ def delete_preferences(user_id: str, session_id: str | None = None) -> dict:
     return {"status": "deleted"}
 
 
-def _graph(request: Request):
+def _get_chat_graph(request: Request):
     compiled = getattr(request.app.state, "chat_graph", None)
     if compiled is not None:
         return compiled
-    from agent.graph.workflow import get_chat_graph
 
     return get_chat_graph()
 
@@ -162,8 +142,8 @@ def _require_user(user_id: str) -> str:
     return owner
 
 
-def _drop(session_id: str, request: Request | None = None) -> bool:
-    thread_id = detach_session(session_id)
+def _forget_session(session_id: str, request: Request | None = None) -> bool:
+    thread_id = remove_sidebar_session(session_id)
     if thread_id is None:
         return False
     _delete_thread(thread_id, request)
@@ -180,19 +160,13 @@ def _delete_thread(thread_id: str, request: Request | None) -> None:
             logger.exception("could not delete session %s", thread_id)
         return
     try:
-        from agent.checkpointer import delete_thread
-
         delete_thread(thread_id)
     except Exception:
         logger.exception("could not delete session %s", thread_id)
 
 
-def _wipe_memory(user_id: str) -> None:
+def _delete_all_user_memory(user_id: str) -> None:
     try:
-        from agent.memory.maintenance.privacy import delete_user_memory
-        from agent.memory.models.types import ALL_CLUSTERS
-        from agent.memory.session.bootstrap import get_repository
-
         repository = get_repository()
         if repository is None:
             return

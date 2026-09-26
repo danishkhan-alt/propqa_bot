@@ -18,8 +18,8 @@ import yaml
 
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb
-from agent.services.catalog_index import domain_index_text
-from agent.services.llm import RouterModels
+from agent.services.catalog_prompt_text import render_domain_index
+from agent.services.llm import LangChainAgentModels
 from agent.sql.recipes import recipe_index_text
 from agent.validator import sanitize_domain_route
 
@@ -27,7 +27,7 @@ GOLDEN_PATH = Path(__file__).resolve().parent / "domain_router_golden.yaml"
 CHECKS = ("lead", "domains", "joins", "recipe")
 
 
-def score(case: dict, route: DomainRoute) -> dict[str, bool]:
+def score_route(case: dict, route: DomainRoute) -> dict[str, bool]:
     expected = list(case["domains"])
     leads = {expected[0], *(case.get("accept_lead") or [])}
     lead = route.domain_ids[0] if route.domain_ids else None
@@ -40,8 +40,8 @@ def score(case: dict, route: DomainRoute) -> dict[str, bool]:
     return result
 
 
-def run(router: str, cases: list[dict]) -> list[dict]:
-    models = RouterModels(domain_router=router)
+def run_router_cases(router: str, cases: list[dict]) -> list[dict]:
+    models = LangChainAgentModels(domain_router=router)
     rows: list[dict] = []
     for case in cases:
         last = LastNeedDb.model_validate(case["last_need_db"]) if case.get("last_need_db") else None
@@ -50,12 +50,12 @@ def run(router: str, cases: list[dict]) -> list[dict]:
             message=case["message"],
             turn_kind=TurnKind(case.get("turn_kind", "new")),
             last_need_db=last,
-            index_text=domain_index_text(),
+            index_text=render_domain_index(),
             recipes_text=recipe_index_text(),
         )
         latency = time.perf_counter() - started
         route, _ = sanitize_domain_route(route)
-        checks = score(case, route)
+        checks = score_route(case, route)
         rows.append({"id": case["id"], "route": route, "checks": checks, "latency": latency})
         mark = "PASS" if all(checks.values()) else "FAIL " + ",".join(k for k, ok in checks.items() if not ok)
         # Jev's rationale names it; anything else means Jev failed and the router model answered.
@@ -68,7 +68,7 @@ def run(router: str, cases: list[dict]) -> list[dict]:
     return rows
 
 
-def summary(router: str, rows: list[dict]) -> str:
+def format_router_summary(router: str, rows: list[dict]) -> str:
     total = len(rows)
     parts = [f"{check} {sum(r['checks'][check] for r in rows)}/{total}" for check in CHECKS]
     passed = sum(all(r["checks"].values()) for r in rows)
@@ -88,10 +88,10 @@ def main() -> None:
     if args.case_ids:
         cases = [case for case in cases if case["id"] in args.case_ids]
     routers = args.router or ["jev", "llm"]
-    results = {router: run(router, cases) for router in routers}
+    results = {router: run_router_cases(router, cases) for router in routers}
     print()
     for router, rows in results.items():
-        print(summary(router, rows))
+        print(format_router_summary(router, rows))
 
 
 if __name__ == "__main__":

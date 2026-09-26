@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from functools import wraps
 
-from common.ratelimit.keys import by_caller
+from common.ratelimit.keys import caller_rate_limit_key
 from common.ratelimit.limiter import limiter
-from common.ratelimit.rules import RateLimit
+from common.schemas.rate_limit import RateLimit
 
 RATE_LIMITS_ATTRIBUTE = "rate_limits"
 
 
-def rate_limit(*rules: RateLimit, key: Callable = by_caller) -> Callable:
+def rate_limit(*rules: RateLimit, key: Callable = caller_rate_limit_key) -> Callable:
     """Override the default ceiling for one endpoint.
 
     Declaring rules here also tells RateLimitMiddleware to stand back, so
@@ -28,7 +29,6 @@ def rate_limit(*rules: RateLimit, key: Callable = by_caller) -> Callable:
             limiter.enforce(key(request), *rules)
             return view(request, *args, **kwargs)
 
-        import asyncio
 
         wrapper = async_wrapper if asyncio.iscoroutinefunction(view) else sync_wrapper
         existing = getattr(view, RATE_LIMITS_ATTRIBUTE, ())

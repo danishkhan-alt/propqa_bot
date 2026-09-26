@@ -7,46 +7,18 @@ parameters; any other name means a narrower question, which the drafted path ans
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import lru_cache
 
 import sqlglot
 from sqlglot import exp
 
 from agent.schemas.grounding import Grounding
+from agent.schemas.recipes import BoundRecipe, Recipe, RecipeParam
 from catalog import load_recipes
 
 
-@dataclass(frozen=True)
-class RecipeParam:
-    name: str
-    table: str
-    kind: str
-
-
-@dataclass(frozen=True)
-class Recipe:
-    id: str
-    domains: tuple[str, ...]
-    when: str
-    purpose: str
-    params: tuple[RecipeParam, ...]
-    sql: str
-
-
-@dataclass(frozen=True)
-class BoundRecipe:
-    recipe: Recipe
-    sql: str
-    values: dict[str, list[str]]
-
-    def filters(self) -> list[str]:
-        """The conditions the user's words set, as `name: value`. The recipe's own are in purpose."""
-        return [f"{name}: {', '.join(stored)}" for name, stored in self.values.items()]
-
-
 @lru_cache(maxsize=1)
-def recipes() -> dict[str, Recipe]:
+def load_recipes_by_id() -> dict[str, Recipe]:
     loaded: dict[str, Recipe] = {}
     for item in load_recipes():
         params = tuple(
@@ -65,13 +37,13 @@ def recipes() -> dict[str, Recipe]:
     return loaded
 
 
-def recipe(recipe_id: str | None) -> Recipe | None:
-    return recipes().get(recipe_id) if recipe_id else None
+def get_recipe(recipe_id: str | None) -> Recipe | None:
+    return load_recipes_by_id().get(recipe_id) if recipe_id else None
 
 
 def recipe_index_text() -> str:
     """What the domain router reads: one line per recipe."""
-    return "\n".join(f"- {item.id} ({', '.join(item.domains)}): {item.when}" for item in recipes().values())
+    return "\n".join(f"- {item.id} ({', '.join(item.domains)}): {item.when}" for item in load_recipes_by_id().values())
 
 
 def bind_recipe(chosen: Recipe, grounding: Grounding | None) -> BoundRecipe | None:

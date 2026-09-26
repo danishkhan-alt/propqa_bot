@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import time
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -31,12 +32,15 @@ from agent.graph.nodes.routing import (
     next_step_after_query_route,
 )
 from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
+from agent.memory.session.backends import connect_memory_cache, open_long_term_store
 from agent.states.chat import ChatInput, ChatState
 from common.logger import get_logger
+from config import ENVIRONMENT
 
 logger = get_logger("agent.workflow")
 
 _graph: CompiledStateGraph | None = None
+_graph_checkpointer: BaseCheckpointSaver | None = None
 
 
 def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
@@ -125,15 +129,14 @@ def with_node_timing(node):
 
 
 def get_chat_graph() -> CompiledStateGraph:
-    global _graph
-    if _graph is None:
-        from config import ENVIRONMENT
-
+    """The compiled chat graph, rebuilt whenever the checkpointer has been replaced."""
+    global _graph, _graph_checkpointer
+    checkpointer = get_checkpointer()
+    if _graph is None or _graph_checkpointer is not checkpointer:
         store = None
         if not ENVIRONMENT.is_test:
-            from agent.memory.session.bootstrap import open_hot, open_long_term_store
-
-            open_hot()
+            connect_memory_cache()
             store = open_long_term_store()
-        _graph = build_chat_graph(get_checkpointer(), store=store)
+        _graph = build_chat_graph(checkpointer, store=store)
+        _graph_checkpointer = checkpointer
     return _graph

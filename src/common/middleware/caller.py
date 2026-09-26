@@ -9,13 +9,13 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from common.context import subject_id_var, user_kind_var
 from common.enums.user_kind import UserKind
 from common.identity import Caller
-from common.utils.helpers import is_valid_uuid
+from common.request_context import subject_id_var, user_kind_var
+from common.utils.uuid_validation import is_valid_uuid
 from config import ActiveConfig
 
-VISITOR_HEADER = "X-Visitor-ID"
+VISITOR_ID_HEADER = "X-Visitor-ID"
 
 
 def resolve_caller(request: Request) -> Caller:
@@ -30,22 +30,22 @@ def resolve_caller(request: Request) -> Caller:
 
 
 def _read_visitor_id(request: Request) -> str | None:
-    header = request.headers.get(VISITOR_HEADER)
-    if header and _usable_id(header):
+    header = request.headers.get(VISITOR_ID_HEADER)
+    if header and _is_usable_visitor_id(header):
         return header.strip()
 
     cookie = request.cookies.get(ActiveConfig.VISITOR_COOKIE_NAME)
-    if cookie and _usable_id(cookie):
+    if cookie and _is_usable_visitor_id(cookie):
         return cookie.strip()
     return None
 
 
-def _usable_id(value: str) -> bool:
+def _is_usable_visitor_id(value: str) -> bool:
     cleaned = value.strip()
     return bool(cleaned) and (is_valid_uuid(cleaned) or cleaned.isalnum())
 
 
-def _visitor_cookie(caller: Caller) -> str:
+def _build_visitor_cookie_header(caller: Caller) -> str:
     cookie = SimpleCookie()
     cookie[ActiveConfig.VISITOR_COOKIE_NAME] = caller.subject_id
     morsel = cookie[ActiveConfig.VISITOR_COOKIE_NAME]
@@ -82,8 +82,8 @@ class CallerMiddleware:
         async def send_with_visitor(message: Message) -> None:
             if message["type"] == "http.response.start" and caller.is_visitor:
                 headers = MutableHeaders(raw=message["headers"])
-                headers.append("set-cookie", _visitor_cookie(caller))
-                headers[VISITOR_HEADER] = caller.subject_id
+                headers.append("set-cookie", _build_visitor_cookie_header(caller))
+                headers[VISITOR_ID_HEADER] = caller.subject_id
             await send(message)
 
         try:

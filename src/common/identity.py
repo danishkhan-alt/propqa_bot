@@ -26,5 +26,5 @@ class Caller:
         return self.kind is UserKind.VISITOR
 
     @property
-    def scope(self) -> str:
+    def identity_key(self) -> str:
         return f"{self.kind.value}:{self.subject_id}"

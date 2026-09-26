@@ -4,12 +4,6 @@ from typing import Any, Protocol
 
 MISSING = object()
 
-#: Generation counters must outlive the values they version. If one is
-#: evicted the counter restarts and previously invalidated keys become
-#: reachable again, so they are written with no expiry.
-GENERATION_TIMEOUT = None
-
-
 class CacheBackend(Protocol):
     def get(self, key: str, default: Any = MISSING) -> Any: ...
     def set(self, key: str, value: Any, ttl: int | None = None) -> None: ...

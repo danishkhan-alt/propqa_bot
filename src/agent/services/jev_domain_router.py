@@ -18,7 +18,7 @@ from agent.schemas.routes import DomainRoute, LastNeedDb
 from agent.services.typesafe import SystemOneClient, TypeSafeError
 
 # The pack every place-filtered lookup joins through.
-JOIN_BRIDGE = "locations"
+PLACE_JOIN_DOMAIN_ID = "locations"
 # Thresholds were set on evals/domain_router_golden.yaml. Per-pack subject scores run high
 # for packs merely related to the question, so a second pack also needs the combines gate.
 COMBINES_MIN = 0.5
@@ -26,7 +26,7 @@ SUBJECT_MIN = 0.4
 PLACE_MIN = 0.5
 # A recipe skips drafting, so it needs a confident pick; near misses sat around 0.55.
 RECIPE_MIN = 0.9
-MAX_PRIMARY = 2
+MAX_JEV_PRIMARY_DOMAINS = 2
 NO_RECIPE = "none"
 
 _LEAD = (
@@ -69,17 +69,17 @@ def route_domain(
     recipes: dict[str, str],
 ) -> DomainRoute:
     """Ask Jev and compose the route. Raises TypeSafeError when the answers are unusable."""
-    packs = {str(domain["id"]): _pack(domain) for domain in domains}
-    questions = build_questions(packs, recipes)
+    packs = {str(domain["id"]): _describe_pack(domain) for domain in domains}
+    questions = build_jev_questions(packs, recipes)
     answers = client.ask(
-        state=_state(message, turn_kind, last_need_db),
+        state=_build_jev_state(message, turn_kind, last_need_db),
         questions=questions,
         run_name="router.domain.jev",
     )
     return compose_route(answers, list(packs), recipes)
 
 
-def build_questions(packs: dict[str, dict], recipes: dict[str, str]) -> dict[str, dict]:
+def build_jev_questions(packs: dict[str, dict], recipes: dict[str, str]) -> dict[str, dict]:
     questions: dict[str, dict] = {
         "lead": {"type": "choice", "instructions": _LEAD, "criteria": packs},
         "combines": {"type": "noul", "instructions": _COMBINES},
@@ -112,8 +112,8 @@ def compose_route(answers: dict[str, dict], domain_ids: list[str], recipes: dict
     if lead not in domain_ids:
         raise TypeSafeError(f"lead {lead!r} is not a catalog domain")
 
-    subject = {domain_id: _noul(answers, f"subject_{domain_id}") for domain_id in domain_ids}
-    combines = _noul(answers, "combines")
+    subject = {domain_id: _read_noul_score(answers, f"subject_{domain_id}") for domain_id in domain_ids}
+    combines = _read_noul_score(answers, "combines")
     seconds: list[str] = []
     if combines >= COMBINES_MIN:
         seconds = sorted(
@@ -121,10 +121,10 @@ def compose_route(answers: dict[str, dict], domain_ids: list[str], recipes: dict
             key=lambda domain_id: subject[domain_id],
             reverse=True,
         )
-    primary = [lead, *seconds][:MAX_PRIMARY]
+    primary = [lead, *seconds][:MAX_JEV_PRIMARY_DOMAINS]
 
-    place = _noul(answers, "place")
-    joins = [JOIN_BRIDGE] if place >= PLACE_MIN and JOIN_BRIDGE in domain_ids and JOIN_BRIDGE not in primary else []
+    place = _read_noul_score(answers, "place")
+    joins = [PLACE_JOIN_DOMAIN_ID] if place >= PLACE_MIN and PLACE_JOIN_DOMAIN_ID in domain_ids and PLACE_JOIN_DOMAIN_ID not in primary else []
 
     recipe_id = None
     if recipes:
@@ -149,7 +149,7 @@ def compose_route(answers: dict[str, dict], domain_ids: list[str], recipes: dict
     )
 
 
-def _pack(domain: dict) -> dict[str, Any]:
+def _describe_pack(domain: dict) -> dict[str, Any]:
     pack: dict[str, Any] = {
         "name": domain.get("name", ""),
         "what": " ".join(str(domain.get("description") or "").split()),
@@ -161,14 +161,14 @@ def _pack(domain: dict) -> dict[str, Any]:
     return pack
 
 
-def _state(message: str, turn_kind: TurnKind, last: LastNeedDb | None) -> dict[str, Any]:
+def _build_jev_state(message: str, turn_kind: TurnKind, last: LastNeedDb | None) -> dict[str, Any]:
     previous = None
     if last is not None:
         previous = {"domains": list(last.domain_ids), "summary": last.intent_summary}
     return {"message": message, "turn_kind": turn_kind.value, "previous_lookup": previous}
 
 
-def _noul(answers: dict[str, dict], question_id: str) -> float:
+def _read_noul_score(answers: dict[str, dict], question_id: str) -> float:
     value = answers[question_id].get("noul")
     if not isinstance(value, (int, float)):
         raise TypeSafeError(f"{question_id} has no noul")

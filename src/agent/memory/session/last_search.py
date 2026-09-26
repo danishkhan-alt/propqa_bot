@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from agent.memory.session.search_results import summarize_search_results
-from agent.schemas.routes import Assumptions, DomainRoute, LastNeedDb, QueryRoute
+from agent.schemas.routes import DomainRoute, LastNeedDb, LookupAssumptions, QueryRoute
 
 _INTENT_SUMMARY_CHARS = 240
 
@@ -15,7 +15,7 @@ def build_last_search(
     message: str,
     query: QueryRoute,
     domain: DomainRoute,
-    assumptions: Assumptions | None,
+    assumptions: LookupAssumptions | None,
     rows: list[dict[str, Any]],
     sql_result: dict[str, Any],
     listing_ids: list[str],

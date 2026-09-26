@@ -5,8 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from common.errors import AppError, InvalidRequestBody, Unauthorized
-from common.errors.system import DatabaseFailure, Forbidden, InternalError, RouteNotFound
-from common.http.request_response import api_error
+from common.errors.standard_errors import DatabaseFailure, Forbidden, InternalError, RouteNotFound
+from common.http.response_builders import api_error_response
 from common.logger import get_logger
 from config import ActiveConfig
 
@@ -20,7 +20,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError):
-        return api_error(exc, request)
+        return api_error_response(exc, request)
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError):
@@ -29,29 +29,29 @@ def register_exception_handlers(app: FastAPI) -> None:
             for e in exc.errors()
         ]
         detail = "; ".join(f"{f['field']}: {f['problem']}" for f in fields)
-        return api_error(InvalidRequestBody(detail, fields), request)
+        return api_error_response(InvalidRequestBody(detail, fields), request)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
-        if not _is_api(request):
+        if not _is_api_request(request):
             raise exc
-        return api_error(_from_status(exc.status_code, exc.detail), request)
+        return api_error_response(_app_error_for_status(exc.status_code, exc.detail), request)
 
     @app.exception_handler(Exception)
     async def unhandled_handler(request: Request, exc: Exception):
-        if not _is_api(request):
+        if not _is_api_request(request):
             raise exc
-        error = _classify(exc)
+        error = _to_app_error(exc)
         if error.status >= 500:
             logger.exception("Unhandled API exception")
-        return api_error(error, request)
+        return api_error_response(error, request)
 
 
-def _is_api(request: Request) -> bool:
+def _is_api_request(request: Request) -> bool:
     return request.url.path.startswith(API_PATH_PREFIX)
 
 
-def _classify(exception: BaseException) -> AppError:
+def _to_app_error(exception: BaseException) -> AppError:
     if isinstance(exception, AppError):
         return exception
     if _is_database_error(exception):
@@ -59,7 +59,7 @@ def _classify(exception: BaseException) -> AppError:
     return InternalError(_public_detail(exception, InternalError.message))
 
 
-def _from_status(status_code: int, detail: object = None) -> AppError:
+def _app_error_for_status(status_code: int, detail: object = None) -> AppError:
     if status_code == 404:
         return RouteNotFound()
     if status_code == 401:

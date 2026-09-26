@@ -5,12 +5,12 @@ from __future__ import annotations
 import uuid
 
 
-def turns_from(values: dict, *, limit: int) -> tuple[list[dict], list[dict]]:
+def restore_turns_from_checkpoint(values: dict, *, limit: int) -> tuple[list[dict], list[dict]]:
     messages = _messages(values)
     if limit > 0:
         messages = messages[-(limit * 2) :]
     cards = [{"id": item, "title": f"Property {item}"} for item in _listing_ids(values)]
-    turns = _pair(messages)
+    turns = _pair_messages_into_turns(messages)
     if turns and cards:
         turns[-1]["cards"] = cards
     return turns, messages
@@ -26,7 +26,7 @@ def _messages(values: dict) -> list[dict]:
     return messages
 
 
-def _pair(messages: list[dict]) -> list[dict]:
+def _pair_messages_into_turns(messages: list[dict]) -> list[dict]:
     turns: list[dict] = []
     pending: str | None = None
     for item in messages:

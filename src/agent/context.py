@@ -8,13 +8,12 @@ from langchain_core.runnables import RunnableConfig
 from agent.enums.routing import TurnKind
 from agent.grounding import GroundingIndex
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
-from agent.schemas.sql import SqlDraft
+from agent.schemas.sql import SqlDraft, SqlPage
 from agent.sql.cards import ListingLoader
-from agent.sql.execute import SqlPage
 from agent.sql.listing_details import ListingDetailLoader
 
 
-class RouterModels(Protocol):
+class AgentModels(Protocol):
     """LLM calls the graph is allowed to make. Tests pass a fake."""
 
     def route_query(
@@ -106,7 +105,7 @@ class AgentContext:
     """Run-scoped values. `models` and `grounding` are None in production and fakes in tests."""
 
     user_id: str
-    models: RouterModels | None = None
+    models: AgentModels | None = None
     sql_runner: SqlRunner | None = None
     listing_loader: ListingLoader | None = None
     listing_detail_loader: ListingDetailLoader | None = None

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from agent.memory.models.types import MemoryOp
+from agent.memory.models.records import MemoryOperation
 
 _PREFERENCE = re.compile(
     r"\b(i prefer|i like|i want|i need|i usually|usually|always|my budget|i am an|i'm an|i am a|i'm a)\b",
@@ -27,7 +27,7 @@ _METRO = re.compile(r"\b(?:near|close to|next to|walking distance to)\b.{0,24}\b
 _FORGET_PLACE = re.compile(r"\b(don't care|do not care|no longer|not anymore)\b", re.I)
 
 
-def extract_turn(job: dict[str, Any]) -> list[MemoryOp]:
+def extract_turn(job: dict[str, Any]) -> list[MemoryOperation]:
     message = str(job.get("message") or "")
     frame = job.get("query_frame") or {}
     result_meta = job.get("result_meta") or frame.get("result_meta") or {}
@@ -40,14 +40,14 @@ def extract_turn(job: dict[str, Any]) -> list[MemoryOp]:
     return ops
 
 
-def extract_explicit(message: str) -> list[MemoryOp]:
+def extract_explicit(message: str) -> list[MemoryOperation]:
     text = message.strip()
     if not text or not (_PREFERENCE.search(text) or _CORRECTION.search(text)):
         return []
-    ops: list[MemoryOp] = []
+    ops: list[MemoryOperation] = []
     if _FORGET_PLACE.search(text) and re.search(r"\b(marina|downtown|location|area|community)\b", text, re.I):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "delete",
                 "preference",
                 "location",
@@ -60,7 +60,7 @@ def extract_explicit(message: str) -> list[MemoryOp]:
     if bedrooms:
         count = int(bedrooms.group(1))
         ops.append(
-            _op(
+            _build_memory_operation(
                 "update" if _CORRECTION.search(text) else "add",
                 "preference",
                 "property_prefs",
@@ -70,10 +70,10 @@ def extract_explicit(message: str) -> list[MemoryOp]:
                 evidence=text,
             )
         )
-    budget = _amount(_BUDGET, text)
+    budget = _parse_aed_amount(_BUDGET, text)
     if budget is not None and (_PREFERENCE.search(text) or "budget" in text.lower()):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "update" if _CORRECTION.search(text) else "add",
                 "preference",
                 "budget",
@@ -84,12 +84,12 @@ def extract_explicit(message: str) -> list[MemoryOp]:
             )
         )
     if re.search(r"\bunfurnished\b", text, re.I):
-        ops.append(_furnished(False, text))
+        ops.append(_furnished_preference_operation(False, text))
     elif re.search(r"\bfurnished\b", text, re.I):
-        ops.append(_furnished(True, text))
+        ops.append(_furnished_preference_operation(True, text))
     if _METRO.search(text):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "add",
                 "preference",
                 "location",
@@ -100,12 +100,12 @@ def extract_explicit(message: str) -> list[MemoryOp]:
             )
         )
     if re.search(r"\b(for sale|to buy)\b", text, re.I):
-        ops.append(_purpose("sale", text))
+        ops.append(_purpose_preference_operation("sale", text))
     elif re.search(r"\b(for rent|to rent)\b", text, re.I):
-        ops.append(_purpose("rent", text))
+        ops.append(_purpose_preference_operation("rent", text))
     if re.search(r"\b(investor|investment|buy to let)\b", text, re.I):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "add",
                 "profile",
                 "persona",
@@ -120,7 +120,7 @@ def extract_explicit(message: str) -> list[MemoryOp]:
             )
         )
         ops.append(
-            _op(
+            _build_memory_operation(
                 "add",
                 "goal",
                 "goal",
@@ -134,7 +134,7 @@ def extract_explicit(message: str) -> list[MemoryOp]:
         )
     if re.search(r"\bbalcon", text, re.I):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "add",
                 "preference",
                 "property_prefs",
@@ -145,7 +145,7 @@ def extract_explicit(message: str) -> list[MemoryOp]:
         )
     if re.search(r"\b(this week|traveling|travelling|on holiday|on vacation)\b", text, re.I):
         ops.append(
-            _op(
+            _build_memory_operation(
                 "add",
                 "ephemeral",
                 "travel",
@@ -158,7 +158,7 @@ def extract_explicit(message: str) -> list[MemoryOp]:
     return ops
 
 
-def extract_episodic(frame: dict[str, Any], result_meta: dict[str, Any]) -> list[MemoryOp]:
+def extract_episodic(frame: dict[str, Any], result_meta: dict[str, Any]) -> list[MemoryOperation]:
     predicates = frame.get("predicates") or {}
     domain = frame.get("domain") or ""
     if not predicates and not domain:
@@ -175,7 +175,7 @@ def extract_episodic(frame: dict[str, Any], result_meta: dict[str, Any]) -> list
         "result_meta": kept_meta,
     }
     return [
-        _op(
+        _build_memory_operation(
             "add",
             "episodic",
             _cluster_for(domain, predicates),
@@ -188,8 +188,8 @@ def extract_episodic(frame: dict[str, Any], result_meta: dict[str, Any]) -> list
     ]
 
 
-def extract_behaviour(events: list[dict[str, Any]]) -> list[MemoryOp]:
-    ops: list[MemoryOp] = []
+def extract_behaviour(events: list[dict[str, Any]]) -> list[MemoryOperation]:
+    ops: list[MemoryOperation] = []
     for event in events:
         kind = str(event.get("type") or "").lower()
         if kind not in {"save", "filter"}:
@@ -197,7 +197,7 @@ def extract_behaviour(events: list[dict[str, Any]]) -> list[MemoryOp]:
         if event.get("bedrooms") is not None:
             count = int(event["bedrooms"])
             ops.append(
-                _op(
+                _build_memory_operation(
                     "add",
                     "preference",
                     "property_prefs",
@@ -213,7 +213,7 @@ def extract_behaviour(events: list[dict[str, Any]]) -> list[MemoryOp]:
         if event.get("budget_max") is not None:
             amount = float(event["budget_max"])
             ops.append(
-                _op(
+                _build_memory_operation(
                     "add",
                     "preference",
                     "budget",
@@ -229,7 +229,7 @@ def extract_behaviour(events: list[dict[str, Any]]) -> list[MemoryOp]:
     return ops
 
 
-def _op(
+def _build_memory_operation(
     op: str,
     memory_type: str,
     cluster: str,
@@ -242,10 +242,10 @@ def _op(
     importance: float = 0.7,
     ttl_days: int | None = None,
     evidence: str = "",
-) -> MemoryOp:
+) -> MemoryOperation:
     if confidence is None:
         confidence = 0.9 if provenance == "explicit" else 0.55
-    return MemoryOp(
+    return MemoryOperation(
         op=op,
         type=memory_type,
         cluster=cluster,
@@ -260,9 +260,9 @@ def _op(
     )
 
 
-def _furnished(value: bool, evidence: str) -> MemoryOp:
+def _furnished_preference_operation(value: bool, evidence: str) -> MemoryOperation:
     word = "furnished" if value else "unfurnished"
-    return _op(
+    return _build_memory_operation(
         "add",
         "preference",
         "property_prefs",
@@ -273,8 +273,8 @@ def _furnished(value: bool, evidence: str) -> MemoryOp:
     )
 
 
-def _purpose(value: str, evidence: str) -> MemoryOp:
-    return _op(
+def _purpose_preference_operation(value: str, evidence: str) -> MemoryOperation:
+    return _build_memory_operation(
         "add",
         "preference",
         "property_prefs",
@@ -285,7 +285,7 @@ def _purpose(value: str, evidence: str) -> MemoryOp:
     )
 
 
-def _amount(pattern: re.Pattern[str], text: str) -> float | None:
+def _parse_aed_amount(pattern: re.Pattern[str], text: str) -> float | None:
     match = pattern.search(text)
     if not match:
         return None

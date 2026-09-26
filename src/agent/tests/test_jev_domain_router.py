@@ -8,7 +8,7 @@ import pytest
 from agent.enums.routing import TurnKind
 from agent.schemas.routes import DomainRoute, LastNeedDb
 from agent.services import jev_domain_router
-from agent.services.llm import RouterModels
+from agent.services.llm import LangChainAgentModels
 from agent.services.typesafe import SystemOneClient, TypeSafeError
 
 DOMAINS = [
@@ -156,7 +156,7 @@ def test_router_models_fall_back_to_the_router_model_when_jev_fails():
         def invoke(self, messages, config=None):
             return {"parsed": DomainRoute(domain_ids=["market"], confidence=0.8, rationale="llm")}
 
-    models = RouterModels.__new__(RouterModels)
+    models = LangChainAgentModels.__new__(LangChainAgentModels)
     models._jev = _client(lambda request: httpx.Response(500, text="boom"))
     models._domain = RouterModelDomain()
 

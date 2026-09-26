@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import logging
 
-from common.context import request_id_var, subject_id_var, user_kind_var
 from common.enums.user_kind import UserKind
-from common.logger.app_logger import JsonFormatter
+from common.logger.json_formatter import JsonFormatter
 from common.logger.redact import redact_headers, redact_token
 from common.middleware.request_id import request_id_var as middleware_var
+from common.request_context import request_id_var, subject_id_var, user_kind_var
 
 
 def test_middleware_and_formatter_share_one_variable():

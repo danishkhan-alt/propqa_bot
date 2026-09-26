@@ -6,10 +6,10 @@ from pydantic import BaseModel
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from common.context import get_request_id
 from common.enums.http_status import HttpStatus
 from common.errors import AppError
-from common.schemas.pagination import PaginationMetaData
+from common.request_context import get_request_id
+from common.schemas.pagination import PaginationMetadata
 from common.schemas.responses import (
     APIResponse,
     FieldProblem,
@@ -24,22 +24,22 @@ PROBLEM_CONTENT_TYPE = "application/problem+json"
 def api_response(
     result: Any = None, status: HttpStatus = HttpStatus.OK
 ) -> JSONResponse:
-    payload = APIResponse(result=serialize(result), status=int(status))
+    payload = APIResponse(result=serialize_for_json(result), status=int(status))
     return JSONResponse(payload.model_dump(mode="json"), status_code=int(status))
 
 
 def api_paginated_response(
     items: list[Any],
-    metadata: PaginationMetaData,
+    metadata: PaginationMetadata,
     status: HttpStatus = HttpStatus.OK,
 ) -> JSONResponse:
     payload = PaginatedAPIResponse(
-        result=serialize(items), metadata=metadata, status=int(status)
+        result=serialize_for_json(items), metadata=metadata, status=int(status)
     )
     return JSONResponse(payload.model_dump(mode="json"), status_code=int(status))
 
 
-def api_error(error: AppError, request: Request | None = None) -> JSONResponse:
+def api_error_response(error: AppError, request: Request | None = None) -> JSONResponse:
     base = ActiveConfig.BASE_URL.rstrip("/")
     subcode = getattr(error.error_subcode, "value", str(error.error_subcode))
     code = getattr(error.error_code, "value", str(error.error_code))
@@ -74,9 +74,9 @@ def api_error(error: AppError, request: Request | None = None) -> JSONResponse:
     return response
 
 
-def serialize(result: Any) -> Any:
+def serialize_for_json(result: Any) -> Any:
     if isinstance(result, BaseModel):
         return result.model_dump(mode="json")
     if isinstance(result, (list, tuple)):
-        return [serialize(item) for item in result]
+        return [serialize_for_json(item) for item in result]
     return result

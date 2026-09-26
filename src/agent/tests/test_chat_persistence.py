@@ -7,14 +7,14 @@ import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.checkpointer import RedisCheckpoint, delete_thread
+from agent.checkpointer import RedisCheckpointSaver, delete_thread
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graph.workflow import build_chat_graph
 from agent.schemas.routes import (
-    Assumptions,
     DomainRoute,
     LastNeedDb,
+    LookupAssumptions,
     QueryRoute,
     as_assumptions,
     as_domain_route,
@@ -55,7 +55,7 @@ def _invoke(graph, message: str, thread_id: str) -> dict:
 
 
 def test_async_checkpoint_calls_run_on_the_sync_saver():
-    saver = RedisCheckpoint.__new__(RedisCheckpoint)
+    saver = RedisCheckpointSaver.__new__(RedisCheckpointSaver)
     calls: list[tuple] = []
 
     def get_tuple(config):
@@ -146,7 +146,7 @@ def test_a_redis_constructor_envelope_reads_back_as_the_model():
     assert route.rationale == "A greeting requires no database lookup."
     assert isinstance(domain, DomainRoute)
     assert domain.domain_ids == ["listings"]
-    assert isinstance(assumptions, Assumptions)
+    assert isinstance(assumptions, LookupAssumptions)
     assert assumptions.purpose == "sale" and assumptions.limit == 10
     assert isinstance(last, LastNeedDb)
     assert last.intent_summary == "flats"

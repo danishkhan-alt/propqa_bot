@@ -16,18 +16,20 @@ from dataclasses import dataclass
 
 from psycopg import sql
 
-from agent.grounding.places import (
-    LEGACY_BREADTH,
-    V2_BREADTH,
-    Breadth,
-    ListingLinks,
+from agent.enums.grounding import Breadth
+from agent.grounding.places import LEGACY_BREADTH, V2_BREADTH, PlaceDirectory, build_place_directory
+from agent.grounding.stored_values import StoredValueIndex, learn_same_place
+from agent.schemas.grounding_index import (
+    ListingCountsByPlaceLink,
     LocationNode,
-    PlaceDirectory,
-    build_place_directory,
+    NamedColumn,
+    StoredValue,
 )
-from agent.grounding.stored_values import NamedColumn, StoredValue, StoredValueIndex, learn_same_place
-from agent.sql.listing_rules import ACTIVE_LISTING
+from agent.sql.execute import fetch_reference_rows
+from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION
+from catalog import load_name_aliases, load_named_value_declarations
 from common.logger import get_logger
+from config import ActiveConfig
 
 logger = get_logger("agent.grounding")
 
@@ -45,37 +47,50 @@ class GroundingIndex:
 
 
 def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingIndex:
-    from catalog import name_aliases, named_columns
 
-    aliases = name_aliases()
+    aliases = load_name_aliases()
     places = build_place_directory(
-        _v2_nodes(read),
-        _legacy_nodes(read),
+        _fetch_v2_nodes(read),
+        _fetch_legacy_nodes(read),
         _listing_links(read),
         region=region,
         aliases=aliases,
         inside_outline=_legacy_inside_outlines(read),
     )
-    columns = [NamedColumn(**declared) for declared in named_columns()]
+    columns = [NamedColumn(**declared) for declared in load_named_value_declarations()]
     kinds = {(column.table, column.column): column.kind for column in columns}
     values: list[StoredValue] = []
     same_place: dict = {}
     for column in columns:
         try:
-            values.extend(_stored_values(read, column))
+            values.extend(_fetch_stored_values(read, column))
             if column.same_place_as:
                 canonical_kind = kinds.get((column.table, column.same_place_as), "area")
-                same_place.update(learn_same_place(column, canonical_kind, _name_pairs(read, column)))
+                same_place.update(
+                    learn_same_place(column, canonical_kind, _fetch_same_place_pair_counts(read, column))
+                )
         except Exception as exc:
             # One broken declaration must not take grounding down for every other column.
             logger.warning(
                 "grounding.column_failed",
-                extra={"extra_data": {"table": column.table, "column": column.column, "error": str(exc)[:200]}},
+                extra={
+                    "extra_data": {
+                        "table": column.table,
+                        "column": column.column,
+                        "error": str(exc)[:200],
+                    }
+                },
             )
     stored = StoredValueIndex(values, same_place, aliases)
     logger.info(
         "grounding.loaded",
-        extra={"extra_data": {"places": len(places), "stored_values": len(stored), "same_place": len(same_place)}},
+        extra={
+            "extra_data": {
+                "places": len(places),
+                "stored_values": len(stored),
+                "same_place": len(same_place),
+            }
+        },
     )
     return GroundingIndex(places=places, stored=stored, loaded_at=time.monotonic())
 
@@ -83,7 +98,9 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
 class GroundingCache:
     """Serves the last loaded index and reloads it in the background once it is older than `max_age`."""
 
-    def __init__(self, loader: Callable[[], GroundingIndex], max_age_seconds: float) -> None:
+    def __init__(
+        self, loader: Callable[[], GroundingIndex], max_age_seconds: float
+    ) -> None:
         self._loader = loader
         self._max_age = max_age_seconds
         self._index: GroundingIndex | None = None
@@ -102,7 +119,9 @@ class GroundingCache:
             if self._loading:
                 return
             self._loading = True
-        threading.Thread(target=self.load_now, name="grounding-load", daemon=True).start()
+        threading.Thread(
+            target=self.load_now, name="grounding-load", daemon=True
+        ).start()
 
     def load_now(self) -> GroundingIndex | None:
         """Load on the calling thread. For startup warm-up, scripts, and evals."""
@@ -121,22 +140,21 @@ _cache: GroundingCache | None = None
 _cache_lock = threading.Lock()
 
 
-def grounding_cache() -> GroundingCache:
+def get_grounding_cache() -> GroundingCache:
     """Process-wide cache over the warehouse."""
     global _cache
     with _cache_lock:
         if _cache is None:
-            from agent.sql.execute import fetch_reference_rows
-            from config import ActiveConfig
-
             _cache = GroundingCache(
-                lambda: load_grounding_index(fetch_reference_rows, region=ActiveConfig.GROUNDING_REGION),
+                lambda: load_grounding_index(
+                    fetch_reference_rows, region=ActiveConfig.GROUNDING_REGION
+                ),
                 max_age_seconds=ActiveConfig.GROUNDING_REFRESH_SECONDS,
             )
         return _cache
 
 
-def _v2_nodes(read: ReferenceReader) -> list[LocationNode]:
+def _fetch_v2_nodes(read: ReferenceReader) -> list[LocationNode]:
     rows = read(
         "SELECT id, parent_id, type, title_en, aliases_en, lat, lng "
         "FROM public.locations_v2 WHERE title_en IS NOT NULL"
@@ -155,8 +173,10 @@ def _v2_nodes(read: ReferenceReader) -> list[LocationNode]:
     ]
 
 
-def _legacy_nodes(read: ReferenceReader) -> list[LocationNode]:
-    rows = read("SELECT id, parent_id, type, name_en, lat, lng FROM public.locations WHERE name_en IS NOT NULL")
+def _fetch_legacy_nodes(read: ReferenceReader) -> list[LocationNode]:
+    rows = read(
+        "SELECT id, parent_id, type, name_en, lat, lng FROM public.locations WHERE name_en IS NOT NULL"
+    )
     return [
         LocationNode(
             id=int(row["id"]),
@@ -195,48 +215,62 @@ def _legacy_inside_outlines(read: ReferenceReader) -> dict[int, list[int]]:
     return dict(inside)
 
 
-def _listing_links(read: ReferenceReader) -> ListingLinks:
+def _listing_links(read: ReferenceReader) -> ListingCountsByPlaceLink:
     by_v2 = read(
         f"SELECT p.location_v2_id AS id, count(*) AS n FROM public.properties p "
-        f"WHERE {ACTIVE_LISTING} AND p.location_v2_id IS NOT NULL GROUP BY 1"
+        f"WHERE {ACTIVE_LISTING_CONDITION} AND p.location_v2_id IS NOT NULL GROUP BY 1"
     )
     by_legacy = read(
         f"SELECT linked.id, count(*) AS n FROM public.properties p, "
         f"unnest(ARRAY[p.location_master_project_id, p.location_project_id, p.location_building_id]) AS linked(id) "
-        f"WHERE {ACTIVE_LISTING} AND linked.id IS NOT NULL GROUP BY 1"
+        f"WHERE {ACTIVE_LISTING_CONDITION} AND linked.id IS NOT NULL GROUP BY 1"
     )
     by_address = read(
         f"SELECT trim(part) AS part, count(*) AS n FROM public.properties p, "
         f"unnest(string_to_array(lower(p.address_en), ',')) AS part "
-        f"WHERE {ACTIVE_LISTING} GROUP BY 1"
+        f"WHERE {ACTIVE_LISTING_CONDITION} GROUP BY 1"
     )
-    return ListingLinks(
+    return ListingCountsByPlaceLink(
         by_v2_id={int(row["id"]): int(row["n"]) for row in by_v2},
         by_legacy_id={int(row["id"]): int(row["n"]) for row in by_legacy},
-        by_address_part={str(row["part"]): int(row["n"]) for row in by_address if row["part"]},
+        by_address_part={
+            str(row["part"]): int(row["n"]) for row in by_address if row["part"]
+        },
     )
 
 
-def _stored_values(read: ReferenceReader, column: NamedColumn) -> list[StoredValue]:
+def _fetch_stored_values(read: ReferenceReader, column: NamedColumn) -> list[StoredValue]:
     statement = sql.SQL(
         "SELECT {col}::text AS value, count(*) AS n FROM {table} WHERE {col} IS NOT NULL "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT {limit}"
-    ).format(col=sql.Identifier(column.column), table=_table(column.table), limit=sql.Literal(MAX_NAMES_PER_COLUMN))
+    ).format(
+        col=sql.Identifier(column.column),
+        table=_table_identifier(column.table),
+        limit=sql.Literal(MAX_NAMES_PER_COLUMN),
+    )
     return [
-        StoredValue(table=column.table, column=column.column, value=text, kind=column.kind, row_count=int(row["n"]))
+        StoredValue(
+            table=column.table,
+            column=column.column,
+            value=text,
+            kind=column.kind,
+            row_count=int(row["n"]),
+        )
         for row in read(statement.as_string())
         if (text := str(row["value"]).strip())
     ]
 
 
-def _name_pairs(read: ReferenceReader, column: NamedColumn) -> list[tuple[str, str, int]]:
+def _fetch_same_place_pair_counts(
+    read: ReferenceReader, column: NamedColumn
+) -> list[tuple[str, str, int]]:
     statement = sql.SQL(
         "SELECT {name}::text AS name, {canonical}::text AS canonical, count(*) AS n FROM {table} "
         "WHERE {name} IS NOT NULL AND {canonical} IS NOT NULL GROUP BY 1, 2"
     ).format(
         name=sql.Identifier(column.column),
         canonical=sql.Identifier(column.same_place_as or ""),
-        table=_table(column.table),
+        table=_table_identifier(column.table),
     )
     return [
         (str(row["name"]).strip(), str(row["canonical"]).strip(), int(row["n"]))
@@ -244,7 +278,7 @@ def _name_pairs(read: ReferenceReader, column: NamedColumn) -> list[tuple[str, s
     ]
 
 
-def _table(qualified: str) -> sql.Identifier:
+def _table_identifier(qualified: str) -> sql.Identifier:
     return sql.Identifier(*qualified.split(".", 1))
 
 
@@ -252,7 +286,11 @@ def _leading_alias_parts(aliases) -> tuple[str, ...]:
     """v2 aliases read "Dubai Marina, Dubai, UAE". The part before the first comma is the name."""
     if not isinstance(aliases, list):
         return ()
-    parts = (str(alias).split(",", 1)[0].strip() for alias in aliases if isinstance(alias, str))
+    parts = (
+        str(alias).split(",", 1)[0].strip()
+        for alias in aliases
+        if isinstance(alias, str)
+    )
     return tuple(part for part in parts if part)
 
 

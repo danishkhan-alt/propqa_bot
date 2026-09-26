@@ -1,7 +1,7 @@
-from common.errors.exceptions import AppError
+from common.errors.app_error import AppError
 from common.errors.invalid_request import InvalidRequestBody
 from common.errors.rate_limited import RateLimited
-from common.errors.system import (
+from common.errors.standard_errors import (
     DatabaseFailure,
     Forbidden,
     InternalError,

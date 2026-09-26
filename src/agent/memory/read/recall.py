@@ -6,11 +6,11 @@ import hashlib
 from datetime import datetime
 from typing import Any
 
-from agent.memory.storage.cache import RECALL_TTL_SECONDS
+from agent.enums.memory import MemoryCluster, MemoryStatus
+from agent.memory.models.records import DEFAULT_CLUSTERS, record_to_public_dict, utcnow
 from agent.memory.read.prompt_text import render_memory_block
 from agent.memory.read.scoring import score_memory
-from agent.enums.memory import MemoryCluster, MemoryStatus
-from agent.memory.models.types import DEFAULT_CLUSTERS, utcnow
+from agent.memory.storage.cache import RECALL_TTL_SECONDS
 
 _CLUSTER_WORDS: tuple[tuple[MemoryCluster, tuple[str, ...]], ...] = (
     (
@@ -59,7 +59,7 @@ def recall_for_user(
     query: str,
     *,
     store=None,
-    hot=None,
+    memory_cache=None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     moment = now or utcnow()
@@ -69,16 +69,16 @@ def recall_for_user(
     settings = repository.get_settings(user_id) if repository is not None else None
     if settings is not None and not settings.memory_enabled:
         return empty
-    clusters = [cluster for cluster in classify_clusters(query) if _allowed(cluster, settings)]
+    clusters = [cluster for cluster in classify_clusters(query) if _is_cluster_allowed(cluster, settings)]
     if not clusters:
         return empty
-    cached = _cached(hot, user_id, clusters, query)
+    cached = _get_cached_recall(memory_cache, user_id, clusters, query)
     if cached is not None:
-        _touch(repository, [item.get("id") for item in cached if item.get("id")], moment)
+        _record_memory_access(repository, [item.get("id") for item in cached if item.get("id")], moment)
         return {
             "memory_context": cached,
             "memory_block": render_memory_block(cached),
-            "memory_question": _question(repository, user_id),
+            "memory_question": _consume_pending_contradiction_prompt(repository, user_id),
         }
     if store is not None:
         hits = store.search(
@@ -104,20 +104,18 @@ def recall_for_user(
         )
         candidates = []
         for record, score in pairs:
-            from agent.memory.models.types import public_record
-
-            candidates.append(public_record(record, similarity=score))
+            candidates.append(record_to_public_dict(record, similarity=score))
     ranked = sorted(candidates, key=lambda item: score_memory(item, now=moment), reverse=True)[:6]
-    _touch(repository, [item.get("id") for item in ranked if item.get("id")], moment)
-    _store_cache(hot, user_id, clusters, query, ranked)
+    _record_memory_access(repository, [item.get("id") for item in ranked if item.get("id")], moment)
+    _cache_recall_results(memory_cache, user_id, clusters, query, ranked)
     return {
         "memory_context": ranked,
         "memory_block": render_memory_block(ranked),
-        "memory_question": _question(repository, user_id),
+        "memory_question": _consume_pending_contradiction_prompt(repository, user_id),
     }
 
 
-def _allowed(cluster: str, settings) -> bool:
+def _is_cluster_allowed(cluster: str, settings) -> bool:
     if settings is None:
         return cluster in DEFAULT_CLUSTERS
     return cluster in settings.allowed_clusters
@@ -129,32 +127,32 @@ def _cache_key(user_id: str, clusters: list[str], query: str) -> str:
     return f"recall:{user_id}:{digest}"
 
 
-def _cached(hot, user_id: str, clusters: list[str], query: str):
-    if hot is None:
+def _get_cached_recall(memory_cache, user_id: str, clusters: list[str], query: str):
+    if memory_cache is None:
         return None
-    value = hot.get(_cache_key(user_id, clusters, query))
+    value = memory_cache.get(_cache_key(user_id, clusters, query))
     return value if isinstance(value, list) else None
 
 
-def _store_cache(hot, user_id: str, clusters: list[str], query: str, ranked: list[dict]) -> None:
-    if hot is None:
+def _cache_recall_results(memory_cache, user_id: str, clusters: list[str], query: str, ranked: list[dict]) -> None:
+    if memory_cache is None:
         return
-    hot.set(_cache_key(user_id, clusters, query), ranked, ttl=RECALL_TTL_SECONDS)
+    memory_cache.set(_cache_key(user_id, clusters, query), ranked, ttl=RECALL_TTL_SECONDS)
 
 
-def _touch(repository, memory_ids: list[str], now: datetime) -> None:
+def _record_memory_access(repository, memory_ids: list[str], now: datetime) -> None:
     if repository is None:
         return
     ids = [memory_id for memory_id in memory_ids if memory_id]
     if ids:
-        repository.touch(ids, now=now)
+        repository.record_access(ids, now=now)
 
 
-def _question(repository, user_id: str) -> str:
+def _consume_pending_contradiction_prompt(repository, user_id: str) -> str:
     if repository is None:
         return ""
     event = repository.latest_open_contradiction(user_id)
     if event is None:
         return ""
-    repository.mark_event(event["id"], asked=True)
+    repository.merge_event_detail(event["id"], asked=True)
     return str(event["detail"].get("prompt") or "")

@@ -43,7 +43,7 @@ def trace_sql_attempt(payload: dict[str, Any], client=None) -> None:
                     "error": payload.get("error"),
                     "status": payload.get("status"),
                 },
-                level=_level(payload.get("status")),
+                level=_langfuse_level_for_status(payload.get("status")),
             )
     except Exception as exc:
         logger.warning(
@@ -52,7 +52,7 @@ def trace_sql_attempt(payload: dict[str, Any], client=None) -> None:
         )
 
 
-def _level(status: str | None) -> str:
+def _langfuse_level_for_status(status: str | None) -> str:
     if status == "failed":
         return "ERROR"
     if status == "empty":

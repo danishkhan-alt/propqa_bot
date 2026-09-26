@@ -3,7 +3,7 @@ from __future__ import annotations
 from common.enums.error_codes import APIErrorCode
 from common.enums.error_subcode import APIErrorSubCode
 from common.enums.http_status import HttpStatus
-from common.errors.exceptions import AppError
+from common.errors.app_error import AppError
 
 
 class RateLimited(AppError):

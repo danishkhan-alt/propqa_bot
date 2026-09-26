@@ -5,13 +5,20 @@ from __future__ import annotations
 import pytest
 
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.reply.clarify import merge_profile, next_question
+from agent.reply.buyer_profile import merge_profile, pick_next_profile_question
+from agent.reply.figures import build_explainer, build_figures, build_reply_blocks, format_figure
 from agent.schemas.profile import ProfileSignals
-from agent.reply.figures import build_explainer, build_figures, format_figure, reply_blocks
-from agent.schemas.reply import Explainer, FigureColumn, FigureSeries, FigureSpec, ReplyCard, StructuredReply
+from agent.schemas.reply import (
+    Explainer,
+    FigureColumn,
+    FigureSeries,
+    FigureSpec,
+    ReplyCard,
+    StructuredReply,
+)
 from agent.schemas.routes import QueryRoute
-from agent.services.llm import REPLY_FALLBACK, stream_structured_reply
-from agent.sql.cards import listing_cards, listing_facts
+from agent.services.llm import REPLY_FALLBACK, stream_structured_reply_with_fallback
+from agent.sql.cards import fetch_listing_cards, prompt_listing_facts
 
 
 def _route(**fields) -> QueryRoute:
@@ -51,14 +58,14 @@ def test_unknown_values_never_enter_the_profile():
 
 
 def test_a_shortlist_asks_the_first_missing_fact():
-    question = next_question(_route(), {"goal": "invest"}, [], has_listings=True)
+    question = pick_next_profile_question(_route(), {"goal": "invest"}, [], has_listings=True)
     assert question is not None and question.id == "budget_range"
 
 
 def test_a_question_already_asked_is_not_asked_again():
-    question = next_question(_route(), {}, ["goal", "budget_range"], has_listings=True)
+    question = pick_next_profile_question(_route(), {}, ["goal", "budget_range"], has_listings=True)
     assert question is not None and question.id == "timeline"
-    assert next_question(_route(), {}, ["goal", "budget_range", "timeline"], has_listings=True) is None
+    assert pick_next_profile_question(_route(), {}, ["goal", "budget_range", "timeline"], has_listings=True) is None
 
 
 @pytest.mark.parametrize(
@@ -71,14 +78,14 @@ def test_a_question_already_asked_is_not_asked_again():
     ],
 )
 def test_no_question_when_it_would_not_change_the_answer(route, has_listings):
-    assert next_question(route, {}, [], has_listings=has_listings) is None
+    assert pick_next_profile_question(route, {}, [], has_listings=has_listings) is None
 
 
 def test_advice_without_listings_still_asks():
     route = _route(route=Route.DIRECT_ANSWER, intent=Intent.OTHER, seeking_advice=True)
-    question = next_question(route, {}, [], has_listings=False)
+    question = pick_next_profile_question(route, {}, [], has_listings=False)
     assert question is not None and question.id == "goal"
-    assert all(option["reply"] for option in question.payload()["options"])
+    assert all(option["reply"] for option in question.to_ui_payload()["options"])
 
 
 # Listing cards
@@ -100,7 +107,7 @@ def _row(**fields) -> dict:
 
 
 def test_cards_keep_id_order_and_fill_what_the_loader_found():
-    cards = listing_cards(["9", "7", "abc"], lambda ids: [_row()])
+    cards = fetch_listing_cards(["9", "7", "abc"], lambda ids: [_row()])
     assert [card["id"] for card in cards] == ["9", "7", "abc"]
     assert cards[0] == {"id": "9"}
     assert cards[1]["images"] == ["https://cdn.test/1.jpg", "https://cdn.test/2.jpg"]
@@ -109,20 +116,20 @@ def test_cards_keep_id_order_and_fill_what_the_loader_found():
 
 
 def test_a_hidden_price_is_never_shown():
-    card = listing_cards(["7"], lambda ids: [_row(show_price=False)])[0]
+    card = fetch_listing_cards(["7"], lambda ids: [_row(show_price=False)])[0]
     assert "price_min" not in card
-    assert "asking_price_aed" not in listing_facts([card])[0]
+    assert "asking_price_aed" not in prompt_listing_facts([card])[0]
 
 
 def test_a_loader_failure_still_returns_id_cards():
     def broken(ids):
         raise RuntimeError("warehouse down")
 
-    assert listing_cards(["7"], broken) == [{"id": "7"}]
+    assert fetch_listing_cards(["7"], broken) == [{"id": "7"}]
 
 
 def test_facts_are_numbers_and_leave_out_media():
-    facts = listing_facts(listing_cards(["7"], lambda ids: [_row()]))
+    facts = prompt_listing_facts(fetch_listing_cards(["7"], lambda ids: [_row()]))
     assert facts == [
         {
             "property_id": "7",
@@ -136,11 +143,11 @@ def test_facts_are_numbers_and_leave_out_media():
 
 
 def test_rent_is_read_from_the_listed_period():
-    card = listing_cards(
+    card = fetch_listing_cards(
         ["7"],
         lambda ids: [_row(purpose="for_rent", rental_period="monthly", monthly_price="9500", price_min=None)],
     )[0]
-    assert listing_facts([card])[0]["rent_aed"] == {"amount": 9500, "period": "monthly"}
+    assert prompt_listing_facts([card])[0]["rent_aed"] == {"amount": 9500, "period": "monthly"}
 
 
 # Streaming
@@ -174,7 +181,7 @@ def test_intro_text_streams_as_it_grows():
             {"intro_text": "Two homes fit.", "suggested_followups": ["Compare with JVC"]},
         ]
     )
-    reply = stream_structured_reply(runnable, [], None, shown.append)
+    reply = stream_structured_reply_with_fallback(runnable, [], None, shown.append)
     assert shown == ["Two", " homes", " fit."]
     assert reply.suggested_followups == ["Compare with JVC"]
 
@@ -182,7 +189,7 @@ def test_intro_text_streams_as_it_grows():
 def test_a_broken_stream_keeps_the_text_already_shown():
     shown: list[str] = []
     runnable = _Stream([{"intro_text": "Two homes"}, {"intro_text": "Two homes fit."}], fail_after=1)
-    reply = stream_structured_reply(runnable, [], None, shown.append)
+    reply = stream_structured_reply_with_fallback(runnable, [], None, shown.append)
     assert shown == ["Two homes"]
     assert reply == StructuredReply(intro_text="Two homes")
 
@@ -190,14 +197,14 @@ def test_a_broken_stream_keeps_the_text_already_shown():
 def test_a_stream_that_shows_nothing_falls_back_to_one_call():
     shown: list[str] = []
     runnable = _Stream([], fail_after=0, final={"intro_text": "Here it is."})
-    reply = stream_structured_reply(runnable, [], None, shown.append)
+    reply = stream_structured_reply_with_fallback(runnable, [], None, shown.append)
     assert shown == ["Here it is."]
     assert reply.intro_text == "Here it is."
 
 
 def test_the_fallback_reply_is_used_when_every_attempt_fails():
     shown: list[str] = []
-    reply = stream_structured_reply(_Stream([], fail_after=0), [], None, shown.append)
+    reply = stream_structured_reply_with_fallback(_Stream([], fail_after=0), [], None, shown.append)
     assert reply == REPLY_FALLBACK
     assert shown == [REPLY_FALLBACK.intro_text]
 
@@ -287,12 +294,12 @@ def test_only_one_block_is_shown_under_the_text():
         figures=_spec("stats", [("n", "Count", "count")]),
         explainer=Explainer(kind="callout", title="Watch", points=["One thing"]),
     )
-    blocks = reply_blocks(reply, rows, ["n"])
+    blocks = build_reply_blocks(reply, rows, ["n"])
     assert blocks["figures"]["tiles"] == [{"label": "Count", "value": "5"}]
     assert blocks["explainer"] is None
 
     carded = reply.model_copy(update={"cards": [ReplyCard(title="JVC")]})
-    assert reply_blocks(carded, rows, ["n"]) == {
+    assert build_reply_blocks(carded, rows, ["n"]) == {
         "cards": [ReplyCard(title="JVC").model_dump()],
         "figures": None,
         "explainer": None,

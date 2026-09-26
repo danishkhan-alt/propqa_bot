@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import yaml
 
-from catalog import date_coverage, domain_prompt, list_domains, load_domain, named_columns
+from catalog import (
+    get_table_date_coverage,
+    list_domains,
+    load_domain,
+    load_named_value_declarations,
+    render_domain_prompt,
+)
 
 
 def _columns(prompt: str, table: str) -> dict[str, dict]:
@@ -14,7 +20,7 @@ def _columns(prompt: str, table: str) -> dict[str, dict]:
 
 
 def test_the_sql_model_sees_measured_facts_and_not_grounding_declarations():
-    prompt = domain_prompt(load_domain("listings"))
+    prompt = render_domain_prompt(load_domain("listings"))
     assert "named_values" not in prompt
     columns = _columns(prompt, "public.properties")
     assert columns["price_min"]["filled"] == "0%"
@@ -29,7 +35,7 @@ def test_every_named_column_is_a_catalog_column():
         for table in load_domain(domain["id"]).get("tables") or []
         if table.get("qualified_name")
     }
-    for declared in named_columns():
+    for declared in load_named_value_declarations():
         columns = columns_by_table[declared["table"]]
         assert declared["column"] in columns, declared
         if declared.get("same_place_as"):
@@ -43,14 +49,14 @@ def test_a_loaded_domain_is_a_copy_the_caller_may_change():
 
 
 def test_the_sql_model_sees_how_far_a_date_column_reaches():
-    prompt = domain_prompt(load_domain("transactions"))
+    prompt = render_domain_prompt(load_domain("transactions"))
     columns = _columns(prompt, "chatbot_ai.rent_contracts")
     first, _, last = columns["contract_start_date"]["covers"].partition(" to ")
     assert first < last
 
 
 def test_date_coverage_names_the_data_not_the_table():
-    spans = date_coverage({"CHATBOT_AI.rent_contracts"})
+    spans = get_table_date_coverage({"CHATBOT_AI.rent_contracts"})
     assert spans
     assert all("rent_contracts" not in span["table"] for span in spans)
-    assert date_coverage({"no.such_table"}) == []
+    assert get_table_date_coverage({"no.such_table"}) == []

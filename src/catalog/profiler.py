@@ -17,8 +17,10 @@ from datetime import date
 
 import yaml
 from psycopg import sql
+from psycopg.rows import dict_row
 
 from catalog.registry import PROFILES_DIR, list_domains, load_domain
+from common.db import close_pools, get_pool, warehouse_conninfo
 from common.logger import get_logger
 
 logger = get_logger("catalog.profiler")
@@ -27,7 +29,7 @@ logger = get_logger("catalog.profiler")
 MAX_LISTED_VALUES = 25
 # Up to this many distinct values, a column is categorical and its most common values are listed.
 MAX_CATEGORICAL_VALUES = 300
-COMMON_VALUES_SHOWN = 15
+MAX_COMMON_VALUES_LISTED = 15
 MAX_VALUE_LENGTH = 80
 # Tables with more rows than this are sampled down to roughly this many.
 SAMPLE_TARGET_ROWS = 200_000
@@ -35,7 +37,7 @@ PROFILE_TIMEOUT_MS = 120_000
 _TEXT_TYPES = ("char", "text")
 _DATE_TYPES = ("date", "timestamp")
 # A date span drops this share of rows at each end, so a stray 1900 or 2109 does not stretch it.
-COVERAGE_TAIL = 0.005
+DATE_SPAN_TAIL_SHARE = 0.005
 
 
 def profile_domain(domain_id: str, runner) -> dict:
@@ -114,7 +116,7 @@ def _value_facts(column: str, source: sql.Composable, runner) -> dict:
         return {}
     if len(values) <= MAX_LISTED_VALUES:
         return {"values": values}
-    return {"common_values": values[:COMMON_VALUES_SHOWN]}
+    return {"common_values": values[:MAX_COMMON_VALUES_LISTED]}
 
 
 def _date_facts(column: str, source: sql.Composable, runner) -> dict:
@@ -127,8 +129,8 @@ def _date_facts(column: str, source: sql.Composable, runner) -> dict:
         ).format(
             col=sql.Identifier(column),
             source=source,
-            low=sql.Literal(COVERAGE_TAIL),
-            high=sql.Literal(1 - COVERAGE_TAIL),
+            low=sql.Literal(DATE_SPAN_TAIL_SHARE),
+            high=sql.Literal(1 - DATE_SPAN_TAIL_SHARE),
         )
     )[0]
     if not row["first"] or not row["last"]:
@@ -146,11 +148,7 @@ def _is_text(column: dict) -> bool:
     return any(marker in kind for marker in _TEXT_TYPES)
 
 
-def _warehouse_runner():
-    from psycopg.rows import dict_row
-
-    from common.db import get_pool, warehouse_conninfo
-
+def _create_readonly_warehouse_runner():
     pool = get_pool(
         "warehouse_profiler",
         warehouse_conninfo(),
@@ -168,9 +166,7 @@ def _warehouse_runner():
 
 
 def main(domain_ids: list[str]) -> None:
-    from common.db import close_pools
-
-    runner = _warehouse_runner()
+    runner = _create_readonly_warehouse_runner()
     try:
         for domain_id in domain_ids or [domain["id"] for domain in list_domains()]:
             profiles = profile_domain(domain_id, runner)

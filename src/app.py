@@ -6,19 +6,18 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import ActiveConfig
-from agent.grounding import grounding_cache
+from agent.grounding import get_grounding_cache
 from agent.memory.routes import router as memory_router
 from common.http import register_exception_handlers
+from common.logger import configure_logging
 from common.middleware import CallerMiddleware, RateLimitMiddleware, RequestIdMiddleware
 from common.middleware.rate_limit import DEFAULT_EXEMPT_PREFIXES
+from config import ActiveConfig
 from routes.chat import router as chat_router
 from routes.leads import router as leads_router
 from routes.sessions import router as session_router
 
-from common.logger import configure_logging
-
-UI_ORIGINS = (
+CORS_ALLOWED_ORIGINS = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
@@ -52,7 +51,7 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(UI_ORIGINS),
+        allow_origins=list(CORS_ALLOWED_ORIGINS),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -87,7 +86,7 @@ def main() -> None:
         backup_count=ActiveConfig.LOG_BACKUP_COUNT,
     )
     # Name grounding loads in the background; turns run without it until it is ready.
-    grounding_cache().load_in_background()
+    get_grounding_cache().load_in_background()
     uvicorn.run(
         create_app(),
         host=ActiveConfig.APP_HOST,

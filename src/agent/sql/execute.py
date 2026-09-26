@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -12,21 +11,15 @@ from uuid import UUID
 
 from psycopg.rows import dict_row
 
+from agent.schemas.sql import SqlPage
+from common.db import get_pool, warehouse_conninfo
+from config import ActiveConfig
+
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class SqlFailed(Exception):
     """The warehouse rejected the statement. The message is safe to log."""
-
-
-@dataclass(frozen=True)
-class SqlPage:
-    """Rows the statement actually returned, already capped."""
-
-    columns: list[str]
-    rows: list[dict[str, Any]]
-    truncated: bool
-    duration_ms: int
 
 
 REFERENCE_TIMEOUT_MS = 60_000
@@ -38,7 +31,6 @@ def run_against_warehouse(sql: str, params: dict[str, Any] | None = None) -> Sql
 
     `params` is for fixed statements written in code. Model-drafted SQL never has any.
     """
-    from config import ActiveConfig
 
     with _warehouse_pool().connection() as connection:
         return fetch_readonly(
@@ -53,7 +45,6 @@ def run_against_warehouse(sql: str, params: dict[str, Any] | None = None) -> Sql
 
 def fetch_reference_rows(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Reference data that code reads in bulk, such as the grounding index. Never model-drafted SQL."""
-    from config import ActiveConfig
 
     with _warehouse_pool().connection() as connection:
         page = fetch_readonly(
@@ -68,9 +59,6 @@ def fetch_reference_rows(sql: str, params: dict[str, Any] | None = None) -> list
 
 
 def _warehouse_pool():
-    from common.db import get_pool, warehouse_conninfo
-    from config import ActiveConfig
-
     return get_pool(
         "warehouse",
         warehouse_conninfo(),
@@ -90,8 +78,8 @@ def fetch_readonly(
     params: dict[str, Any] | None = None,
 ) -> SqlPage:
     """One read-only transaction. Returns at most `row_cap` rows."""
-    timeout = _timeout_ms(timeout_ms)
-    path = _search_path(search_path)
+    timeout = _clamped_timeout_ms(timeout_ms)
+    path = _validated_search_path(search_path)
     started = time.perf_counter()
     try:
         with connection.transaction():
@@ -105,7 +93,7 @@ def fetch_readonly(
         raise SqlFailed(_safe_db_error(exc)) from exc
     duration_ms = int((time.perf_counter() - started) * 1000)
     visible = fetched[:row_cap]
-    rows = [{column: json_ready(row.get(column)) for column in columns} for row in visible]
+    rows = [{column: to_json_safe(row.get(column)) for column in columns} for row in visible]
     return SqlPage(
         columns=columns,
         rows=rows,
@@ -114,7 +102,7 @@ def fetch_readonly(
     )
 
 
-def json_ready(value: Any) -> Any:
+def to_json_safe(value: Any) -> Any:
     """A log and a prompt can both carry this value."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -129,13 +117,13 @@ def json_ready(value: Any) -> Any:
     if isinstance(value, (bytes, memoryview)):
         return None
     if isinstance(value, dict):
-        return {str(key): json_ready(item) for key, item in value.items()}
+        return {str(key): to_json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [json_ready(item) for item in value]
+        return [to_json_safe(item) for item in value]
     return str(value)
 
 
-def _timeout_ms(timeout_ms: int) -> int:
+def _clamped_timeout_ms(timeout_ms: int) -> int:
     try:
         value = int(timeout_ms)
     except (TypeError, ValueError):
@@ -145,7 +133,7 @@ def _timeout_ms(timeout_ms: int) -> int:
     return value
 
 
-def _search_path(raw: str) -> str:
+def _validated_search_path(raw: str) -> str:
     parts = [part.strip() for part in (raw or "").split(",") if part.strip()]
     if not parts or any(_IDENTIFIER.match(part) is None for part in parts):
         raise SqlFailed("Warehouse search_path is not a list of identifiers")

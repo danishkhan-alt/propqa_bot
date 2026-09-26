@@ -9,31 +9,17 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Hashable, Iterable
-from dataclasses import dataclass
-from enum import IntEnum
-from typing import Generic, TypeVar
+from collections.abc import Iterable
+from typing import Generic
+
+from agent.enums.grounding import MatchTier
+from agent.schemas.grounding_index import Key, NameHit
 
 _BRACKETED = re.compile(r"\(([^)]*)\)")
 _NON_WORD = re.compile(r"[^0-9a-z]+")
 
-FUZZY_THRESHOLD = 0.45
+MIN_TRIGRAM_SIMILARITY = 0.45
 
-Key = TypeVar("Key", bound=Hashable)
-
-
-class MatchTier(IntEnum):
-    FUZZY = 1
-    WORDS = 2
-    EXACT = 3
-
-
-@dataclass(frozen=True)
-class NameHit(Generic[Key]):
-    key: Key
-    tier: MatchTier
-    # Share of the stored name the phrase covers. "marina" covers half of "dubai marina".
-    coverage: float
 
 
 def normalize_name(text: str) -> str:
@@ -96,12 +82,12 @@ class NameMatcher(Generic[Key]):
         if not normalized:
             return []
         for tier, names in (
-            (MatchTier.EXACT, self._exact(normalized)),
+            (MatchTier.EXACT, self._exact_name_matches(normalized)),
             (MatchTier.WORDS, self._containing_words(normalized)),
-            (MatchTier.FUZZY, self._similar(normalized)),
+            (MatchTier.FUZZY, self._fuzzy_name_matches(normalized)),
         ):
             if names:
-                return self._hits(normalized, names, tier)
+                return self._best_hits_per_key(normalized, names, tier)
         return []
 
     def find_containing(self, phrase: str) -> list[NameHit[Key]]:
@@ -109,16 +95,16 @@ class NameMatcher(Generic[Key]):
         normalized = normalize_name(phrase)
         if not normalized:
             return []
-        exact = self._exact(normalized)
+        exact = self._exact_name_matches(normalized)
         containing = [name for name in self._containing_words(normalized) if name not in exact]
         if exact or containing:
             return [
-                *self._hits(normalized, exact, MatchTier.EXACT),
-                *self._hits(normalized, containing, MatchTier.WORDS),
+                *self._best_hits_per_key(normalized, exact, MatchTier.EXACT),
+                *self._best_hits_per_key(normalized, containing, MatchTier.WORDS),
             ]
-        return self._hits(normalized, self._similar(normalized), MatchTier.FUZZY)
+        return self._best_hits_per_key(normalized, self._fuzzy_name_matches(normalized), MatchTier.FUZZY)
 
-    def _exact(self, normalized: str) -> list[str]:
+    def _exact_name_matches(self, normalized: str) -> list[str]:
         return [normalized] if normalized in self._keys_by_name else []
 
     def _containing_words(self, normalized: str) -> list[str]:
@@ -130,21 +116,21 @@ class NameMatcher(Generic[Key]):
                 return []
         return sorted(candidates or ())
 
-    def _similar(self, normalized: str) -> list[str]:
+    def _fuzzy_name_matches(self, normalized: str) -> list[str]:
         phrase_grams = trigrams(normalized)
         shared: Counter[str] = Counter()
         for gram in phrase_grams:
             shared.update(self._names_by_trigram.get(gram, ()))
         # similarity = shared / union, and union >= the phrase's own trigrams, so a name
         # below this many shared trigrams can never reach the threshold.
-        floor = FUZZY_THRESHOLD * len(phrase_grams)
+        floor = MIN_TRIGRAM_SIMILARITY * len(phrase_grams)
         return [
             name
             for name, count in shared.items()
-            if count >= floor and trigram_similarity(normalized, name) >= FUZZY_THRESHOLD
+            if count >= floor and trigram_similarity(normalized, name) >= MIN_TRIGRAM_SIMILARITY
         ]
 
-    def _hits(self, normalized: str, names: list[str], tier: MatchTier) -> list[NameHit[Key]]:
+    def _best_hits_per_key(self, normalized: str, names: list[str], tier: MatchTier) -> list[NameHit[Key]]:
         phrase_words = len(normalized.split())
         best: dict[Key, float] = {}
         for name in names:

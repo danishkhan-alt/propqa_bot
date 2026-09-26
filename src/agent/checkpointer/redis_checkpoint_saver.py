@@ -21,7 +21,7 @@ from langgraph.checkpoint.base import (
 from langgraph.checkpoint.redis import RedisSaver
 
 
-class RedisCheckpoint(RedisSaver):
+class RedisCheckpointSaver(RedisSaver):
     """Redis checkpoints the async chat stream can read and write."""
 
     async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:

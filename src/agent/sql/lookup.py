@@ -12,30 +12,38 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from agent.enums.listing import MentionKind
 from agent.enums.routing import Intent
-from catalog import date_coverage
 from agent.schemas.grounding import Grounding, as_grounding
-from agent.schemas.listing import ListingFilters, MentionKind
+from agent.schemas.listing import ListingFilters
+from agent.schemas.listing_search import ListingSearch
+from agent.schemas.recipes import BoundRecipe
 from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
-from agent.schemas.sql import SqlDraft
-from agent.sql.execute import SqlFailed, SqlPage
+from agent.schemas.sql import SqlDraft, SqlPage
+from agent.services.transcript import (
+    ANSWER_HISTORY_MESSAGE_LIMIT,
+    format_recent_history,
+    latest_user_text,
+)
+from agent.sql.execute import SqlFailed
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
-    blended_averages,
+    blended_average_reasons,
     prepare_select,
     referenced_tables,
     segment_rules,
     tables_in_domains,
 )
-from agent.sql.listing_rules import LISTINGS_TABLE
-from agent.sql.listing_search import ListingSearch, search_listings
-from agent.sql.listings import is_listing_list, listing_ids_from
-from agent.sql.recipes import BoundRecipe, bind_recipe, recipe
+from agent.sql.listing_card_ids import is_listing_list_request, listing_card_ids_from_rows
+from agent.sql.listing_search import search_listings
+from agent.sql.listing_sql_fragments import LISTINGS_TABLE
+from agent.sql.recipes import bind_recipe, get_recipe
 from agent.sql.trace import trace_sql_attempt
 from agent.states.chat import ChatState
+from catalog import get_table_date_coverage
 from common.logger import get_logger
-from common.schemas.pagination import page_request
+from common.schemas.pagination import build_page_request
 from config import ActiveConfig
 
 logger = get_logger("agent.sql")
@@ -43,12 +51,12 @@ logger = get_logger("agent.sql")
 MAX_ATTEMPTS = 2
 EMPTY_LOOKUP_REPLY = "Nothing matched those filters. I can widen the area or the dates if you want."
 FAILED_LOOKUP_REPLY = "I couldn't complete that lookup. Try a more specific area or time range."
-NO_ROWS = "The query returned no rows."
-ONLY_ZERO_VALUES = (
+NO_ROWS_RETRY_REASON = "The query returned no rows."
+ALL_ZERO_ROW_RETRY_REASON = (
     "The query returned one row whose values are all zero or empty. A name filter probably matched "
     "nothing; use the stored values in resolved_names, or check the filters against the catalog."
 )
-BLENDED_NOTE = "These figures average several kinds of property together, so treat them as a blend."
+BLENDED_AVERAGE_NOTE = "These figures average several kinds of property together, so treat them as a blend."
 LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK})
 
 
@@ -68,11 +76,11 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
     domain_ids = [*domain.domain_ids, *domain.join_ids] if domain is not None else []
     grounding = as_grounding(state.get("grounding")) or Grounding()
     assumptions = as_assumptions(state.get("assumptions"))
-    window = page_request(
+    window = build_page_request(
         page=(assumptions.page if assumptions and assumptions.page else 1),
         per_page=assumptions.limit if assumptions else None,
     )
-    search = _listing_search(query, grounding)
+    search = _build_listing_search(query, grounding)
     try:
         found = search_listings(
             search,
@@ -81,7 +89,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
             offset=(window.page - 1) * window.per_page,
         )
     except SqlFailed as exc:
-        last = _result(
+        last = _build_sql_result(
             domain_ids=domain_ids,
             attempt=1,
             purpose="property search",
@@ -92,7 +100,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
         trace_sql_attempt(last, client)
         return {"sql_result": last, "sql_rows": [], "listing_ids": []}
     rows = [{"property_id": listing_id} for listing_id in found.ids]
-    last = _result(
+    last = _build_sql_result(
         domain_ids=domain_ids,
         attempt=1,
         purpose="property search",
@@ -101,13 +109,13 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
         columns=["property_id"],
         rows=rows,
         duration_ms=found.duration_ms,
-        error=None if rows else NO_ROWS,
+        error=None if rows else NO_ROWS_RETRY_REASON,
     )
     last.update(
         params=found.query.params,
         total=found.total,
-        notes=[*grounding.notes(), *found.notes],
-        filters=_listing_conditions(search),
+        notes=[*grounding.user_facing_notes(), *found.notes],
+        filters=_stated_listing_filters(search),
     )
     trace_sql_attempt(last, client)
     return {"sql_result": last, "sql_rows": rows, "listing_ids": found.ids}
@@ -130,26 +138,26 @@ def run_sql_lookup(
     assumptions = as_assumptions(state.get("assumptions"))
     frame = _frame_for_prompt(state.get("query_frame"))
     catalog = state.get("catalog_context") or ""
-    message = _message(state)
-    history = _history(state)
+    message = _latest_user_message(state)
+    history = _history_summary(state)
 
-    listing_ids_only = is_listing_list(state)
+    listing_ids_only = is_listing_list_request(state)
     grounding = as_grounding(state.get("grounding"))
     if not listing_ids_only and domain is not None:
-        bound = bind_recipe(chosen, grounding) if (chosen := recipe(domain.recipe_id)) else None
+        bound = bind_recipe(chosen, grounding) if (chosen := get_recipe(domain.recipe_id)) else None
         if chosen is not None and bound is None:
             logger.info("sql.recipe_unbound", extra={"extra_data": {"recipe": chosen.id}})
-        answered_by_recipe = _run_recipe(bound, runner, grounding, cap, client) if bound else None
+        answered_by_recipe = _answer_with_recipe(bound, runner, grounding, cap, client) if bound else None
         if answered_by_recipe is not None:
             return answered_by_recipe
     resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
     rules = segment_rules(domain_ids)
     previous_error: str | None = None
-    last: dict[str, Any] = _empty_result(domain_ids)
+    last: dict[str, Any] = _undrafted_sql_result(domain_ids)
     # An attempt that returned rows, kept in case the retry it prompted fails outright.
     answered: dict[str, Any] | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        draft = _draft(
+        draft = _draft_sql(
             models,
             message=message,
             history=history,
@@ -176,7 +184,7 @@ def run_sql_lookup(
         try:
             guarded = prepare_select(draft.sql, allowed, cap)
         except SqlRejected as exc:
-            last = _result(
+            last = _build_sql_result(
                 domain_ids=domain_ids,
                 attempt=attempt,
                 purpose=draft.purpose,
@@ -187,9 +195,9 @@ def run_sql_lookup(
             trace_sql_attempt(last, client)
             previous_error = str(exc)
             continue
-        blends = blended_averages(guarded, rules)
+        blends = blended_average_reasons(guarded, rules)
         if blends and attempt < MAX_ATTEMPTS:
-            last = _result(
+            last = _build_sql_result(
                 domain_ids=domain_ids,
                 attempt=attempt,
                 purpose=draft.purpose,
@@ -203,7 +211,7 @@ def run_sql_lookup(
         try:
             page = runner(guarded)
         except SqlFailed as exc:
-            last = _result(
+            last = _build_sql_result(
                 domain_ids=domain_ids,
                 attempt=attempt,
                 purpose=draft.purpose,
@@ -222,7 +230,7 @@ def run_sql_lookup(
                 duration_ms=int(getattr(page, "duration_ms", 0) or 0),
             )
         status = "rows" if page.rows else "empty"
-        last = _result(
+        last = _build_sql_result(
             domain_ids=domain_ids,
             attempt=attempt,
             purpose=draft.purpose,
@@ -232,15 +240,15 @@ def run_sql_lookup(
             rows=page.rows,
             truncated=page.truncated,
             duration_ms=page.duration_ms,
-            error=None if page.rows else NO_ROWS,
+            error=None if page.rows else NO_ROWS_RETRY_REASON,
         )
         last["filters"] = applied_conditions(guarded)
-        last["coverage"] = date_coverage(referenced_tables(guarded))
-        last["notes"] = [*(grounding.notes() if grounding is not None else []), *([BLENDED_NOTE] if blends else [])]
+        last["coverage"] = get_table_date_coverage(referenced_tables(guarded))
+        last["notes"] = [*(grounding.user_facing_notes() if grounding is not None else []), *([BLENDED_AVERAGE_NOTE] if blends else [])]
         trace_sql_attempt(last, client)
         if page.rows:
             answered = last
-        retry_reason = NO_ROWS if not page.rows else ONLY_ZERO_VALUES if _only_zero_values(page.rows) else None
+        retry_reason = NO_ROWS_RETRY_REASON if not page.rows else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(page.rows) else None
         if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
         previous_error = retry_reason
@@ -251,11 +259,11 @@ def run_sql_lookup(
     return {
         "sql_result": last,
         "sql_rows": rows,
-        "listing_ids": listing_ids_from(state, rows, last["sql"] if rows else ""),
+        "listing_ids": listing_card_ids_from_rows(state, rows, last["sql"] if rows else ""),
     }
 
 
-def _run_recipe(
+def _answer_with_recipe(
     bound: BoundRecipe, runner, grounding: Grounding | None, cap: int, client
 ) -> dict | None:
     """The update for a recipe that returned rows, or None so the turn drafts SQL instead."""
@@ -266,10 +274,10 @@ def _run_recipe(
     except (SqlRejected, SqlFailed) as exc:
         logger.warning("sql.recipe_failed", extra={"extra_data": {"recipe": bound.recipe.id, "error": str(exc)}})
         return None
-    if not page.rows or _only_zero_values(page.rows):
+    if not page.rows or _is_single_all_zero_row(page.rows):
         logger.info("sql.recipe_empty", extra={"extra_data": {"recipe": bound.recipe.id}})
         return None
-    last = _result(
+    last = _build_sql_result(
         domain_ids=domain_ids,
         attempt=1,
         purpose=bound.recipe.purpose,
@@ -283,8 +291,8 @@ def _run_recipe(
     last.update(
         recipe=bound.recipe.id,
         filters=bound.filters(),
-        coverage=date_coverage(referenced_tables(guarded)),
-        notes=grounding.notes() if grounding is not None else [],
+        coverage=get_table_date_coverage(referenced_tables(guarded)),
+        notes=grounding.user_facing_notes() if grounding is not None else [],
     )
     logger.info(
         "sql.recipe",
@@ -294,18 +302,18 @@ def _run_recipe(
     return {"sql_result": last, "sql_rows": list(page.rows), "listing_ids": []}
 
 
-def _listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
+def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
     places = [name for name in grounding.names if name.kind is MentionKind.PLACE]
     filters = query.listing_filters if query is not None else None
     return ListingSearch(
         filters=filters or ListingFilters(),
         places=[name.place for name in places if name.place is not None],
-        developers=grounding.stored_in(LISTINGS_TABLE, "developer"),
+        developers=grounding.stored_values_in(LISTINGS_TABLE, "developer"),
         unmatched_places=[name.text for name in places if name.place is None],
     )
 
 
-def _listing_conditions(search: ListingSearch) -> list[str]:
+def _stated_listing_filters(search: ListingSearch) -> list[str]:
     """The user's own listing filters, as `field: value`, for the reply to name."""
     stated = search.filters.model_dump(mode="json", exclude_defaults=True)
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
@@ -315,7 +323,7 @@ def _listing_conditions(search: ListingSearch) -> list[str]:
     return conditions
 
 
-def _only_zero_values(rows: list[dict]) -> bool:
+def _is_single_all_zero_row(rows: list[dict]) -> bool:
     """One row of nothing but zeros and nulls: an aggregate whose filter matched no rows."""
     if len(rows) != 1 or not rows[0]:
         return False
@@ -333,7 +341,7 @@ def _is_zero_or_empty(value: Any) -> bool:
         return False
 
 
-def _draft(models, **kwargs) -> SqlDraft:
+def _draft_sql(models, **kwargs) -> SqlDraft:
     parsed = models.draft_sql(**kwargs)
     if isinstance(parsed, SqlDraft):
         return parsed
@@ -347,23 +355,19 @@ def _frame_for_prompt(frame: dict | None) -> dict | None:
     return safe or None
 
 
-def _message(state: ChatState) -> str:
-    from agent.services.transcript import latest_user_text
-
+def _latest_user_message(state: ChatState) -> str:
     return latest_user_text(state.get("messages") or [])
 
 
-def _history(state: ChatState) -> str:
-    from agent.services.transcript import ANSWER_HISTORY, history_summary
-
-    return history_summary(state.get("messages") or [], limit=ANSWER_HISTORY)
+def _history_summary(state: ChatState) -> str:
+    return format_recent_history(state.get("messages") or [], limit=ANSWER_HISTORY_MESSAGE_LIMIT)
 
 
-def _empty_result(domain_ids: list[str]) -> dict[str, Any]:
-    return _result(domain_ids=domain_ids, attempt=0, purpose="", sql="", status="failed", error="SQL was not drafted")
+def _undrafted_sql_result(domain_ids: list[str]) -> dict[str, Any]:
+    return _build_sql_result(domain_ids=domain_ids, attempt=0, purpose="", sql="", status="failed", error="SQL was not drafted")
 
 
-def _result(
+def _build_sql_result(
     *,
     domain_ids: list[str],
     attempt: int,

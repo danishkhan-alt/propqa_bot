@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from agent.memory.maintenance.privacy import delete_user_memory, export_user_memory
-from agent.memory.models.types import ALL_CLUSTERS
-from agent.memory.session.bootstrap import get_repository
+from agent.memory.models.records import ALL_CLUSTERS
+from agent.memory.session.backends import get_repository
 
 
 def require_repository():

@@ -9,8 +9,8 @@ from __future__ import annotations
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
-from agent.sql.cards import load_from_warehouse
-from agent.sql.listing_details import focused_listing_facts, load_details_from_warehouse
+from agent.sql.cards import fetch_listing_card_rows
+from agent.sql.listing_details import fetch_focused_listing_facts, fetch_listing_detail_rows
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
@@ -21,10 +21,10 @@ def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> d
     if runtime.context is None:
         raise RuntimeError("AgentContext is required")
     ids = list(state.get("focused_property_ids") or [])
-    listings = focused_listing_facts(
+    listings = fetch_focused_listing_facts(
         ids,
-        runtime.context.listing_loader or load_from_warehouse,
-        runtime.context.listing_detail_loader or load_details_from_warehouse,
+        runtime.context.listing_loader or fetch_listing_card_rows,
+        runtime.context.listing_detail_loader or fetch_listing_detail_rows,
     )
     logger.info(
         "listing.focus",

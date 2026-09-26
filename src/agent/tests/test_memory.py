@@ -20,31 +20,35 @@ from langgraph.types import Command
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graph.workflow import build_chat_graph
-from agent.sql.execute import SqlPage
-from agent.memory.write.upsert import write_memories
 from agent.memory.maintenance.consolidate import consolidate_user
+from agent.memory.maintenance.privacy import (
+    export_user_memory,
+    set_memory_enabled,
+    soft_delete_memories,
+)
+from agent.memory.models.records import MemoryOperation, empty_frame, utcnow
 from agent.memory.read.personalize import apply_saved_preferences
-from agent.memory.write.extract import extract_explicit, extract_turn
-from agent.memory.safety.reject_unsafe import MemoryRejected, validate_memory
-from agent.memory.storage.cache import WorkingMemoryCache
-from agent.memory.session.search_results import summarize_search_results
-from agent.memory.read.prompt_text import disclosure_line
-from agent.memory.maintenance.privacy import export_user_memory, forget_memory, set_memory_enabled
+from agent.memory.read.prompt_text import format_disclosure_line
 from agent.memory.read.recall import classify_clusters, recall_for_user
-from agent.memory.session.follow_up import update_search_from_message
-from agent.memory.storage.repository import InMemoryRepository
-from agent.memory.routes import router
-from agent.memory.session.bootstrap import set_hot, set_repository
 from agent.memory.read.scoring import score_memory
+from agent.memory.routes import router
+from agent.memory.safety.reject_unsafe import MemoryRejected, sanitize_memory_operation
+from agent.memory.session.backends import set_memory_cache, set_repository
+from agent.memory.session.follow_up import derive_search_state_from_message
+from agent.memory.session.search_results import summarize_search_results
+from agent.memory.storage.cache import InProcessMemoryCache
+from agent.memory.storage.in_memory_repository import InMemoryMemoryRepository
 from agent.memory.storage.langgraph_store import PropQAMemoryStore
-from agent.memory.models.types import MemoryOp, empty_frame, utcnow
-from agent.memory.write.worker import drain, process_job
+from agent.memory.write.extract import extract_explicit, extract_turn
+from agent.memory.write.upsert import write_memories
+from agent.memory.write.worker import drain_extraction_queue, process_extraction_job
 from agent.schemas.routes import QueryRoute
+from agent.schemas.sql import SqlPage
 from agent.tests.test_router import ScriptedModels
 
 
 def _preference(slot: str, column: str, op: str, value, *, cluster: str, provenance: str = "explicit", confidence: float = 0.9, importance: float = 0.7, action: str = "add", memory_type: str = "preference"):
-    return MemoryOp(
+    return MemoryOperation(
         op=action,
         type=memory_type,
         cluster=cluster,
@@ -64,10 +68,10 @@ def test_cheaper_uses_the_lower_quartile_and_the_second_row():
     frame["predicates"] = {"purpose": "sale"}
     frame["result_meta"] = {"p25_price": 1_200_000, "ids": ["a", "b", "c"], "row_count": 3}
     frame["turn"] = 1
-    cheaper = update_search_from_message("cheaper", frame, None, now=utcnow())
+    cheaper = derive_search_state_from_message("cheaper", frame, None, now=utcnow())
     assert cheaper["query_frame"]["predicates"]["price"] == {"lte": 1_200_000}
 
-    second = update_search_from_message("the second one", frame, None, now=utcnow())
+    second = derive_search_state_from_message("the second one", frame, None, now=utcnow())
     assert second["query_frame"]["predicates"]["id"] == {"in": ["b"]}
 
 
@@ -97,7 +101,7 @@ def test_budget_does_not_leak_into_rta():
     )
     assert kept["predicates"]["price"] == {"lte": 2_000_000}
     assert labels == ["≤ AED 2M"]
-    assert disclosure_line(labels) == "Searched for ≤ AED 2M."
+    assert format_disclosure_line(labels) == "Searched for ≤ AED 2M."
 
 
 def test_ignore_defaults_skips_saved_filters():
@@ -120,7 +124,7 @@ def test_ignore_defaults_skips_saved_filters():
 
 
 def test_explicit_correction_replaces_a_slot_and_inferred_does_not():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     user = "user-1"
     write_memories(
         repo,
@@ -181,7 +185,7 @@ def test_explicit_correction_replaces_a_slot_and_inferred_does_not():
 
 
 def test_overlapping_bedroom_counts_become_one_semantic_value():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     write_memories(
         repo,
         "user-1",
@@ -200,11 +204,11 @@ def test_overlapping_bedroom_counts_become_one_semantic_value():
 
 
 def test_sql_phone_and_unknown_columns_are_rejected():
-    repo = InMemoryRepository()
-    columns = repo.columns()
+    repo = InMemoryMemoryRepository()
+    columns = repo.get_column_specs()
     with pytest.raises(MemoryRejected):
-        validate_memory(
-            MemoryOp(
+        sanitize_memory_operation(
+            MemoryOperation(
                 op="add",
                 type="preference",
                 cluster="budget",
@@ -215,8 +219,8 @@ def test_sql_phone_and_unknown_columns_are_rejected():
             ),
             columns,
         )
-    cleaned = validate_memory(
-        MemoryOp(
+    cleaned = sanitize_memory_operation(
+        MemoryOperation(
             op="add",
             type="preference",
             cluster="personal",
@@ -232,7 +236,7 @@ def test_sql_phone_and_unknown_columns_are_rejected():
         repo,
         "user-1",
         [
-            MemoryOp(
+            MemoryOperation(
                 op="add",
                 type="preference",
                 cluster="property_prefs",
@@ -248,7 +252,7 @@ def test_sql_phone_and_unknown_columns_are_rejected():
 
 
 def test_forget_export_and_kill_switch():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     user = "user-1"
     write_memories(
         repo,
@@ -263,7 +267,7 @@ def test_forget_export_and_kill_switch():
     assert "embedding" not in exported[0]
     assert all("location_id" not in item["content"] for item in exported)
 
-    assert forget_memory(repo, user, cluster="budget") == 1
+    assert soft_delete_memories(repo, user, cluster="budget") == 1
     assert repo.get_active_slot(user, "budget_max") is None
     assert repo.count_events(user, "deleted_by_user") == 1
     assert repo.get_active_slot(user, "bedrooms") is not None
@@ -274,7 +278,7 @@ def test_forget_export_and_kill_switch():
 
 
 def test_three_episodes_become_a_semantic_memory_and_old_rows_expire():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     user = "user-1"
     now = utcnow()
     for count in (10, 12, 8):
@@ -288,7 +292,7 @@ def test_three_episodes_become_a_semantic_memory_and_old_rows_expire():
             "query_frame": frame,
             "result_meta": {"row_count": count},
         }
-        process_job(job, repo, now=now)
+        process_extraction_job(job, repo, now=now)
     episodic = [row for row in repo.list_active(user) if row.type == "episodic"]
     assert len(episodic) == 3
     consolidate_user(repo, user, now=now)
@@ -334,7 +338,7 @@ def test_extraction_keeps_explicit_preferences_and_drops_a_click():
 
 
 def test_store_search_and_score_follow_the_spec_weights():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     store = PropQAMemoryStore(repo)
     now = utcnow()
     memory_id = str(uuid.uuid4())
@@ -379,7 +383,7 @@ def test_store_search_and_score_follow_the_spec_weights():
 
 
 def test_recall_of_many_users_stays_inside_the_latency_budget():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     now = utcnow()
     for index in range(30):
         write_memories(
@@ -421,16 +425,16 @@ def test_result_meta_captures_the_quartile_used_by_cheaper():
 
 
 def test_graph_cheaper_narrows_the_saved_frame_and_forget_asks_first():
-    hot = WorkingMemoryCache()
-    set_hot(hot)
-    repo = InMemoryRepository()
+    memory_cache = InProcessMemoryCache()
+    set_memory_cache(memory_cache)
+    repo = InMemoryMemoryRepository()
     set_repository(repo)
     thread_id = "t-cheap"
     frame = empty_frame()
     frame["domain"] = "property_search"
     frame["turn"] = 1
     frame["result_meta"] = {"p25_price": 900_000, "ids": ["a", "b"]}
-    hot.set(f"wm:{thread_id}", {"query_frame": frame, "goal": None, "ignore_defaults": False})
+    memory_cache.set(f"wm:{thread_id}", {"query_frame": frame, "goal": None, "ignore_defaults": False})
 
     models = ScriptedModels()
     graph = build_chat_graph(InMemorySaver(), store=PropQAMemoryStore(repo))
@@ -474,13 +478,13 @@ def test_graph_cheaper_narrows_the_saved_frame_and_forget_asks_first():
 
 
 def test_worker_drains_the_memory_queue_without_sql():
-    hot = WorkingMemoryCache()
-    repo = InMemoryRepository()
+    memory_cache = InProcessMemoryCache()
+    repo = InMemoryMemoryRepository()
     frame = empty_frame()
     frame["sql"] = "select * from properties"
     frame["domain"] = "property_search"
     frame["predicates"] = {"purpose": "sale"}
-    hot.push(
+    memory_cache.enqueue_extraction_job(
         {
             "user_id": "user-1",
             "thread_id": "t",
@@ -490,14 +494,14 @@ def test_worker_drains_the_memory_queue_without_sql():
             "events": [],
         }
     )
-    assert drain(hot, repo) == 1
+    assert drain_extraction_queue(memory_cache, repo) == 1
     purpose = repo.get_active_slot("user-1", "purpose")
     assert purpose is not None and purpose.structured["val"] == "sale"
     assert all("select" not in row.content.lower() for row in repo.list_all("user-1"))
 
 
 def test_memory_http_export_and_delete():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     set_repository(repo)
     write_memories(
         repo,
@@ -522,9 +526,9 @@ def test_off_topic_text_recalls_nothing():
 
 
 def test_rename_points_a_logical_column_at_a_new_physical_name():
-    repo = InMemoryRepository()
+    repo = InMemoryMemoryRepository()
     repo.rename_column("properties.price", "listings.asking_price")
-    assert repo.columns()["properties.price"].physical_col == "listings.asking_price"
+    assert repo.get_column_specs()["properties.price"].physical_col == "listings.asking_price"
 
 
 def test_direct_models_still_route_a_greeting():

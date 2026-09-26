@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import time
 
+from agent.enums.grounding import Breadth, MatchTier
+from agent.enums.listing import MentionKind
 from agent.grounding import GroundingIndex, ground_names
-from agent.grounding.names import MatchTier, NameMatcher, name_variants
-from agent.grounding.places import Breadth, ListingLinks, LocationNode, build_place_directory
-from agent.grounding.stored_values import NamedColumn, StoredValue, StoredValueIndex, learn_same_place
-from agent.schemas.listing import MentionKind, NameMention
+from agent.grounding.name_matching import NameMatcher, name_variants
+from agent.grounding.places import build_place_directory
+from agent.grounding.stored_values import StoredValueIndex, learn_same_place
+from agent.schemas.grounding_index import (
+    ListingCountsByPlaceLink,
+    LocationNode,
+    NamedColumn,
+    StoredValue,
+)
+from agent.schemas.listing import NameMention
 
 DLD_SALES = "chatbot_ai.real_estate_transactions"
 OFFPLAN = "public.offplan_projects_new"
@@ -44,7 +52,7 @@ def _directory(aliases=None):
         _v2(1200, None, "Jumeirah Village Circle", Breadth.AREA, 25.061, 55.209),
         _v2(1300, None, "DownTown Dubai", Breadth.AREA, 25.195, 55.275),
     ]
-    links = ListingLinks(by_address_part={"dubai marina": 9, "downtown dubai": 75, "downtown jebel ali": 3})
+    links = ListingCountsByPlaceLink(by_address_part={"dubai marina": 9, "downtown dubai": 75, "downtown jebel ali": 3})
     return build_place_directory(v2, legacy, links, region="Dubai", aliases=aliases)
 
 
@@ -199,15 +207,15 @@ def test_grounding_uses_the_place_spelling_to_find_other_sources():
     }
     assert emaar.place is None
     assert [match.value for match in emaar.stored] == ["Emaar Properties"]
-    assert grounding.unresolved() == []
+    assert grounding.unresolved_names() == []
 
 
 def test_an_unknown_name_is_reported_not_dropped():
     index = GroundingIndex(places=_directory(), stored=_stored_index(), loaded_at=time.monotonic())
     grounding = ground_names([NameMention(text="Atlantis Zzyzx")], index, [DLD_SALES])
-    assert grounding.unresolved() == ["Atlantis Zzyzx"]
+    assert grounding.unresolved_names() == ["Atlantis Zzyzx"]
     assert grounding.for_sql_prompt() == [{"name": "Atlantis Zzyzx", "unresolved": True}]
-    assert "searched as text" in grounding.notes()[0]
+    assert "searched as text" in grounding.user_facing_notes()[0]
 
 
 def test_a_legacy_node_at_the_same_spot_as_a_v2_node_joins_the_v2_place_it_sits_in():
@@ -222,7 +230,7 @@ def test_a_legacy_node_at_the_same_spot_as_a_v2_node_joins_the_v2_place_it_sits_
         # Same name, far away: a different place, never linked.
         _v2(99000, None, "Burj Khalifa", Breadth.BUILDING, 24.40, 54.50),
     ]
-    downtown = build_place_directory(v2, legacy, ListingLinks(), region="Dubai").find("downtown").place
+    downtown = build_place_directory(v2, legacy, ListingCountsByPlaceLink(), region="Dubai").find("downtown").place
     assert {12057, 12058} <= downtown.legacy_ids
     assert 99000 not in downtown.legacy_ids
 
@@ -230,9 +238,9 @@ def test_a_legacy_node_at_the_same_spot_as_a_v2_node_joins_the_v2_place_it_sits_
 def test_a_legacy_node_inside_a_drawn_outline_belongs_to_that_area():
     v2 = [_v2(2, None, "Dubai", Breadth.REGION), _v2(30, 2, "Dubai Hills Estate", Breadth.AREA, 25.11, 55.26)]
     legacy = [_v2(1102, None, "DUBAI HILLS - EMERALD HILLS", Breadth.AREA, 25.1298, 55.2702)]
-    directory = build_place_directory(v2, legacy, ListingLinks(), region="Dubai", inside_outline={30: [1102]})
+    directory = build_place_directory(v2, legacy, ListingCountsByPlaceLink(), region="Dubai", inside_outline={30: [1102]})
     assert 1102 in directory.find("Dubai Hills Estate").place.legacy_ids
-    assert 1102 not in build_place_directory(v2, legacy, ListingLinks(), region="Dubai").find(
+    assert 1102 not in build_place_directory(v2, legacy, ListingCountsByPlaceLink(), region="Dubai").find(
         "Dubai Hills Estate"
     ).place.legacy_ids
 
@@ -251,7 +259,7 @@ def test_an_outline_does_not_claim_a_legacy_area_that_v2_places_elsewhere():
         _v2(276307, 12034, "ALFATTAN HOTEL & RESIDENSE", Breadth.PROJECT, 25.08, 55.14),
     ]
     directory = build_place_directory(
-        v2, legacy, ListingLinks(), region="Dubai", inside_outline={10: [311546, 276307]}
+        v2, legacy, ListingCountsByPlaceLink(), region="Dubai", inside_outline={10: [311546, 276307]}
     )
     assert not {311546, 309575, 276307} & directory.find("Dubai Marina").place.legacy_ids
     assert {311546, 309575} <= directory.find("Dubai Harbour").place.legacy_ids

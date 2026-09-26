@@ -1,4 +1,9 @@
-from common.schemas.pagination import DEFAULT_PER_PAGE, PageRequest, PaginationMetaData, page_request
+from common.schemas.pagination import (
+    DEFAULT_PER_PAGE,
+    PageRequest,
+    PaginationMetadata,
+    build_page_request,
+)
 from common.schemas.responses import (
     APIResponse,
     FieldProblem,
@@ -12,7 +17,7 @@ __all__ = [
     "FieldProblem",
     "PaginatedAPIResponse",
     "PageRequest",
-    "PaginationMetaData",
-    "page_request",
+    "PaginationMetadata",
+    "build_page_request",
     "ProblemDetails",
 ]

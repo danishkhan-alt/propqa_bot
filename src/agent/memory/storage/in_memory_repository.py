@@ -7,14 +7,14 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from agent.memory.models.column_map import ColumnSpec, seed_map
-from agent.memory.read.scoring import as_datetime
-from agent.memory.models.types import (
+from agent.memory.models.column_map import ColumnSpec, default_column_specs_by_logical_column
+from agent.memory.models.records import (
     MemoryRecord,
     MemorySettings,
     copy_record,
     utcnow,
 )
+from agent.memory.read.scoring import as_datetime
 
 
 def _tokens(text: str) -> set[str]:
@@ -29,7 +29,7 @@ def token_similarity(query: str, content: str) -> float:
     return len(left & right) / len(left | right)
 
 
-def cosine(left: list[float], right: list[float]) -> float:
+def cosine_similarity(left: list[float], right: list[float]) -> float:
     if not left or not right or len(left) != len(right):
         return 0.0
     dot = sum(a * b for a, b in zip(left, right, strict=True))
@@ -40,7 +40,7 @@ def cosine(left: list[float], right: list[float]) -> float:
     return dot / (left_norm * right_norm)
 
 
-class InMemoryRepository:
+class InMemoryMemoryRepository:
     """The durable operations, held in process for tests and local fakes."""
 
     def __init__(self) -> None:
@@ -48,14 +48,14 @@ class InMemoryRepository:
         self._events: list[dict[str, Any]] = []
         self._settings: dict[str, MemorySettings] = {}
         self._profiles: dict[str, dict[str, Any]] = {}
-        self._columns = seed_map()
+        self._columns = default_column_specs_by_logical_column()
         self._event_seq = 1
         self._lock = threading.RLock()
 
     def transaction(self):
         return self._lock
 
-    def columns(self) -> dict[str, ColumnSpec]:
+    def get_column_specs(self) -> dict[str, ColumnSpec]:
         return dict(self._columns)
 
     def rename_column(self, logical: str, physical: str) -> None:
@@ -124,7 +124,7 @@ class InMemoryRepository:
                     continue
                 score = 0.0
                 if embedding and row.embedding:
-                    score = cosine(embedding, row.embedding)
+                    score = cosine_similarity(embedding, row.embedding)
                 elif query:
                     score = token_similarity(query, row.content)
                 found.append((copy_record(row), score))
@@ -151,7 +151,7 @@ class InMemoryRepository:
         with self._lock:
             return sorted({row.user_id for row in self._rows.values()})
 
-    def touch(self, memory_ids: list[str], *, now: datetime | None = None) -> None:
+    def record_access(self, memory_ids: list[str], *, now: datetime | None = None) -> None:
         moment = now or utcnow()
         with self._lock:
             for memory_id in memory_ids:
@@ -161,7 +161,7 @@ class InMemoryRepository:
                 row.last_accessed_at = moment
                 row.access_count += 1
 
-    def hard_delete_status(self, *, status: str, older_than: datetime) -> int:
+    def hard_delete_by_status(self, *, status: str, older_than: datetime) -> int:
         with self._lock:
             doomed = [
                 row.id
@@ -201,7 +201,7 @@ class InMemoryRepository:
                 1 for item in self._events if item["user_id"] == user_id and item["event"] == event
             )
 
-    def decayed_recently(self, memory_id: str, *, since: datetime) -> bool:
+    def was_decayed_since(self, memory_id: str, *, since: datetime) -> bool:
         with self._lock:
             for item in reversed(self._events):
                 if item["memory_id"] != memory_id or not item["detail"].get("decay"):
@@ -222,7 +222,7 @@ class InMemoryRepository:
                     return dict(item, detail=dict(item["detail"]))
             return None
 
-    def mark_event(self, event_id: int, **detail: Any) -> None:
+    def merge_event_detail(self, event_id: int, **detail: Any) -> None:
         with self._lock:
             for item in self._events:
                 if item["id"] == event_id:
@@ -272,5 +272,5 @@ class InMemoryRepository:
             }
 
 
-def new_id() -> str:
+def new_memory_id() -> str:
     return str(uuid.uuid4())

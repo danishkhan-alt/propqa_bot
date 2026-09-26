@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from agent.enums.listing import MentionKind
 from agent.grounding.index import GroundingIndex
-from agent.grounding.places import PlaceMatch
-from agent.grounding.stored_values import PLACE_GROUP, StoredValue
+from agent.grounding.stored_values import PLACE_GROUP
 from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding, StoredMatch
-from agent.schemas.listing import MentionKind, NameMention
+from agent.schemas.grounding_index import PlaceMatch, StoredValue
+from agent.schemas.listing import NameMention
 
-_GROUPS_BY_MENTION = {
+_NAME_GROUPS_BY_MENTION_KIND = {
     MentionKind.PLACE: {PLACE_GROUP},
     MentionKind.DEVELOPER: {"developer"},
     MentionKind.OTHER: None,
@@ -23,17 +24,17 @@ def ground_names(
     tables: Iterable[str],
 ) -> Grounding:
     allowed = set(tables)
-    return Grounding(names=[_ground(mention, index, allowed) for mention in mentions])
+    return Grounding(names=[_ground_mention(mention, index, allowed) for mention in mentions])
 
 
-def _ground(mention: NameMention, index: GroundingIndex, tables: set[str]) -> GroundedName:
+def _ground_mention(mention: NameMention, index: GroundingIndex, tables: set[str]) -> GroundedName:
     match = index.places.find(mention.text) if mention.kind is MentionKind.PLACE else None
     # The place's own spellings are tried with the user's wording: "downtown" becomes
     # "Downtown Dubai", which is how the other sources spell it.
     spellings = [mention.text]
     if match is not None:
         spellings = [*sorted(match.place.names | match.place.covered_names), mention.text]
-    stored = index.stored.find(spellings, tables, _GROUPS_BY_MENTION[mention.kind])
+    stored = index.stored.find(spellings, tables, _NAME_GROUPS_BY_MENTION_KIND[mention.kind])
     return GroundedName(
         text=mention.text,
         kind=mention.kind,

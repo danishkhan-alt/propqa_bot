@@ -1,15 +1,20 @@
 """A chat session: the sidebar row, who owns it, and the turns to restore."""
 
-from common.session.identity import safe_thread_id, safe_user_id
-from common.session.store import Session, detach_session, note_session, sessions_for
-from common.session.transcript import turns_from
+from common.schemas.session import SidebarSession
+from common.session.id_validation import safe_thread_id, safe_user_id
+from common.session.sidebar_sessions import (
+    list_user_sessions,
+    record_session_activity,
+    remove_sidebar_session,
+)
+from common.session.transcript import restore_turns_from_checkpoint
 
 __all__ = [
-    "Session",
-    "detach_session",
-    "note_session",
+    "SidebarSession",
+    "remove_sidebar_session",
+    "record_session_activity",
     "safe_thread_id",
     "safe_user_id",
-    "sessions_for",
-    "turns_from",
+    "list_user_sessions",
+    "restore_turns_from_checkpoint",
 ]

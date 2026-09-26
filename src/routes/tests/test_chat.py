@@ -12,27 +12,26 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
-from agent.memory.session.bootstrap import close_memory
+from agent.memory.session.backends import close_memory_backends
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, QueryRoute
-from agent.schemas.sql import SqlDraft
-from agent.sql.execute import SqlPage
+from agent.schemas.sql import SqlDraft, SqlPage
 from app import create_app
 from common.cache import MemoryCache, set_cache
 from common.enums.user_kind import UserKind
 from common.identity import Caller
-from routes.chat import chat_rule
 from common.ratelimit.rules import CHAT_REGISTERED, CHAT_VISITOR
+from routes.chat import chat_rate_limit_for
 
 
 @pytest.fixture(autouse=True)
 def memory_cache():
     backend = MemoryCache()
     set_cache(backend)
-    close_memory()
+    close_memory_backends()
     yield backend
     set_cache(None)
-    close_memory()
+    close_memory_backends()
 
 
 class _Greeting:
@@ -375,8 +374,8 @@ def test_a_blank_message_is_rejected():
 
 
 def test_chat_uses_the_chat_limit(memory_cache: MemoryCache):
-    assert chat_rule(Caller(UserKind.REGISTERED, "user-1")) is CHAT_REGISTERED
-    assert chat_rule(Caller(UserKind.VISITOR, "visitor-1")) is CHAT_VISITOR
+    assert chat_rate_limit_for(Caller(UserKind.REGISTERED, "user-1")) is CHAT_REGISTERED
+    assert chat_rate_limit_for(Caller(UserKind.VISITOR, "visitor-1")) is CHAT_VISITOR
     client, _graph = _client(_Greeting())
     with client:
         for _ in range(20):

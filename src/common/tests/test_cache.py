@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from common.cache.user_cache import UserCache
+from common.cache.user_cache import CallerScopedCache
 from common.enums.user_kind import UserKind
 from common.identity import Caller
 
 
-def _cache(kind: UserKind, subject_id: str, backend) -> UserCache:
-    return UserCache(Caller(kind=kind, subject_id=subject_id), backend=backend)
+def _cache(kind: UserKind, subject_id: str, backend) -> CallerScopedCache:
+    return CallerScopedCache(Caller(kind=kind, subject_id=subject_id), backend=backend)
 
 
 def test_registered_and_visitor_do_not_share_keys(memory_cache):
@@ -31,7 +31,7 @@ def test_two_registered_users_are_isolated(memory_cache):
 
 def test_it_refuses_to_exist_without_a_caller():
     try:
-        UserCache(None)  # type: ignore[arg-type]
+        CallerScopedCache(None)  # type: ignore[arg-type]
     except ValueError:
         return
     raise AssertionError("expected ValueError")
@@ -91,11 +91,11 @@ def test_invalidating_everything_stays_on_one_caller(memory_cache):
 
 def test_generations_advance_rather_than_reset(memory_cache):
     cache = _cache(UserKind.VISITOR, "v1", memory_cache)
-    first = cache.scoped("chat:last")
+    first = cache.scoped_key("chat:last")
     cache.invalidate_category("chat")
-    second = cache.scoped("chat:last")
+    second = cache.scoped_key("chat:last")
     cache.invalidate_category("chat")
-    third = cache.scoped("chat:last")
+    third = cache.scoped_key("chat:last")
 
     assert len({first, second, third}) == 3
 

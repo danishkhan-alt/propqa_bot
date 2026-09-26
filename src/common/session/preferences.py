@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from common.cache import get_cache
-from common.session.store import TTL_SECONDS
+from common.session.sidebar_sessions import SESSION_TTL_SECONDS
 
 
 def load(user_id: str) -> dict | None:
@@ -17,7 +17,7 @@ def merge(user_id: str, updates: dict) -> dict:
     current = load(user_id)
     merged = dict(current) if current is not None else {}
     merged.update(updates)
-    get_cache().set(_key(user_id), merged, ttl=TTL_SECONDS)
+    get_cache().set(_key(user_id), merged, ttl=SESSION_TTL_SECONDS)
     return merged
 
 

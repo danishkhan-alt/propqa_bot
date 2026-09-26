@@ -8,7 +8,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from common.context import get_request_id, request_id_var
+from common.request_context import get_request_id, request_id_var
 
 REQUEST_ID_HEADER = "X-Request-ID"
 

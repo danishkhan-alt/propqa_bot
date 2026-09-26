@@ -3,41 +3,46 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from agent.enums.routing import TurnKind
-from agent.memory.session.follow_up import FrameClass
-from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_SYSTEM
+from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_ANSWER_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
-from agent.prompts.reply import LISTING_FOCUS_SYSTEM, STRUCTURED_REPLY_SYSTEM
+from agent.prompts.reply import FOCUSED_LISTINGS_REPLY_SYSTEM, STRUCTURED_REPLY_SYSTEM
 from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
+from agent.schemas.follow_up import FollowUpClassification
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.services import jev_domain_router
 from agent.services.typesafe import SystemOneClient, TypeSafeError
+from agent.sql.recipes import load_recipes_by_id
+from catalog import list_domains
 from common.logger import get_logger
+from config import ActiveConfig
 
 logger = get_logger("agent.router")
 
-QUERY_FALLBACK = QueryRoute(
+QUERY_ROUTE_FALLBACK = QueryRoute(
     route="need_db",
     turn_kind="new",
     confidence=0.3,
     rationale="Router output was invalid; defaulting to a database lookup.",
 )
 
-DOMAIN_FALLBACK = DomainRoute(
+DOMAIN_ROUTE_FALLBACK = DomainRoute(
     domain_ids=[],
     join_ids=[],
     confidence=0.3,
     rationale="Domain router output was invalid.",
 )
 
-FRAME_CLASS_SYSTEM = """Classify this follow-up against the current query frame. Do not answer the user.
+FOLLOW_UP_KIND_SYSTEM = """Classify this follow-up against the current query frame. Do not answer the user.
 
 kind is one of:
 - refine: same search, with a change to filters, sort, projection, or a row reference
@@ -45,7 +50,7 @@ kind is one of:
 - new: unrelated request
 """
 
-FRAME_FALLBACK = FrameClass(kind="new")
+FOLLOW_UP_KIND_FALLBACK = FollowUpClassification(kind="new")
 
 SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
 REPLY_FALLBACK = StructuredReply(
@@ -53,7 +58,7 @@ REPLY_FALLBACK = StructuredReply(
 )
 
 
-def output_schema(model: type[BaseModel]) -> dict:
+def build_strict_output_schema(model: type[BaseModel]) -> dict:
     """The JSON schema a structured call is constrained to, with every field required.
 
     The API allows at most 24 optional and 16 union-typed fields, and each optional field
@@ -118,7 +123,7 @@ def _require_every_property(node):
     return node
 
 
-def invoke_structured(
+def invoke_structured_with_fallback(
     runnable, messages: list, config: RunnableConfig | None, fallback
 ):
     """Call a structured runnable once, retry once, then return the fallback.
@@ -161,10 +166,6 @@ def invoke_structured(
 
 
 def _anthropic_chat_models():
-    from langchain_anthropic import ChatAnthropic
-
-    from config import ActiveConfig
-
     api_key = ActiveConfig.ANTHROPIC_API_KEY or None
 
     def main(effort: str):
@@ -183,16 +184,12 @@ def _anthropic_chat_models():
 
 
 def _openai_chat_models():
-    from langchain_openai import ChatOpenAI
-
-    from config import ActiveConfig
-
     api_key = ActiveConfig.OPENAI_API_KEY or None
 
     def build(model: str, effort: str, max_tokens: int):
         # Reasoning tokens come out of max_tokens, as with Claude's thinking. A model that
         # does not reason (gpt-4.1, gpt-4o) rejects the effort setting, so it gets none.
-        reasoning = {"reasoning_effort": effort} if effort and openai_model_reasons(model) else {}
+        reasoning = {"reasoning_effort": effort} if effort and is_openai_reasoning_model(model) else {}
         return ChatOpenAI(
             model=model,
             api_key=api_key,
@@ -208,7 +205,7 @@ def _openai_chat_models():
     return router, answer, sql
 
 
-def openai_model_reasons(model: str) -> bool:
+def is_openai_reasoning_model(model: str) -> bool:
     """OpenAI's reasoning families: the o-series and gpt-5, except its non-reasoning chat variant."""
     name = model.lower().rsplit("/", 1)[-1]
     if name.startswith("gpt-5"):
@@ -216,7 +213,7 @@ def openai_model_reasons(model: str) -> bool:
     return len(name) > 1 and name[0] == "o" and name[1].isdigit()
 
 
-_PROVIDERS = {"anthropic": _anthropic_chat_models, "openai": _openai_chat_models}
+_CHAT_MODEL_BUILDERS_BY_PROVIDER = {"anthropic": _anthropic_chat_models, "openai": _openai_chat_models}
 
 
 def constrained_output_options() -> dict:
@@ -225,18 +222,16 @@ def constrained_output_options() -> dict:
     Claude's json_schema method always constrains decoding. OpenAI only does when strict
     is set; without it the schema is a hint, and the model can answer in another shape.
     """
-    from config import ActiveConfig
 
     return {"strict": True} if ActiveConfig.LLM_PROVIDER == "openai" else {}
 
 
-def cached_system(text: str) -> SystemMessage:
+def build_cached_system_message(text: str) -> SystemMessage:
     """A system message the provider may reuse across calls that start with it.
 
     OpenAI caches any repeated prefix of 1024 tokens or more on its own. Claude caches
     only up to a block marked with cache_control, so the marker is added there.
     """
-    from config import ActiveConfig
 
     if ActiveConfig.LLM_PROVIDER == "anthropic":
         return SystemMessage(content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}])
@@ -245,27 +240,26 @@ def cached_system(text: str) -> SystemMessage:
 
 def build_chat_models():
     """(router, answer, sql) chat models from the provider set by LLM_PROVIDER."""
-    from config import ActiveConfig
 
     provider = ActiveConfig.LLM_PROVIDER
-    if provider not in _PROVIDERS:
+    if provider not in _CHAT_MODEL_BUILDERS_BY_PROVIDER:
         raise ValueError(
-            f"LLM_PROVIDER={provider!r} is not supported; use one of {sorted(_PROVIDERS)}"
+            f"LLM_PROVIDER={provider!r} is not supported; use one of {sorted(_CHAT_MODEL_BUILDERS_BY_PROVIDER)}"
         )
-    return _PROVIDERS[provider]()
+    return _CHAT_MODEL_BUILDERS_BY_PROVIDER[provider]()
 
 
-class RouterModels:
+class LangChainAgentModels:
     """Fast model for routing. The main model drafts SQL and writes the answer."""
 
     def __init__(self, domain_router: str | None = None) -> None:
         router_llm, answer_llm, sql_llm = build_chat_models()
         constrained = constrained_output_options()
         self._query = router_llm.with_structured_output(
-            output_schema(QueryRoute), method="json_schema", include_raw=True, **constrained
+            build_strict_output_schema(QueryRoute), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "router.query"})
         self._domain = router_llm.with_structured_output(
-            output_schema(DomainRoute), method="json_schema", include_raw=True, **constrained
+            build_strict_output_schema(DomainRoute), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "router.domain"})
         self._answer = answer_llm.with_config({"run_name": "answer.direct"})
         self._sql_answer = answer_llm.with_config({"run_name": "answer.synthesize"})
@@ -275,10 +269,10 @@ class RouterModels:
             StructuredReply.model_json_schema(), method="json_schema"
         ).with_config({"run_name": "answer.structured"})
         self._sql = sql_llm.with_structured_output(
-            output_schema(SqlDraft), method="json_schema", include_raw=True, **constrained
+            build_strict_output_schema(SqlDraft), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "sql.generate"})
         self._frame = router_llm.with_structured_output(
-            output_schema(FrameClass), method="json_schema", include_raw=True, **constrained
+            build_strict_output_schema(FollowUpClassification), method="json_schema", include_raw=True, **constrained
         ).with_config({"run_name": "memory.frame"})
         self._jev = build_jev_client(domain_router)
 
@@ -305,7 +299,7 @@ class RouterModels:
             SystemMessage(content=QUERY_ROUTER_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
         ]
-        return invoke_structured(self._query, messages, config, QUERY_FALLBACK)
+        return invoke_structured_with_fallback(self._query, messages, config, QUERY_ROUTE_FALLBACK)
 
     def route_domain(
         self,
@@ -336,7 +330,7 @@ class RouterModels:
             SystemMessage(content=DOMAIN_ROUTER_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
         ]
-        return invoke_structured(self._domain, messages, config, DOMAIN_FALLBACK)
+        return invoke_structured_with_fallback(self._domain, messages, config, DOMAIN_ROUTE_FALLBACK)
 
     def stream_answer_direct(
         self,
@@ -346,7 +340,7 @@ class RouterModels:
         memory_block: str = "",
         config: RunnableConfig | None = None,
     ):
-        yield from _llm_deltas(
+        yield from _stream_text_deltas(
             self._answer,
             [
                 SystemMessage(content=DIRECT_ANSWER_SYSTEM),
@@ -384,10 +378,10 @@ class RouterModels:
         history: str,
         config: RunnableConfig | None = None,
     ):
-        yield from _llm_deltas(
+        yield from _stream_text_deltas(
             self._answer,
             [
-                SystemMessage(content=UNAVAILABLE_SYSTEM),
+                SystemMessage(content=UNAVAILABLE_ANSWER_SYSTEM),
                 HumanMessage(
                     content=json.dumps(
                         {"history": history, "message": message}, ensure_ascii=False
@@ -436,10 +430,10 @@ class RouterModels:
             "previous_error": previous_error,
             "listing_ids_only": listing_ids_only,
         }
-        return invoke_structured(
+        return invoke_structured_with_fallback(
             self._sql,
             [
-                cached_system(instructions),
+                build_cached_system_message(instructions),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
             ],
             config,
@@ -481,7 +475,7 @@ class RouterModels:
             "filters": filters or [],
             "coverage": coverage or [],
         }
-        yield from _llm_deltas(
+        yield from _stream_text_deltas(
             self._sql_answer,
             [
                 SystemMessage(content=SQL_ANSWER_SYSTEM),
@@ -574,10 +568,10 @@ class RouterModels:
             "follow_up_question": follow_up_question,
         }
         messages = [
-            cached_system(STRUCTURED_REPLY_SYSTEM),
+            build_cached_system_message(STRUCTURED_REPLY_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
         ]
-        return stream_structured_reply(self._reply, messages, config, on_text)
+        return stream_structured_reply_with_fallback(self._reply, messages, config, on_text)
 
     def draft_listing_reply(
         self,
@@ -601,12 +595,12 @@ class RouterModels:
             "data_note": data_note,
         }
         messages = [
-            cached_system(LISTING_FOCUS_SYSTEM),
+            build_cached_system_message(FOCUSED_LISTINGS_REPLY_SYSTEM),
             HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
         ]
-        return stream_structured_reply(self._reply, messages, config, on_text)
+        return stream_structured_reply_with_fallback(self._reply, messages, config, on_text)
 
-    def classify_frame(
+    def classify_follow_up_kind(
         self,
         *,
         message: str,
@@ -614,18 +608,18 @@ class RouterModels:
         config: RunnableConfig | None = None,
     ) -> str:
         payload = {"message": message, "query_frame": {key: value for key, value in frame.items() if key != "sql"}}
-        return invoke_structured(
+        return invoke_structured_with_fallback(
             self._frame,
             [
-                SystemMessage(content=FRAME_CLASS_SYSTEM),
+                SystemMessage(content=FOLLOW_UP_KIND_SYSTEM),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
             ],
             config,
-            FRAME_FALLBACK,
+            FOLLOW_UP_KIND_FALLBACK,
         ).kind
 
 
-def stream_structured_reply(
+def stream_structured_reply_with_fallback(
     runnable,
     messages: list,
     config: RunnableConfig | None,
@@ -657,13 +651,13 @@ def stream_structured_reply(
         )
         if shown.strip():
             return StructuredReply(intro_text=shown)
-    reply = invoke_structured(runnable, messages, config, REPLY_FALLBACK)
+    reply = invoke_structured_with_fallback(runnable, messages, config, REPLY_FALLBACK)
     if on_text is not None and reply.intro_text:
         on_text(reply.intro_text)
     return reply
 
 
-def _llm_deltas(runnable, messages: list, config: RunnableConfig | None):
+def _stream_text_deltas(runnable, messages: list, config: RunnableConfig | None):
     for chunk in runnable.stream(messages, config=config):
         text = _chunk_text(chunk)
         if text:
@@ -685,16 +679,8 @@ def _chunk_text(chunk) -> str:
     return ""
 
 
-def _message_text(result) -> str:
-    content = result.content
-    if isinstance(content, str):
-        return content.strip()
-    return str(content).strip()
-
-
 def build_jev_client(domain_router: str | None = None) -> SystemOneClient | None:
     """The Jev client when the domain router (DOMAIN_ROUTER by default) is jev, else None."""
-    from config import ActiveConfig
 
     router = domain_router or ActiveConfig.DOMAIN_ROUTER
     if router == "llm":
@@ -714,24 +700,21 @@ def _route_domain_jev(
     turn_kind: TurnKind,
     last_need_db: LastNeedDb | None,
 ) -> DomainRoute:
-    from agent.sql.recipes import recipes
-    from catalog import list_domains
-
     return jev_domain_router.route_domain(
         client,
         message=message,
         turn_kind=turn_kind,
         last_need_db=last_need_db,
         domains=list_domains(),
-        recipes={item.id: item.when for item in recipes().values()},
+        recipes={item.id: item.when for item in load_recipes_by_id().values()},
     )
 
 
-_models: RouterModels | None = None
+_models: LangChainAgentModels | None = None
 
 
-def default_models() -> RouterModels:
+def get_default_models() -> LangChainAgentModels:
     global _models
     if _models is None:
-        _models = RouterModels()
+        _models = LangChainAgentModels()
     return _models

@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 
+from agent.sql.execute import run_against_warehouse
 from common.logger import get_logger
 
 logger = get_logger("agent.sql")
@@ -123,9 +124,7 @@ class ListingLoader(Protocol):
     def __call__(self, ids: list[int]) -> list[dict[str, Any]]: ...
 
 
-def load_from_warehouse(ids: list[int]) -> list[dict[str, Any]]:
-    from agent.sql.execute import run_against_warehouse
-
+def fetch_listing_card_rows(ids: list[int]) -> list[dict[str, Any]]:
     page = run_against_warehouse(
         LISTING_CARDS_SQL,
         {
@@ -138,7 +137,7 @@ def load_from_warehouse(ids: list[int]) -> list[dict[str, Any]]:
     return page.rows
 
 
-def listing_cards(ids: list[str], loader: ListingLoader) -> list[dict[str, Any]]:
+def fetch_listing_cards(ids: list[str], loader: ListingLoader) -> list[dict[str, Any]]:
     """One card per id, in id order. An id the loader cannot fill keeps an id-only card."""
     numeric = [int(item) for item in ids if item.isdigit()]
     rows: list[dict[str, Any]] = []
@@ -151,7 +150,7 @@ def listing_cards(ids: list[str], loader: ListingLoader) -> list[dict[str, Any]]
     return [by_id.get(item) or {"id": item} for item in ids]
 
 
-def listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def prompt_listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What the answer model may cite. No photos, links, or contact details."""
     facts: list[dict[str, Any]] = []
     for card in cards[:PROMPT_LISTING_LIMIT]:
@@ -161,10 +160,10 @@ def listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "type": card.get("type"),
             "bedrooms": card.get("rooms"),
             "bathrooms": card.get("baths"),
-            "size_sqft": plain_number(card.get("area")),
+            "size_sqft": to_json_number(card.get("area")),
             "purpose": card.get("purpose"),
-            "asking_price_aed": plain_number(card.get("price_min")),
-            "asking_price_max_aed": plain_number(card.get("price_max")),
+            "asking_price_aed": to_json_number(card.get("price_min")),
+            "asking_price_max_aed": to_json_number(card.get("price_max")),
             "rent_aed": _rent(card),
             "completion": card.get("completion_status"),
             "furnished": card.get("furnished"),
@@ -218,13 +217,13 @@ def _rent(card: dict[str, Any]) -> dict[str, Any] | None:
     if "rent" not in str(card.get("purpose") or ""):
         return None
     period = str(card.get("rental_period") or "yearly")
-    amount = plain_number(card.get(f"{period}_price"))
+    amount = to_json_number(card.get(f"{period}_price"))
     if amount is None:
         return None
     return {"amount": amount, "period": period}
 
 
-def plain_number(value: Any) -> int | float | None:
+def to_json_number(value: Any) -> int | float | None:
     """A stored amount as a JSON number: whole values as int, the rest as float."""
     if value is None or isinstance(value, bool):
         return None

@@ -2,29 +2,29 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
-from typing import Any
 
-from agent.memory.safety.reject_unsafe import MemoryRejected, validate_memory
+from agent.memory.models.records import MemoryOperation, MemoryRecord, utcnow
+from agent.memory.safety.reject_unsafe import MemoryRejected, sanitize_memory_operation
+from agent.memory.session.working_memory import invalidate_user_memory_cache
+from agent.memory.storage.in_memory_repository import InMemoryMemoryRepository, new_memory_id
 from agent.memory.write.filters import (
-    merge_filters,
-    same_filter,
     can_merge_filters,
+    is_same_filter,
+    merge_filters,
 )
-from agent.memory.storage.repository import InMemoryRepository, new_id
-from agent.memory.session.bootstrap import invalidate
-from agent.memory.models.types import MemoryOp, MemoryRecord, utcnow
 from common.logger import get_logger
 
 logger = get_logger("agent.memory")
 
-IMPORTANCE_FLOOR = 0.3
+MIN_IMPORTANCE_TO_STORE = 0.3
 
 
 def write_memories(
-    repository: InMemoryRepository,
+    repository: InMemoryMemoryRepository,
     user_id: str,
-    ops: list[MemoryOp],
+    ops: list[MemoryOperation],
     *,
     now: datetime | None = None,
     actor: str = "extractor",
@@ -52,10 +52,10 @@ def write_memories(
         for op in ops:
             if op.op == "noop":
                 continue
-            if op.op != "delete" and op.importance < IMPORTANCE_FLOOR:
+            if op.op != "delete" and op.importance < MIN_IMPORTANCE_TO_STORE:
                 continue
             try:
-                cleaned = validate_memory(op, repository.columns())
+                cleaned = sanitize_memory_operation(op, repository.get_column_specs())
             except MemoryRejected as exc:
                 logger.info(
                     "memory.rejected",
@@ -63,18 +63,18 @@ def write_memories(
                 )
                 continue
             if cleaned.op == "delete":
-                touched.extend(_delete(repository, user_id, cleaned, moment, actor))
+                touched.extend(_soft_delete_targeted_memories(repository, user_id, cleaned, moment, actor))
             elif cleaned.slot:
-                touched.extend(_apply_slot(repository, user_id, cleaned, moment, actor))
+                touched.extend(_apply_slotted_operation(repository, user_id, cleaned, moment, actor))
             else:
-                touched.extend(_apply_free(repository, user_id, cleaned, moment, actor))
+                touched.extend(_apply_unslotted_operation(repository, user_id, cleaned, moment, actor))
     if touched:
-        invalidate(user_id)
+        invalidate_user_memory_cache(user_id)
     return touched
 
 
-def _apply_slot(
-    repository, user_id, op: MemoryOp, now: datetime, actor: str
+def _apply_slotted_operation(
+    repository, user_id, op: MemoryOperation, now: datetime, actor: str
 ) -> list[str]:
     """Apply a slot memory operation to the repository.
 
@@ -97,10 +97,10 @@ def _apply_slot(
     if existing is None:
         return [_insert(repository, user_id, op, now, actor)]
 
-    if same_filter(existing.structured, op.structured):
+    if is_same_filter(existing.structured, op.structured):
         _strengthen_repeat(existing, now)
         if op.type == "goal" or op.ttl_days:
-            existing.expires_at = _expires(op, now)
+            existing.expires_at = _expiry_for_operation(op, now)
         repository.update(existing)
         repository.add_event(
             user_id, existing.id, "updated", actor, {"repeat": True}, now
@@ -121,8 +121,8 @@ def _apply_slot(
     return _flag_contradiction(repository, user_id, existing, op, now, actor)
 
 
-def _apply_free(
-    repository, user_id, op: MemoryOp, now: datetime, actor: str
+def _apply_unslotted_operation(
+    repository, user_id, op: MemoryOperation, now: datetime, actor: str
 ) -> list[str]:
     """Apply a free memory operation to the repository.
     
@@ -162,7 +162,7 @@ def _apply_free(
 
 
 def _merge(
-    repository, user_id, existing: MemoryRecord, op: MemoryOp, now: datetime, actor: str
+    repository, user_id, existing: MemoryRecord, op: MemoryOperation, now: datetime, actor: str
 ) -> list[str]:
     _mark_superseded(repository, user_id, existing, now, actor)
     merged = merge_filters(existing.structured or {}, op.structured or {})
@@ -172,7 +172,7 @@ def _merge(
         if isinstance(values, list)
         else values
     )
-    created = MemoryOp(
+    created = MemoryOperation(
         op="add",
         type="semantic",
         cluster=op.cluster,
@@ -193,7 +193,7 @@ def _merge(
 
 
 def _supersede(
-    repository, user_id, existing, op: MemoryOp, now: datetime, actor: str
+    repository, user_id, existing, op: MemoryOperation, now: datetime, actor: str
 ) -> list[str]:
     _mark_superseded(repository, user_id, existing, now, actor)
     memory_id = _insert(repository, user_id, op, now, actor, supersedes_id=existing.id)
@@ -201,7 +201,7 @@ def _supersede(
 
 
 def _flag_contradiction(
-    repository, user_id, existing: MemoryRecord, op: MemoryOp, now: datetime, actor: str
+    repository, user_id, existing: MemoryRecord, op: MemoryOperation, now: datetime, actor: str
 ) -> list[str]:
     existing.confidence = max(0.2, existing.confidence - 0.15)
     repository.update(existing)
@@ -218,7 +218,7 @@ def _flag_contradiction(
     return [existing.id, held]
 
 
-def _delete(repository, user_id, op: MemoryOp, now: datetime, actor: str) -> list[str]:
+def _soft_delete_targeted_memories(repository, user_id, op: MemoryOperation, now: datetime, actor: str) -> list[str]:
     rows: list[MemoryRecord] = []
     if op.target_memory_id:
         found = repository.get(user_id, op.target_memory_id)
@@ -255,7 +255,7 @@ def _mark_superseded(
 def _insert(
     repository,
     user_id: str,
-    op: MemoryOp,
+    op: MemoryOperation,
     now: datetime,
     actor: str,
     *,
@@ -263,7 +263,7 @@ def _insert(
     supersedes_id: str | None = None,
 ) -> str:
     record = MemoryRecord(
-        id=new_id(),
+        id=new_memory_id(),
         user_id=user_id,
         type=op.type,
         cluster=op.cluster,
@@ -277,7 +277,7 @@ def _insert(
         source_message_id=op.source_message_id,
         status=status,
         supersedes_id=supersedes_id,
-        expires_at=_expires(op, now),
+        expires_at=_expiry_for_operation(op, now),
         created_at=now,
         updated_at=now,
         valid_from=now,
@@ -300,7 +300,7 @@ def _strengthen_repeat(record: MemoryRecord, now: datetime) -> None:
     record.access_count += 1
 
 
-def _expires(op: MemoryOp, now: datetime) -> datetime | None:
+def _expiry_for_operation(op: MemoryOperation, now: datetime) -> datetime | None:
     if op.ttl_days:
         return now + timedelta(days=int(op.ttl_days))
     if op.type == "ephemeral":
@@ -314,12 +314,10 @@ def _is_negation(left: str, right: str, similarity: float) -> bool:
     overlap = _polarity_overlap(left, right)
     if similarity < 0.34 and overlap < 0.5:
         return False
-    return _negative(left) != _negative(right) and overlap >= 0.5
+    return _is_negated(left) != _is_negated(right) and overlap >= 0.5
 
 
-def _negative(text: str) -> bool:
-    import re
-
+def _is_negated(text: str) -> bool:
     return bool(
         re.search(
             r"\b(not|no|never|don't|do not|without|avoid|doesn't|does not)\b",

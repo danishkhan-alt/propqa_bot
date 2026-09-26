@@ -8,6 +8,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg_pool import ConnectionPool
 
 from common.logger import get_logger
+from config import ActiveConfig
 
 logger = get_logger("common.db")
 
@@ -43,7 +44,6 @@ def build_conninfo(
 
 def warehouse_conninfo() -> str:
     """Connection string for the read-only warehouse. Not the chatbot database."""
-    from config import ActiveConfig
 
     return build_conninfo(
         host=ActiveConfig.AUDIT_DB_HOST,
@@ -57,7 +57,6 @@ def warehouse_conninfo() -> str:
 
 def chat_conninfo() -> str:
     """Connection string for the chatbot database, never the warehouse."""
-    from config import ActiveConfig
 
     return build_conninfo(
         host=ActiveConfig.CHAT_DB_HOST,

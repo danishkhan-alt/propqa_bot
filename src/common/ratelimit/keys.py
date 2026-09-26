@@ -25,12 +25,12 @@ def client_ip(request: Request) -> str:
     return "unknown"
 
 
-def by_ip(request: Request) -> str:
+def ip_rate_limit_key(request: Request) -> str:
     return f"ip:{client_ip(request)}"
 
 
-def by_caller(request: Request) -> str:
+def caller_rate_limit_key(request: Request) -> str:
     caller = getattr(request.state, "caller", None)
     if isinstance(caller, Caller):
-        return caller.scope
-    return by_ip(request)
+        return caller.identity_key
+    return ip_rate_limit_key(request)

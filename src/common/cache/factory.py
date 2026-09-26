@@ -3,6 +3,7 @@ from __future__ import annotations
 from common.cache.memory import MemoryCache
 from common.cache.protocol import CacheBackend
 from common.cache.redis import RedisCache
+from config import ENVIRONMENT, ActiveConfig
 
 _backend: CacheBackend | None = None
 
@@ -17,8 +18,6 @@ def get_cache() -> CacheBackend:
 
 
 def build_cache(url: str | None = None) -> CacheBackend:
-    from config import ActiveConfig, ENVIRONMENT
-
     redis_url = url if url is not None else ActiveConfig.REDIS_URL
     if redis_url and not ENVIRONMENT.is_test:
         return RedisCache(redis_url, prefix=ActiveConfig.CACHE_KEY_PREFIX)

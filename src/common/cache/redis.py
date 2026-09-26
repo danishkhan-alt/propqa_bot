@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import redis
+
 from common.cache.protocol import MISSING
 
 
@@ -28,8 +30,6 @@ class RedisCache:
     """Shared cache. Required in deployed environments."""
 
     def __init__(self, url: str, *, prefix: str = "") -> None:
-        import redis
-
         self._client = redis.Redis.from_url(url, decode_responses=True)
         self._prefix = prefix.rstrip(":")
 

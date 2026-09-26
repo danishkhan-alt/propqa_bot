@@ -6,15 +6,17 @@ import json
 import time
 from typing import Any
 
-WM_TTL_SECONDS = 60 * 60 * 2
+import redis
+
+WORKING_MEMORY_TTL_SECONDS = 60 * 60 * 2
 RECALL_TTL_SECONDS = 60 * 5
 PROFILE_TTL_SECONDS = 60 * 15
-STREAM = "memq"
-GROUP = "memory-worker"
-CONSUMER = "worker-1"
+EXTRACTION_STREAM_KEY = "memq"
+EXTRACTION_CONSUMER_GROUP = "memory-worker"
+EXTRACTION_CONSUMER_NAME = "worker-1"
 
 
-class WorkingMemoryCache:
+class InProcessMemoryCache:
     """Process stand-in for the Redis keys in the memory spec."""
 
     def __init__(self) -> None:
@@ -44,19 +46,19 @@ class WorkingMemoryCache:
             if key.startswith(prefix):
                 self._values.pop(key, None)
 
-    def push(self, job: dict) -> str:
+    def enqueue_extraction_job(self, job: dict) -> str:
         self._seq += 1
         entry_id = str(self._seq)
         self._stream.append((entry_id, job))
         return entry_id
 
-    def read(self, *, count: int = 10, block_ms: int = 0) -> list[tuple[str, dict]]:
+    def read_extraction_jobs(self, *, count: int = 10, block_ms: int = 0) -> list[tuple[str, dict]]:
         del block_ms
         batch = self._stream[:count]
         self._stream = self._stream[count:]
         return batch
 
-    def ack(self, entry_id: str) -> None:
+    def ack_extraction_job(self, entry_id: str) -> None:
         del entry_id
 
     def close(self) -> None:
@@ -67,8 +69,6 @@ class RedisMemoryCache:
     """Exact key names from the spec: `wm:{thread}`, `profile:{user}`, `recall:…`, `memq`."""
 
     def __init__(self, url: str) -> None:
-        import redis
-
         self._redis = redis.Redis.from_url(url, decode_responses=True)
 
     def get(self, key: str) -> Any:
@@ -96,21 +96,21 @@ class RedisMemoryCache:
             if cursor == 0:
                 return
 
-    def push(self, job: dict) -> str:
+    def enqueue_extraction_job(self, job: dict) -> str:
         entry_id = self._redis.xadd(
-            STREAM,
+            EXTRACTION_STREAM_KEY,
             {"job": json.dumps(job, default=str)},
             maxlen=10000,
             approximate=True,
         )
         return str(entry_id)
 
-    def read(self, *, count: int = 10, block_ms: int = 2000) -> list[tuple[str, dict]]:
+    def read_extraction_jobs(self, *, count: int = 10, block_ms: int = 2000) -> list[tuple[str, dict]]:
         self._ensure_group()
         rows = self._redis.xreadgroup(
-            GROUP,
-            CONSUMER,
-            {STREAM: ">"},
+            EXTRACTION_CONSUMER_GROUP,
+            EXTRACTION_CONSUMER_NAME,
+            {EXTRACTION_STREAM_KEY: ">"},
             count=count,
             block=block_ms,
         )
@@ -123,15 +123,15 @@ class RedisMemoryCache:
                 jobs.append((str(entry_id), json.loads(payload)))
         return jobs
 
-    def ack(self, entry_id: str) -> None:
-        self._redis.xack(STREAM, GROUP, entry_id)
+    def ack_extraction_job(self, entry_id: str) -> None:
+        self._redis.xack(EXTRACTION_STREAM_KEY, EXTRACTION_CONSUMER_GROUP, entry_id)
 
     def close(self) -> None:
         self._redis.close()
 
     def _ensure_group(self) -> None:
         try:
-            self._redis.xgroup_create(STREAM, GROUP, id="0", mkstream=True)
+            self._redis.xgroup_create(EXTRACTION_STREAM_KEY, EXTRACTION_CONSUMER_GROUP, id="0", mkstream=True)
         except Exception as exc:
             if "BUSYGROUP" not in str(exc):
                 raise

@@ -8,19 +8,19 @@ from langgraph.runtime import Runtime
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
 from agent.graph.nodes.runtime import models_for
-from agent.reply.clarify import merge_profile
+from agent.reply.buyer_profile import merge_profile
 from agent.schemas.routes import (
     DomainRoute,
     as_domain_route,
     as_last_need_db,
     as_query_route,
 )
-from agent.services.catalog_index import domain_blurbs, domain_index_text
-from agent.services.transcript import history_summary, latest_user_text
-from agent.sql.listing_search import category_names
+from agent.services.catalog_prompt_text import render_domain_blurbs, render_domain_index
+from agent.services.transcript import format_recent_history, latest_user_text
+from agent.sql.listing_search import property_type_names
 from agent.sql.recipes import recipe_index_text
 from agent.states.chat import ChatState
-from agent.validator import apply_query_policy, build_lookup_assumptions, sanitize_domain_route
+from agent.validator import build_lookup_assumptions, sanitize_domain_route, sanitize_query_route
 from common.logger import get_logger
 
 logger = get_logger("agent.routing")
@@ -36,14 +36,14 @@ def choose_query_route(
     last = as_last_need_db(state.get("last_need_db"))
     route = models_for(runtime).route_query(
         message=message,
-        history=history_summary(messages),
+        history=format_recent_history(messages),
         last_need_db=last,
-        domain_blurbs=domain_blurbs(),
+        domain_blurbs=render_domain_blurbs(),
         memory_context=state.get("memory_block") or "",
-        property_types=category_names(),
+        property_types=property_type_names(),
         config=config,
     )
-    route, notes = apply_query_policy(route, last)
+    route, notes = sanitize_query_route(route, last)
 
     logger.info(
         "router.query",
@@ -103,7 +103,7 @@ def choose_data_domains(
             message=message,
             turn_kind=kind,
             last_need_db=last,
-            index_text=domain_index_text(),
+            index_text=render_domain_index(),
             recipes_text=recipe_index_text(),
             config=config,
         )
