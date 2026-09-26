@@ -17,8 +17,9 @@ from agent.graph.nodes.focus import (
 from agent.graph.nodes.lookup import resolve_mentioned_names, run_warehouse_lookup
 from agent.graph.nodes.memory import (
     ask_before_forgetting_memory,
+    check_forget_request,
     load_session_context,
-    next_step_after_search_frame_update,
+    next_step_after_forget_check,
     personalize_search_frame,
     queue_memory_extraction,
     recall_long_term_memories,
@@ -48,7 +49,8 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
     the message mentions, and run a read-only warehouse lookup.
 
     Memory runs around that path: load the session context, recall long-term memories,
-    update the search frame, then queue memory extraction after the reply.
+    ask first if the message asks to forget, update the search frame alongside the query
+    route (neither reads the other's output), then queue memory extraction after the reply.
 
     A turn about listings the user picked on screen skips routing and lookup: it loads
     those listings' adverts and replies from them.
@@ -58,6 +60,7 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
         load_session_context,
         load_focused_listings,
         recall_long_term_memories,
+        check_forget_request,
         update_search_frame,
         ask_before_forgetting_memory,
         choose_query_route,
@@ -79,13 +82,15 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
         ["load_focused_listings", "recall_long_term_memories"],
     )
     builder.add_edge("load_focused_listings", "write_reply")
-    builder.add_edge("recall_long_term_memories", "update_search_frame")
+    builder.add_edge("recall_long_term_memories", "check_forget_request")
     builder.add_conditional_edges(
-        "update_search_frame",
-        next_step_after_search_frame_update,
-        ["ask_before_forgetting_memory", "choose_query_route"],
+        "check_forget_request",
+        next_step_after_forget_check,
+        ["ask_before_forgetting_memory", "choose_query_route", "update_search_frame"],
     )
     builder.add_edge("ask_before_forgetting_memory", END)
+    # The frame branch ends here; the route branch carries the turn on from the next step.
+    builder.add_edge("update_search_frame", END)
     builder.add_conditional_edges(
         "choose_query_route",
         next_step_after_query_route,

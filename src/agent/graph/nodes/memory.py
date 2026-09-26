@@ -18,7 +18,7 @@ from agent.memory.read.personalize import apply_saved_preferences
 from agent.memory.read.prompt_text import format_disclosure_line
 from agent.memory.read.recall import recall_for_user
 from agent.memory.session.backends import get_memory_cache, get_repository
-from agent.memory.session.follow_up import derive_search_state_from_message
+from agent.memory.session.follow_up import derive_search_state_from_message, is_forget_request
 from agent.memory.session.working_memory import load_cached_profile, load_working_memory
 from agent.schemas.routes import as_query_route
 from agent.services.stream_events import publish_stream_event
@@ -62,9 +62,24 @@ def recall_long_term_memories(
     return recalled
 
 
+def check_forget_request(state: ChatState) -> dict:
+    """A request to forget saved memory stops the turn here, to ask first, before any model runs."""
+    message = latest_user_text(state.get("messages") or [])
+    if not is_forget_request(message):
+        return {"pending_forget": None}
+    return derive_search_state_from_message(
+        message,
+        state.get("query_frame"),
+        state.get("goal"),
+        ignore_defaults=bool(state.get("ignore_defaults")),
+    )
+
+
 def update_search_frame(
     state: ChatState, runtime: Runtime[AgentContext], config: RunnableConfig
 ) -> dict:
+    """Runs beside choose_query_route: the router does not read the frame, so the follow-up
+    classifier's model call overlaps the router's instead of adding to the turn's latency."""
     del config
     message = latest_user_text(state.get("messages") or [])
     update = derive_search_state_from_message(
@@ -173,10 +188,15 @@ def queue_memory_extraction(
     return {}
 
 
-def next_step_after_search_frame_update(state: ChatState) -> str:
+def next_step_after_forget_check(state: ChatState) -> str | list[str]:
+    """Ask before forgetting, or route the query and update the search frame in one step.
+
+    Nodes in one step run concurrently and the next step waits for all of them, so the
+    frame is updated before anything that reads it (personalize, reply, memory extraction).
+    """
     if state.get("pending_forget"):
         return "ask_before_forgetting_memory"
-    return "choose_query_route"
+    return ["choose_query_route", "update_search_frame"]
 
 
 def _build_frame_classifier(runtime: Runtime[AgentContext] | None):
