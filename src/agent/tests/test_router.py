@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
+import openai
 import pytest
 import yaml
 from langchain_core.messages import HumanMessage
@@ -337,6 +339,27 @@ def test_structured_output_retries_once_then_uses_the_fallback():
     parsed = invoke_structured_with_fallback(runnable, [], None, fallback)
     assert parsed is fallback
     assert runnable.calls == 2
+
+
+def _status_error(status: int) -> openai.APIStatusError:
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    return openai.APIStatusError("error", response=httpx.Response(status, request=request), body=None)
+
+
+@pytest.mark.parametrize(("status", "calls"), [(400, 1), (401, 1), (408, 2), (429, 2), (500, 2)])
+def test_a_rejected_request_is_not_sent_twice(status: int, calls: int):
+    class Rejected:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def invoke(self, messages, config=None):
+            self.calls += 1
+            raise _status_error(status)
+
+    runnable = Rejected()
+    fallback = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.3, rationale="Fallback.")
+    assert invoke_structured_with_fallback(runnable, [], None, fallback) is fallback
+    assert runnable.calls == calls
 
 
 def test_golden_file_is_model_routed():

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import anthropic
+import httpx
 import pytest
 
 from agent.enums.routing import Intent, Route, TurnKind
@@ -200,6 +202,24 @@ def test_a_stream_that_shows_nothing_falls_back_to_one_call():
     reply = stream_structured_reply_with_fallback(runnable, [], None, shown.append)
     assert shown == ["Here it is."]
     assert reply.intro_text == "Here it is."
+
+
+def test_a_rejected_stream_is_not_sent_again():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    rejected = anthropic.BadRequestError("too long", response=httpx.Response(400, request=request), body=None)
+
+    class Rejected(_Stream):
+        def stream(self, messages, config=None):
+            raise rejected
+            yield
+
+        def invoke(self, messages, config=None):
+            raise AssertionError("a rejected request was sent again")
+
+    shown: list[str] = []
+    reply = stream_structured_reply_with_fallback(Rejected([]), [], None, shown.append)
+    assert reply == REPLY_FALLBACK
+    assert shown == [REPLY_FALLBACK.intro_text]
 
 
 def test_the_fallback_reply_is_used_when_every_attempt_fails():

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+import anthropic
+import openai
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -51,6 +53,8 @@ kind is one of:
 """
 
 FOLLOW_UP_KIND_FALLBACK = FollowUpClassification(kind="new")
+
+_TRANSIENT_CLIENT_STATUS_CODES = frozenset({408, 409, 429})
 
 SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
 REPLY_FALLBACK = StructuredReply(
@@ -151,6 +155,8 @@ def invoke_structured_with_fallback(
             "router structured output failed",
             extra={"extra_data": {"error": type(first_error).__name__}},
         )
+        if is_permanent_api_error(first_error):
+            return fallback
         retry = [
             *messages,
             HumanMessage(content="Return valid JSON matching the schema. No prose."),
@@ -163,6 +169,17 @@ def invoke_structured_with_fallback(
                 extra={"extra_data": {"error": type(second_error).__name__}},
             )
             return fallback
+
+
+def is_permanent_api_error(error: Exception) -> bool:
+    """A 4xx the provider SDK does not retry (bad request, auth, not found, too long).
+
+    The same request fails the same way again, so a second attempt only adds a round trip.
+    408, 409, and 429 are transient, as are 5xx and connection errors.
+    """
+    if not isinstance(error, (anthropic.APIStatusError, openai.APIStatusError)):
+        return False
+    return 400 <= error.status_code < 500 and error.status_code not in _TRANSIENT_CLIENT_STATUS_CODES
 
 
 def _anthropic_chat_models():
@@ -628,7 +645,8 @@ def stream_structured_reply_with_fallback(
     """Stream intro_text through `on_text`, then validate the whole reply.
 
     If the stream breaks after text was shown, keep that text rather than replace it.
-    If it breaks before, fall back to one non-streaming call with a retry.
+    If it breaks before, fall back to one non-streaming call with a retry, unless the
+    provider rejected the request outright, which a second call would repeat.
     """
     shown = ""
     latest: dict = {}
@@ -651,7 +669,10 @@ def stream_structured_reply_with_fallback(
         )
         if shown.strip():
             return StructuredReply(intro_text=shown)
-    reply = invoke_structured_with_fallback(runnable, messages, config, REPLY_FALLBACK)
+        if is_permanent_api_error(exc):
+            reply = REPLY_FALLBACK
+        else:
+            reply = invoke_structured_with_fallback(runnable, messages, config, REPLY_FALLBACK)
     if on_text is not None and reply.intro_text:
         on_text(reply.intro_text)
     return reply
