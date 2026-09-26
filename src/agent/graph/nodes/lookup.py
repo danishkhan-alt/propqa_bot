@@ -11,16 +11,16 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
-from agent.grounding import ground_names, grounding_cache
+from agent.grounding import get_grounding_cache, ground_names
 from agent.schemas.grounding import GroundedName, Grounding
 from agent.schemas.routes import as_domain_route, as_query_route
-from agent.services.events import publish
-from agent.services.llm import default_models
-from agent.services.tracing import langfuse_client
-from agent.sql.cards import listing_cards, load_from_warehouse
+from agent.services.llm import get_default_models
+from agent.services.stream_events import publish_stream_event
+from agent.services.tracing import get_langfuse_client
+from agent.sql.cards import fetch_listing_card_rows, fetch_listing_cards
 from agent.sql.execute import run_against_warehouse
 from agent.sql.guard import tables_in_domains
-from agent.sql.listing_rules import LISTINGS_TABLE
+from agent.sql.listing_sql_fragments import LISTINGS_TABLE
 from agent.sql.lookup import run_listing_lookup, run_sql_lookup, uses_listing_search
 from agent.states.chat import ChatState
 from common.logger import get_logger
@@ -36,7 +36,7 @@ def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) ->
         return {"grounding": None}
     index = runtime.context.grounding if runtime.context is not None else None
     if index is None:
-        index = grounding_cache().get()
+        index = get_grounding_cache().get()
     if index is None:
         # Never drop a name: unmatched names are still searched as text, and the reply says so.
         logger.info(
@@ -63,7 +63,7 @@ def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) ->
                     }
                     for name in grounding.names
                 ],
-                "unresolved": grounding.unresolved(),
+                "unresolved": grounding.unresolved_names(),
             }
         },
     )
@@ -79,24 +79,24 @@ def run_warehouse_lookup(
         raise RuntimeError("AgentContext is required")
     runner = runtime.context.sql_runner or run_against_warehouse
     if uses_listing_search(state):
-        update = run_listing_lookup(state, runner, client=langfuse_client())
+        update = run_listing_lookup(state, runner, client=get_langfuse_client())
     else:
         models = (
             runtime.context.models
             if runtime.context.models is not None
-            else default_models()
+            else get_default_models()
         )
         update = run_sql_lookup(
             state,
             models,
             runner,
             config=config,
-            client=langfuse_client(),
+            client=get_langfuse_client(),
         )
     ids = list(update.get("listing_ids") or [])
     if ids:
-        loader = runtime.context.listing_loader or load_from_warehouse
-        cards = listing_cards(ids, loader)
+        loader = runtime.context.listing_loader or fetch_listing_card_rows
+        cards = fetch_listing_cards(ids, loader)
         update["listing_cards"] = cards
-        publish("listings", ids=ids, cards=cards)
+        publish_stream_event("listings", ids=ids, cards=cards)
     return update

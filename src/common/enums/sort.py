@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class DBSort(str, Enum):
+class SortDirection(str, Enum):
     """Database sort direction."""
 
     ASC = "asc"

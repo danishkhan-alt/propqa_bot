@@ -14,7 +14,7 @@ from agent.graph.runner import _build_turn_input
 from agent.graph.workflow import build_chat_graph
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
-from agent.sql.listing_details import MAX_FOCUSED_LISTINGS, focused_listing_facts
+from agent.sql.listing_details import MAX_FOCUSED_LISTINGS, fetch_focused_listing_facts
 
 CARDS = {
     201: {
@@ -75,7 +75,7 @@ def _details(ids: list[int]) -> list[dict]:
 
 
 def test_a_focused_listing_carries_its_card_and_advert_details():
-    facts = focused_listing_facts([201], _cards, _details)
+    facts = fetch_focused_listing_facts([201], _cards, _details)
     assert facts == [
         {
             "property_id": "201",
@@ -100,7 +100,7 @@ def test_a_focused_listing_carries_its_card_and_advert_details():
 
 
 def test_listings_keep_the_order_picked_and_a_gone_listing_is_dropped():
-    facts = focused_listing_facts([368, 999, 201], _cards, _details)
+    facts = fetch_focused_listing_facts([368, 999, 201], _cards, _details)
     assert [fact["property_id"] for fact in facts] == ["368", "201"]
     assert facts[0]["rent_aed"] == {"amount": 95000, "period": "yearly"}
     assert "amenities" not in facts[0]
@@ -110,7 +110,7 @@ def test_a_detail_failure_still_answers_from_the_card():
     def broken(ids: list[int]) -> list[dict]:
         raise RuntimeError("warehouse down")
 
-    facts = focused_listing_facts([201], _cards, broken)
+    facts = fetch_focused_listing_facts([201], _cards, broken)
     assert facts[0]["building"] == "Harbour Gate Tower 2"
     assert "amenities" not in facts[0]
 
@@ -122,7 +122,7 @@ def test_no_more_listings_are_read_than_the_ui_can_attach():
         seen.append(ids)
         return []
 
-    focused_listing_facts(list(range(1, 20)), record, record)
+    fetch_focused_listing_facts(list(range(1, 20)), record, record)
     assert all(len(ids) == MAX_FOCUSED_LISTINGS for ids in seen)
 
 

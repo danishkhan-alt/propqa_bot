@@ -20,7 +20,7 @@ __all__ = [
     "ALL_CLUSTERS",
     "DEFAULT_CLUSTERS",
     "MemoryCluster",
-    "MemoryOp",
+    "MemoryOperation",
     "MemoryProvenance",
     "MemoryRecord",
     "MemorySettings",
@@ -30,7 +30,7 @@ __all__ = [
     "clone_frame",
     "copy_record",
     "empty_frame",
-    "public_record",
+    "record_to_public_dict",
     "utcnow",
 ]
 
@@ -82,7 +82,7 @@ def copy_record(record: MemoryRecord) -> MemoryRecord:
 
 
 @dataclass(slots=True)
-class MemoryOp:
+class MemoryOperation:
     """One extractor decision. `noop` is dropped before insert."""
 
     op: str
@@ -138,7 +138,7 @@ def clone_frame(frame: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def public_record(record: MemoryRecord, *, similarity: float = 0) -> dict[str, Any]:
+def record_to_public_dict(record: MemoryRecord, *, similarity: float = 0) -> dict[str, Any]:
     """Serializable view stored on graph state and returned from the store."""
     return {
         "id": record.id,

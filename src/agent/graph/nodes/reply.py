@@ -9,18 +9,23 @@ from langgraph.runtime import Runtime
 from agent.context import AgentContext
 from agent.enums.routing import Route
 from agent.graph.nodes.runtime import models_for
-from agent.reply.clarify import Question, next_question
+from agent.reply.buyer_profile import pick_next_profile_question
 from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
-from agent.reply.streaming import stream_memory_notes, stream_prose_reply, stream_structured_reply
+from agent.reply.streaming import publish_structured_reply, stream_memory_notes, stream_prose_reply
+from agent.schemas.profile import ProfileQuestion
 from agent.schemas.routes import (
     QueryRoute,
     as_assumptions,
     as_domain_route,
     as_query_route,
 )
-from agent.services.events import publish
-from agent.services.transcript import ANSWER_HISTORY, history_summary, latest_user_text
-from agent.sql.cards import PROMPT_LISTING_LIMIT, listing_facts
+from agent.services.stream_events import publish_stream_event
+from agent.services.transcript import (
+    ANSWER_HISTORY_MESSAGE_LIMIT,
+    format_recent_history,
+    latest_user_text,
+)
+from agent.sql.cards import PROMPT_LISTING_LIMIT, prompt_listing_facts
 from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from common.logger import get_logger
@@ -49,7 +54,7 @@ def write_reply(
 
     if query.route is Route.DIRECT_ANSWER:
         question = _next_profile_question(state, query, has_listings=False)
-        structured = stream_structured_reply(
+        structured = publish_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -63,7 +68,7 @@ def write_reply(
                 models_for(runtime),
                 "answer_direct",
                 message=message,
-                history=history_summary(messages, limit=ANSWER_HISTORY),
+                history=format_recent_history(messages, limit=ANSWER_HISTORY_MESSAGE_LIMIT),
                 memory_block=state.get("memory_block") or "",
                 config=config,
             )
@@ -96,7 +101,7 @@ def _reply_from_lookup_results(
     # A listing turn answers from the filled cards. Rows stay only for columns the cards
     # lack, such as a permit number, and only for the listings the model reads.
     listings = (
-        listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
+        prompt_listing_facts(list(state.get("listing_cards") or [])) if listing_ids else []
     )
     rows = list(result.get("rows") or [])
     columns = list(result.get("columns") or [])
@@ -114,7 +119,7 @@ def _reply_from_lookup_results(
     structured = None
     if status in ("rows", "empty"):
         question = _next_profile_question(state, query, has_listings=bool(listing_ids))
-        structured = stream_structured_reply(
+        structured = publish_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -143,7 +148,7 @@ def _reply_from_lookup_results(
             models_for(runtime),
             "answer_from_sql",
             message=message,
-            history=history_summary(messages, limit=ANSWER_HISTORY),
+            history=format_recent_history(messages, limit=ANSWER_HISTORY_MESSAGE_LIMIT),
             rows=listings or rows,
             columns=columns,
             row_count=int(result.get("row_count") or 0),
@@ -160,10 +165,10 @@ def _reply_from_lookup_results(
         )
     elif status == "empty":
         text = EMPTY_LOOKUP_REPLY
-        publish("text", delta=text)
+        publish_stream_event("text", delta=text)
     else:
         text = FAILED_LOOKUP_REPLY
-        publish("text", delta=text)
+        publish_stream_event("text", delta=text)
     text = _stream_memory_notes(text, state)
     logger.info(
         "answer.synthesize",
@@ -195,7 +200,7 @@ def _reply_about_focused_listings(
     listings = list(state.get("focused_listings") or [])
     structured = None
     if listings:
-        structured = stream_structured_reply(
+        structured = publish_structured_reply(
             models_for(runtime),
             method_name="draft_listing_reply",
             message=message,
@@ -211,7 +216,7 @@ def _reply_about_focused_listings(
         text = structured
     else:
         text = FAILED_FOCUSED_LISTINGS_REPLY if listings else MISSING_LISTINGS_REPLY
-        publish("text", delta=text)
+        publish_stream_event("text", delta=text)
     logger.info(
         "answer.focus",
         extra={
@@ -236,7 +241,7 @@ def _reply_without_data(
         models_for(runtime),
         "answer_unavailable",
         message=message,
-        history=history_summary(messages, limit=ANSWER_HISTORY),
+        history=format_recent_history(messages, limit=ANSWER_HISTORY_MESSAGE_LIMIT),
         config=config,
     )
     text = _stream_memory_notes(text, state)
@@ -251,8 +256,8 @@ def _stream_memory_notes(text: str, state: ChatState) -> str:
 
 def _next_profile_question(
     state: ChatState, query: QueryRoute | None, *, has_listings: bool
-) -> Question | None:
-    return next_question(
+) -> ProfileQuestion | None:
+    return pick_next_profile_question(
         query,
         state.get("session_profile") or {},
         state.get("profile_asked"),
@@ -260,7 +265,7 @@ def _next_profile_question(
     )
 
 
-def _reply_state_update(state: ChatState, text: str, question: Question | None) -> dict:
+def _reply_state_update(state: ChatState, text: str, question: ProfileQuestion | None) -> dict:
     """Store the question with the reply, so history reads the way the user saw it."""
     content = f"{text}\n\n{question.prompt}" if question is not None else text
     update: dict = {"messages": [AIMessage(content=content)], "awaiting_sql": False}

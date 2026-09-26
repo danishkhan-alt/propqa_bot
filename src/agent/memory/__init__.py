@@ -6,7 +6,7 @@ Layout:
   safety/       — never-store patterns and validation
   write/        — extract, upsert, filter merge, worker
   read/         — recall, scoring, personalization, prompt text
-  session/      — follow-ups, search-result summary, bootstrap
+  session/      — follow-ups, search-result summary, working memory, memory backends
   maintenance/  — consolidate, privacy
   routes/       — HTTP path wiring
   views/        — HTTP handlers

@@ -3,13 +3,15 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from langchain_core.messages import HumanMessage
+from langfuse import propagate_attributes
+from langfuse.langchain import CallbackHandler
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from agent.context import AgentContext, RouterModels
+from agent.context import AgentContext, AgentModels
 from agent.graph.workflow import get_chat_graph
 from agent.schemas.routes import as_query_route
-from agent.services.tracing import langfuse_client
+from agent.services.tracing import get_langfuse_client
 from common.logger import get_logger
 
 logger = get_logger("agent.runner")
@@ -20,11 +22,11 @@ def run_turn(
     *,
     thread_id: str,
     user_id: str,
-    models: RouterModels | None = None,
+    models: AgentModels | None = None,
     focused_property_ids: list[int] | None = None,
 ) -> dict:
     """Run one user turn. `thread_id` reloads and updates that chat."""
-    client = langfuse_client()
+    client = get_langfuse_client()
     callbacks = _langfuse_callbacks(client)
 
     def invoke() -> dict:
@@ -43,7 +45,6 @@ def run_turn(
 
     if client is None:
         return invoke()
-    from langfuse import propagate_attributes
 
     with propagate_attributes(user_id=user_id, session_id=thread_id):
         result = invoke()
@@ -56,7 +57,7 @@ async def stream_turn(
     *,
     thread_id: str,
     user_id: str,
-    models: RouterModels | None = None,
+    models: AgentModels | None = None,
     sql_runner=None,
     listing_loader=None,
     listing_detail_loader=None,
@@ -66,7 +67,7 @@ async def stream_turn(
 ) -> AsyncIterator[dict]:
     """Yield listing cards and text deltas as the turn runs, then a done event."""
     compiled = graph or get_chat_graph()
-    client = langfuse_client()
+    client = get_langfuse_client()
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id},
         "callbacks": _langfuse_callbacks(client),
@@ -124,7 +125,6 @@ async def stream_turn(
         async for event in events():
             yield event
         return
-    from langfuse import propagate_attributes
 
     with propagate_attributes(user_id=user_id, session_id=thread_id):
         async for event in events():
@@ -182,10 +182,5 @@ def _interrupt_prompt_text(raw) -> str:
 
 def _langfuse_callbacks(client) -> list:
     if client is None:
-        return []
-    try:
-        from langfuse.langchain import CallbackHandler
-    except ImportError:
-        logger.warning("langfuse is not installed; router traces stay in app logs")
         return []
     return [CallbackHandler()]

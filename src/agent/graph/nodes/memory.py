@@ -11,21 +11,17 @@ from langgraph.types import interrupt
 
 from agent.context import AgentContext
 from agent.graph.nodes.runtime import models_for, thread_id_for, user_id_for
-from agent.memory.read.personalize import apply_saved_preferences
+from agent.memory.maintenance.privacy import soft_delete_memories
 from agent.memory.models.column_map import memory_domains_for
-from agent.memory.read.prompt_text import disclosure_line
-from agent.memory.maintenance.privacy import forget_memory
+from agent.memory.models.records import clone_frame
+from agent.memory.read.personalize import apply_saved_preferences
+from agent.memory.read.prompt_text import format_disclosure_line
 from agent.memory.read.recall import recall_for_user
-from agent.memory.session.follow_up import update_search_from_message
-from agent.memory.session.bootstrap import (
-    get_hot,
-    get_repository,
-    load_profile,
-    load_working,
-)
-from agent.services.events import publish
-from agent.memory.models.types import clone_frame
+from agent.memory.session.backends import get_memory_cache, get_repository
+from agent.memory.session.follow_up import derive_search_state_from_message
+from agent.memory.session.working_memory import load_cached_profile, load_working_memory
 from agent.schemas.routes import as_query_route
+from agent.services.stream_events import publish_stream_event
 from agent.services.transcript import latest_user_text
 from agent.states.chat import ChatState
 
@@ -38,12 +34,12 @@ def load_session_context(
     """The user id, this chat's working memory, and the user's saved profile."""
     user_id = user_id_for(state, runtime, config)
     update: dict[str, Any] = {"user_id": user_id}
-    working = load_working(thread_id_for(config))
+    working = load_working_memory(thread_id_for(config))
     if working:
         update["query_frame"] = working.get("query_frame")
         update["goal"] = working.get("goal")
         update["ignore_defaults"] = bool(working.get("ignore_defaults"))
-    profile = load_profile(user_id)
+    profile = load_cached_profile(user_id)
     if profile:
         update["profile"] = profile
     return update
@@ -61,7 +57,7 @@ def recall_long_term_memories(
         user_id_for(state, runtime, config),
         query,
         store=runtime.store if runtime is not None else None,
-        hot=get_hot(),
+        memory_cache=get_memory_cache(),
     )
     return recalled
 
@@ -71,7 +67,7 @@ def update_search_frame(
 ) -> dict:
     del config
     message = latest_user_text(state.get("messages") or [])
-    update = update_search_from_message(
+    update = derive_search_state_from_message(
         message,
         state.get("query_frame"),
         state.get("goal"),
@@ -93,7 +89,7 @@ def ask_before_forgetting_memory(
     if str(answer).strip().lower() in {"yes", "y"}:
         repository = _memory_repository(runtime)
         if repository is not None:
-            forget_memory(
+            soft_delete_memories(
                 repository,
                 user_id_for(state, runtime, config),
                 cluster=pending.get("cluster"),
@@ -103,7 +99,7 @@ def ask_before_forgetting_memory(
         text = "Forgot that."
     else:
         text = "Kept your saved preferences."
-    publish("text", delta=text)
+    publish_stream_event("text", delta=text)
     return {"pending_forget": None, "messages": [AIMessage(content=text)]}
 
 
@@ -127,7 +123,7 @@ def personalize_search_frame(state: ChatState) -> dict:
     return {
         "query_frame": frame,
         "memory_block": block,
-        "disclosure": disclosure_line(labels) if labels else "",
+        "disclosure": format_disclosure_line(labels) if labels else "",
         "applied_defaults": labels,
     }
 
@@ -137,8 +133,8 @@ def queue_memory_extraction(
     runtime: Runtime[AgentContext],
     config: RunnableConfig,
 ) -> dict:
-    hot = get_hot()
-    if hot is None:
+    memory_cache = get_memory_cache()
+    if memory_cache is None:
         return {}
     user_id = user_id_for(state, runtime, config)
     repository = _memory_repository(runtime)
@@ -162,7 +158,7 @@ def queue_memory_extraction(
         ),
         None,
     )
-    hot.push(
+    memory_cache.enqueue_extraction_job(
         {
             "user_id": user_id,
             "thread_id": thread_id_for(config),
@@ -187,7 +183,7 @@ def _build_frame_classifier(runtime: Runtime[AgentContext] | None):
     """Use Haiku only when this run has a model that knows how to classify a frame."""
     if runtime is None or runtime.context is None:
         return None
-    method = getattr(models_for(runtime), "classify_frame", None)
+    method = getattr(models_for(runtime), "classify_follow_up_kind", None)
     if method is None:
         return None
 

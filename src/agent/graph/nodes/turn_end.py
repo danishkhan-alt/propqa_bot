@@ -9,10 +9,10 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.enums.routing import Route
 from agent.graph.nodes.runtime import thread_id_for
-from agent.memory.models.types import clone_frame
-from agent.memory.session.bootstrap import save_working
+from agent.memory.models.records import clone_frame
 from agent.memory.session.last_search import build_last_search
 from agent.memory.session.search_results import summarize_search_results
+from agent.memory.session.working_memory import save_working_memory
 from agent.schemas.routes import as_assumptions, as_domain_route, as_query_route
 from agent.services.transcript import latest_user_text
 from agent.states.chat import ChatState
@@ -66,7 +66,7 @@ def _save_working_memory(state: ChatState, config: RunnableConfig | None) -> dic
         update["sql_rows"] = []
     thread_id = thread_id_for(config)
     if thread_id:
-        save_working(
+        save_working_memory(
             thread_id,
             update.get("query_frame", state.get("query_frame")),
             state.get("goal"),

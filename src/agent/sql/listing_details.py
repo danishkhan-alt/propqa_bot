@@ -8,15 +8,16 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from agent.sql.cards import ListingLoader, listing_cards, listing_facts, plain_number
+from agent.sql.cards import ListingLoader, fetch_listing_cards, prompt_listing_facts, to_json_number
+from agent.sql.execute import run_against_warehouse
 from common.logger import get_logger
 
 logger = get_logger("agent.sql")
 
 # Matches the frontend's attach limit. Each listing adds its description to the prompt.
 MAX_FOCUSED_LISTINGS = 8
-DESCRIPTION_CHARS = 1500
-NEARBY_PER_KIND = 3
+MAX_DESCRIPTION_CHARS = 1500
+MAX_NEARBY_PLACES_PER_KIND = 3
 
 _COORDINATE = r"^\s*-?[0-9]+(\.[0-9]+)?\s*$"
 
@@ -114,21 +115,19 @@ class ListingDetailLoader(Protocol):
     def __call__(self, ids: list[int]) -> list[dict[str, Any]]: ...
 
 
-def load_details_from_warehouse(ids: list[int]) -> list[dict[str, Any]]:
-    from agent.sql.execute import run_against_warehouse
-
+def fetch_listing_detail_rows(ids: list[int]) -> list[dict[str, Any]]:
     page = run_against_warehouse(
         LISTING_DETAILS_SQL,
         {
             "ids": ids,
-            "description_chars": DESCRIPTION_CHARS,
-            "nearby_per_kind": NEARBY_PER_KIND,
+            "description_chars": MAX_DESCRIPTION_CHARS,
+            "nearby_per_kind": MAX_NEARBY_PLACES_PER_KIND,
         },
     )
     return page.rows
 
 
-def focused_listing_facts(
+def fetch_focused_listing_facts(
     ids: list[int],
     card_loader: ListingLoader,
     detail_loader: ListingDetailLoader,
@@ -143,9 +142,9 @@ def focused_listing_facts(
         logger.warning("listing.details failed", exc_info=True)
         details = {}
     # An id the loader could not fill comes back as an id-only card: that listing is gone.
-    cards = [card for card in listing_cards([str(item) for item in ids], card_loader) if len(card) > 1]
+    cards = [card for card in fetch_listing_cards([str(item) for item in ids], card_loader) if len(card) > 1]
     facts: list[dict[str, Any]] = []
-    for card, fact in zip(cards, listing_facts(cards)):
+    for card, fact in zip(cards, prompt_listing_facts(cards)):
         fact.update(_detail_facts(details.get(card["id"]) or {}))
         facts.append(fact)
     return facts
@@ -162,7 +161,7 @@ def _detail_facts(row: dict[str, Any]) -> dict[str, Any]:
         "layout": row.get("layout_type"),
         "corner_unit": row.get("is_corner") or None,
         "age_years": row.get("property_age"),
-        "plot_size_sqft": plain_number(row.get("plot_area")),
+        "plot_size_sqft": to_json_number(row.get("plot_area")),
         "available_from": row.get("rent_availability"),
         "rent_cheques": row.get("no_of_cheques"),
         "permit_number": row.get("permit_number"),
@@ -170,7 +169,7 @@ def _detail_facts(row: dict[str, Any]) -> dict[str, Any]:
         "amenities": sorted(row.get("amenities") or []),
         "views": sorted(row.get("views") or []),
         "nearby_places": _nearby_places(row.get("nearby_places")),
-        "nearest_metro": _metro(row),
+        "nearest_metro": _nearest_metro_fact(row),
     }
     return {key: value for key, value in fact.items() if value not in (None, "", [], {})}
 
@@ -181,19 +180,19 @@ def _nearby_places(value: Any) -> dict[str, list[dict[str, Any]]]:
         return {}
     places: dict[str, list[dict[str, Any]]] = {}
     for kind, items in value.items():
-        named = [_place(item) for item in items or [] if isinstance(item, dict) and item.get("name")]
+        named = [_nearby_place_fact(item) for item in items or [] if isinstance(item, dict) and item.get("name")]
         if named:
             places[str(kind)] = named
     return places
 
 
-def _place(item: dict[str, Any]) -> dict[str, Any]:
-    place = {"name": item["name"], "km": plain_number(item.get("km"))}
+def _nearby_place_fact(item: dict[str, Any]) -> dict[str, Any]:
+    place = {"name": item["name"], "km": to_json_number(item.get("km"))}
     return {key: value for key, value in place.items() if value is not None}
 
 
-def _metro(row: dict[str, Any]) -> dict[str, Any] | None:
+def _nearest_metro_fact(row: dict[str, Any]) -> dict[str, Any] | None:
     if not row.get("metro_station"):
         return None
-    metro = {"station": row["metro_station"], "line": row.get("metro_line"), "km": plain_number(row.get("metro_km"))}
+    metro = {"station": row["metro_station"], "line": row.get("metro_line"), "km": to_json_number(row.get("metro_km"))}
     return {key: value for key, value in metro.items() if value is not None}

@@ -4,8 +4,7 @@ import pytest
 
 from common.errors.rate_limited import RateLimited
 from common.ratelimit.limiter import RateLimiter
-from common.ratelimit.rules import RateLimit
-
+from common.schemas.rate_limit import RateLimit
 
 RULE = RateLimit("test.burst", 3, 60)
 
@@ -39,4 +38,4 @@ def test_success_resets_failure_count(memory_cache):
     limiter.record("ip:1.1.1.1", RULE)
     limiter.record("ip:1.1.1.1", RULE)
     limiter.reset("ip:1.1.1.1", RULE)
-    limiter.guard("ip:1.1.1.1", RULE)
+    limiter.enforce_without_counting("ip:1.1.1.1", RULE)

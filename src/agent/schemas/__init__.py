@@ -1,7 +1,7 @@
 from agent.schemas.routes import (
-    Assumptions,
     DomainRoute,
     LastNeedDb,
+    LookupAssumptions,
     QueryRoute,
     as_assumptions,
     as_domain_route,
@@ -10,7 +10,7 @@ from agent.schemas.routes import (
 )
 
 __all__ = [
-    "Assumptions",
+    "LookupAssumptions",
     "DomainRoute",
     "LastNeedDb",
     "QueryRoute",

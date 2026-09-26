@@ -6,12 +6,12 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-from agent.memory.write.filters import to_filter
-from agent.memory.models.column_map import logical_for_filter_key, slot_for_filter_key
 from agent.enums.memory import MemoryProvenance, MemoryStatus, MemoryType
-from agent.memory.storage.repository import new_id
-from agent.memory.session.bootstrap import invalidate
-from agent.memory.models.types import MemoryRecord, utcnow
+from agent.memory.models.column_map import logical_column_for_filter_key, slot_for_filter_key
+from agent.memory.models.records import MemoryRecord, utcnow
+from agent.memory.session.working_memory import invalidate_user_memory_cache
+from agent.memory.storage.in_memory_repository import new_memory_id
+from agent.memory.write.filters import to_filter_spec_entry
 
 
 def consolidate_all(repository, *, now: datetime | None = None, summarize=None) -> None:
@@ -24,15 +24,15 @@ def consolidate_user(repository, user_id: str, *, now: datetime | None = None, s
     moment = now or utcnow()
     settings = repository.get_settings(user_id)
     with repository.transaction():
-        _expire(repository, user_id, moment)
-        _decay(repository, user_id, moment)
-        _infer(repository, user_id, moment)
-        _summarise(repository, user_id, moment, summarize)
-        _retain(repository, user_id, settings, moment)
-    invalidate(user_id)
+        _expire_past_due_memories(repository, user_id, moment)
+        _decay_inferred_confidence(repository, user_id, moment)
+        _infer_semantic_from_episodes(repository, user_id, moment)
+        _summarize_episodes_into_profile(repository, user_id, moment, summarize)
+        _apply_retention_policy(repository, user_id, settings, moment)
+    invalidate_user_memory_cache(user_id)
 
 
-def _expire(repository, user_id: str, now: datetime) -> None:
+def _expire_past_due_memories(repository, user_id: str, now: datetime) -> None:
     for row in repository.list_all(user_id):
         if row.status != MemoryStatus.ACTIVE or row.expires_at is None or row.expires_at > now:
             continue
@@ -42,14 +42,14 @@ def _expire(repository, user_id: str, now: datetime) -> None:
         repository.add_event(user_id, row.id, "expired", "worker", {}, now)
 
 
-def _decay(repository, user_id: str, now: datetime) -> None:
+def _decay_inferred_confidence(repository, user_id: str, now: datetime) -> None:
     for row in repository.list_active(user_id, now=now):
         if row.provenance != MemoryProvenance.INFERRED:
             continue
         anchor = row.last_accessed_at or row.updated_at
         if (now - anchor).days < 7:
             continue
-        if repository.decayed_recently(row.id, since=now - timedelta(days=6)):
+        if repository.was_decayed_since(row.id, since=now - timedelta(days=6)):
             continue
         row.confidence = row.confidence * 0.97
         if row.confidence < 0.3:
@@ -62,7 +62,7 @@ def _decay(repository, user_id: str, now: datetime) -> None:
             repository.add_event(user_id, row.id, "updated", "worker", {"decay": True}, now)
 
 
-def _infer(repository, user_id: str, now: datetime) -> None:
+def _infer_semantic_from_episodes(repository, user_id: str, now: datetime) -> None:
     groups: dict[str, list[MemoryRecord]] = {}
     for row in repository.list_active(user_id, now=now):
         if row.type != MemoryType.EPISODIC:
@@ -75,14 +75,14 @@ def _infer(repository, user_id: str, now: datetime) -> None:
         if len(rows) < 3:
             continue
         predicates = (rows[0].structured or {}).get("predicates") or {}
-        columns = repository.columns()
-        if _explicit_covers(repository, user_id, predicates):
+        columns = repository.get_column_specs()
+        if _has_explicit_slot_for_predicates(repository, user_id, predicates):
             continue
-        if _semantic_exists(repository, user_id, key):
+        if _has_semantic_for_predicate_key(repository, user_id, key):
             continue
         structured = _semantic_structured(predicates, columns)
         record = MemoryRecord(
-            id=new_id(),
+            id=new_memory_id(),
             user_id=user_id,
             type=MemoryType.SEMANTIC,
             cluster=rows[0].cluster,
@@ -102,7 +102,7 @@ def _infer(repository, user_id: str, now: datetime) -> None:
         repository.add_event(user_id, record.id, "created", "worker", {"inferred_from": key}, now)
 
 
-def _summarise(repository, user_id: str, now: datetime, summarize) -> None:
+def _summarize_episodes_into_profile(repository, user_id: str, now: datetime, summarize) -> None:
     active = repository.list_active(user_id, now=now)
     profile = repository.get_profile(user_id)
     stale = profile is None or (now - profile["updated_at"]).days >= 7
@@ -119,7 +119,7 @@ def _summarise(repository, user_id: str, now: datetime, summarize) -> None:
     _retire_episodic(repository, user_id, active, now)
 
 
-def _retain(repository, user_id: str, settings, now: datetime) -> None:
+def _apply_retention_policy(repository, user_id: str, settings, now: datetime) -> None:
     if settings.retention_days:
         cutoff = now - timedelta(days=int(settings.retention_days))
         for row in repository.list_all(user_id):
@@ -128,7 +128,7 @@ def _retain(repository, user_id: str, settings, now: datetime) -> None:
                 row.updated_at = now
                 repository.update(row)
                 repository.add_event(user_id, row.id, "expired", "worker", {"retention": True}, now)
-    repository.hard_delete_status(
+    repository.hard_delete_by_status(
         status=MemoryStatus.DELETED.value, older_than=now - timedelta(days=30)
     )
 
@@ -140,8 +140,8 @@ def _predicate_key(structured: dict[str, Any] | None) -> str:
     return json.dumps(predicates, sort_keys=True, default=str)
 
 
-def _explicit_covers(repository, user_id: str, predicates: dict) -> bool:
-    columns = repository.columns()
+def _has_explicit_slot_for_predicates(repository, user_id: str, predicates: dict) -> bool:
+    columns = repository.get_column_specs()
     for name in predicates:
         slot = slot_for_filter_key(name, columns)
         if not slot:
@@ -152,7 +152,7 @@ def _explicit_covers(repository, user_id: str, predicates: dict) -> bool:
     return False
 
 
-def _semantic_exists(repository, user_id: str, key: str) -> bool:
+def _has_semantic_for_predicate_key(repository, user_id: str, key: str) -> bool:
     for row in repository.list_active(user_id):
         if row.type != MemoryType.SEMANTIC:
             continue
@@ -173,7 +173,7 @@ def _semantic_structured(predicates: dict, columns=None) -> dict[str, Any]:
     if len(predicates) != 1:
         return {}
     name, value = next(iter(predicates.items()))
-    column = logical_for_filter_key(name, columns)
+    column = logical_column_for_filter_key(name, columns)
     if column is None or not isinstance(value, dict):
         return {}
     op, raw = next(iter(value.items()))
@@ -201,7 +201,7 @@ def _profile_structured(rows: list[MemoryRecord]) -> dict[str, Any]:
         if "col" not in body or row.type == MemoryType.EPISODIC:
             continue
         try:
-            key, value = to_filter(body)
+            key, value = to_filter_spec_entry(body)
         except (KeyError, TypeError):
             continue
         if key not in structured:

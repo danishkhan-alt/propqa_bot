@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from langgraph.config import get_stream_writer
 
-def publish(event: str, **fields: Any) -> None:
+
+def publish_stream_event(event: str, **fields: Any) -> None:
     """Send `event` if this run is streaming. A normal invoke drops it."""
-    from langgraph.config import get_stream_writer
 
     try:
         get_stream_writer()({"event": event, **fields})

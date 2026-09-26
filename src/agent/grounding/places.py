@@ -12,16 +12,20 @@ import math
 from bisect import bisect_left
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
-from enum import IntEnum
 
-from agent.grounding.names import (
-    MatchTier,
-    NameHit,
+from agent.enums.grounding import Breadth, MatchTier
+from agent.grounding.name_matching import (
     NameMatcher,
     name_variants,
     normalize_name,
     without_brackets,
+)
+from agent.schemas.grounding_index import (
+    ListingCountsByPlaceLink,
+    LocationNode,
+    NameHit,
+    Place,
+    PlaceMatch,
 )
 
 MAX_ALTERNATIVES = 3
@@ -29,17 +33,8 @@ MAX_ALTERNATIVES = 3
 # "DUBAI HILLS - SIDRA 1") when the two are at most this far apart.
 COVER_RADIUS_KM = 1.5
 # Nodes of the two trees with the same name this close together are one location.
-SAME_SPOT_KM = 1.0
+SAME_SPOT_RADIUS_KM = 1.0
 _EARTH_RADIUS_KM = 6371.0
-
-
-class Breadth(IntEnum):
-    """How much ground a place covers. A broader place wins a tie: "marina" is the area, not a tower."""
-
-    REGION = 0
-    AREA = 1
-    PROJECT = 2
-    BUILDING = 3
 
 
 V2_BREADTH = {
@@ -58,58 +53,6 @@ LEGACY_BREADTH = {
     "building": Breadth.BUILDING,
 }
 _PLACE_BREADTHS = frozenset({Breadth.AREA, Breadth.PROJECT})
-
-
-@dataclass(frozen=True)
-class LocationNode:
-    """One row of a location tree."""
-
-    id: int
-    parent_id: int | None
-    title: str
-    breadth: Breadth
-    aliases: tuple[str, ...] = ()
-    lat: float | None = None
-    lng: float | None = None
-
-
-@dataclass
-class Place:
-    key: str
-    title: str
-    breadth: Breadth
-    lat: float | None = None
-    lng: float | None = None
-    # Spellings of this place itself. Only these are matched against what the user typed.
-    names: set[str] = field(default_factory=set)
-    # Spellings of nearby places it covers by name, e.g. "dubai hills estate" for "Dubai Hills".
-    covered_names: set[str] = field(default_factory=set)
-    # What a search for this place covers: its subtrees in both trees and the address parts
-    # that name it or a place it covers, e.g. "jumeirah village circle (jvc)".
-    v2_ids: set[int] = field(default_factory=set)
-    legacy_ids: set[int] = field(default_factory=set)
-    address_names: set[str] = field(default_factory=set)
-    listing_count: int = 0
-
-
-@dataclass(frozen=True)
-class PlaceMatch:
-    place: Place
-    tier: MatchTier
-    alternatives: tuple[str, ...] = ()
-
-    @property
-    def is_approximate(self) -> bool:
-        return self.tier is MatchTier.FUZZY
-
-
-@dataclass(frozen=True)
-class ListingLinks:
-    """Active listing counts per way a listing points at a place. Only used to rank ties."""
-
-    by_v2_id: Mapping[int, int] = field(default_factory=dict)
-    by_legacy_id: Mapping[int, int] = field(default_factory=dict)
-    by_address_part: Mapping[str, int] = field(default_factory=dict)
 
 
 class PlaceDirectory:
@@ -156,7 +99,7 @@ class PlaceDirectory:
 def build_place_directory(
     v2_nodes: Iterable[LocationNode],
     legacy_nodes: Iterable[LocationNode],
-    links: ListingLinks,
+    links: ListingCountsByPlaceLink,
     *,
     region: str,
     aliases: Mapping[str, list[str]] | None = None,
@@ -166,11 +109,11 @@ def build_place_directory(
 
     `inside_outline` maps a v2 area with a drawn outline to the legacy nodes whose point lies in it.
     """
-    v2 = _in_region({node.id: node for node in v2_nodes}, region)
+    v2 = _nodes_in_region({node.id: node for node in v2_nodes}, region)
     legacy = {node.id: node for node in legacy_nodes}
     places: dict[str, Place] = {}
     for tree, is_v2 in ((v2, True), (legacy, False)):
-        descendants = _descendants(tree)
+        descendants = _subtree_ids_by_node(tree)
         for node in tree.values():
             key = _place_key(node.title)
             if not key or node.breadth is Breadth.REGION:
@@ -185,7 +128,7 @@ def build_place_directory(
                 place.title, place.breadth, place.lat, place.lng = node.title, node.breadth, node.lat, node.lng
             subtree = descendants[node.id]
             (place.v2_ids if is_v2 else place.legacy_ids).update(subtree)
-            place.names.update(_spellings(node))
+            place.names.update(_address_spellings(node))
     for place in places.values():
         place.address_names.update(place.names)
     _cover_legacy_nodes_inside(places, v2, legacy, inside_outline or {})
@@ -220,14 +163,14 @@ def _cover_legacy_nodes_inside(
     The legacy "Dubai Harbour" point falls inside the Dubai Marina outline, but v2 has Dubai
     Harbour as its own area; a project filed under Palm Jumeirah stays there whatever its point says.
     """
-    legacy_below = _descendants(legacy)
+    legacy_below = _subtree_ids_by_node(legacy)
     legacy_by_key: dict[str, list[LocationNode]] = defaultdict(list)
     for node in legacy.values():
         legacy_by_key[_place_key(node.title)].append(node)
     linked: dict[int, set[int]] = defaultdict(set)
     for node in v2.values():
         for twin in legacy_by_key.get(_place_key(node.title), ()):
-            if _distance_km(node, twin) <= SAME_SPOT_KM:
+            if _distance_km(node, twin) <= SAME_SPOT_RADIUS_KM:
                 linked[node.id] |= legacy_below[twin.id]
     placed_by_v2 = {_place_key(node.title) for node in v2.values() if node.breadth in _PLACE_BREADTHS}
     for v2_id, legacy_ids in inside_outline.items():
@@ -277,7 +220,7 @@ def _distance_km(first: Place | LocationNode, second: Place | LocationNode) -> f
     return 2 * _EARTH_RADIUS_KM * math.asin(math.sqrt(half))
 
 
-def _spellings(node: LocationNode) -> set[str]:
+def _address_spellings(node: LocationNode) -> set[str]:
     """Exact lowercased spellings, as they appear between the commas of `address_en`."""
     names: set[str] = set()
     for text in (node.title, *node.aliases):
@@ -289,7 +232,7 @@ def _spellings(node: LocationNode) -> set[str]:
     return {name for name in names if name}
 
 
-def _descendants(tree: Mapping[int, LocationNode]) -> dict[int, set[int]]:
+def _subtree_ids_by_node(tree: Mapping[int, LocationNode]) -> dict[int, set[int]]:
     """Each id with every id below it, itself included."""
     children: dict[int, list[int]] = defaultdict(list)
     for node in tree.values():
@@ -308,7 +251,7 @@ def _descendants(tree: Mapping[int, LocationNode]) -> dict[int, set[int]]:
     return result
 
 
-def _in_region(tree: dict[int, LocationNode], region: str) -> dict[int, LocationNode]:
+def _nodes_in_region(tree: dict[int, LocationNode], region: str) -> dict[int, LocationNode]:
     wanted = normalize_name(region)
     if not wanted:
         return tree
@@ -319,7 +262,7 @@ def _in_region(tree: dict[int, LocationNode], region: str) -> dict[int, Location
     ]
     if not roots:
         return tree
-    descendants = _descendants(tree)
+    descendants = _subtree_ids_by_node(tree)
     kept: set[int] = set()
     for root in roots:
         kept |= descendants[root]

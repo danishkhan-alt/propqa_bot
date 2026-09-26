@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from agent.memory.session.bootstrap import invalidate
-from agent.memory.models.types import utcnow
+from agent.memory.models.records import utcnow
+from agent.memory.session.working_memory import invalidate_user_memory_cache
 
 
-def forget_memory(
+def soft_delete_memories(
     repository,
     user_id: str,
     *,
@@ -40,7 +40,7 @@ def forget_memory(
                 now,
             )
     if rows:
-        invalidate(user_id)
+        invalidate_user_memory_cache(user_id)
     return len(rows)
 
 
@@ -51,7 +51,7 @@ def delete_user_memory(
     cluster: str | None = None,
     memory_id: str | None = None,
 ) -> int:
-    return forget_memory(
+    return soft_delete_memories(
         repository,
         user_id,
         cluster=cluster,
@@ -82,5 +82,5 @@ def set_memory_enabled(repository, user_id: str, enabled: bool):
     settings = repository.get_settings(user_id)
     settings.memory_enabled = enabled
     repository.save_settings(settings)
-    invalidate(user_id)
+    invalidate_user_memory_cache(user_id)
     return settings

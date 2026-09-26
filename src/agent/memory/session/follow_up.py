@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel
-
-from agent.memory.models.types import clone_frame, empty_frame, utcnow
+from agent.memory.models.records import clone_frame, empty_frame, utcnow
 
 _FORGET = re.compile(
     r"\b(?:forget|delete)\b.{0,48}\b(?:memor(?:y|ies)|preferences?|defaults|everything|budget|bedrooms?|location)\b",
@@ -24,16 +22,10 @@ _PIVOT = re.compile(
     r"\b(what about|how about|instead|that area|near those|from the metro|how far|the yield|what's the yield|whats the yield)\b",
     re.I,
 )
-_CARRY = ("location_id_v2", "id")
+_PIVOT_CARRIED_PREDICATE_KEYS = ("location_id_v2", "id")
 
 
-class FrameClass(BaseModel):
-    """Haiku's decision when a follow-up is not one of the known comparatives."""
-
-    kind: Literal["refine", "pivot", "new"]
-
-
-def update_search_from_message(
+def derive_search_state_from_message(
     message: str,
     frame: dict[str, Any] | None,
     goal: dict[str, Any] | None,
@@ -51,26 +43,26 @@ def update_search_from_message(
     if _FORGET.search(lowered):
         return {
             "ignore_defaults": ignore,
-            "pending_forget": forget_target(lowered),
+            "pending_forget": build_forget_request(lowered),
         }
     current = clone_frame(frame) if _has_frame(frame) else None
-    kind = _classify(lowered, current)
+    kind = _classify_follow_up_kind(lowered, current)
     if kind == "new" and current is not None and classify is not None:
-        kind = _judged_kind(classify, text, current) or kind
+        kind = _classify_follow_up_with_model(classify, text, current) or kind
     if kind == "refine" and current is not None:
-        current = _delta(lowered, current)
+        current = _apply_refinement_to_frame(lowered, current)
         current["turn"] = int(current.get("turn") or 0) + 1
-        goal = _touch_goal(goal, moment)
+        goal = _extend_goal_expiry(goal, moment)
     elif kind == "pivot" and current is not None:
         current = _pivot(current)
         current["turn"] = int(current.get("turn") or 0) + 1
-        goal = _touch_goal(goal, moment)
+        goal = _extend_goal_expiry(goal, moment)
     else:
         if _contradicts_goal(goal, lowered):
             goal = None
         current = empty_frame()
         current["turn"] = 1
-    goal = _maybe_goal(lowered, goal, moment)
+    goal = _detect_goal_from_text(lowered, goal, moment)
     return {
         "query_frame": current,
         "goal": goal,
@@ -79,7 +71,7 @@ def update_search_from_message(
     }
 
 
-def forget_target(text: str) -> dict[str, Any]:
+def build_forget_request(text: str) -> dict[str, Any]:
     lowered = text.lower()
     if "everything" in lowered or "all my memory" in lowered or "all memory" in lowered:
         return {
@@ -103,7 +95,7 @@ def forget_target(text: str) -> dict[str, Any]:
     return {"cluster": cluster, "memory_id": None, "all": False, "prompt": prompt}
 
 
-def _judged_kind(classify, message: str, frame: dict[str, Any]) -> str | None:
+def _classify_follow_up_with_model(classify, message: str, frame: dict[str, Any]) -> str | None:
     try:
         judged = classify(message, frame)
     except Exception:
@@ -119,7 +111,7 @@ def _has_frame(frame: dict[str, Any] | None) -> bool:
     return bool(frame.get("predicates") or frame.get("domain") or frame.get("result_meta") or frame.get("turn"))
 
 
-def _classify(text: str, frame: dict[str, Any] | None) -> str:
+def _classify_follow_up_kind(text: str, frame: dict[str, Any] | None) -> str:
     if frame is None:
         return "new"
     if _COMPARATIVE.search(text):
@@ -129,7 +121,7 @@ def _classify(text: str, frame: dict[str, Any] | None) -> str:
     return "new"
 
 
-def _delta(text: str, frame: dict[str, Any]) -> dict[str, Any]:
+def _apply_refinement_to_frame(text: str, frame: dict[str, Any]) -> dict[str, Any]:
     predicates = frame.setdefault("predicates", {})
     meta = frame.get("result_meta") or {}
     if "cheaper" in text:
@@ -202,7 +194,7 @@ def _pin_id(predicates: dict, meta: dict, index: int) -> None:
 
 def _pivot(frame: dict[str, Any]) -> dict[str, Any]:
     carried = {}
-    for key in _CARRY:
+    for key in _PIVOT_CARRIED_PREDICATE_KEYS:
         if key in frame.get("predicates", {}):
             carried[key] = frame["predicates"][key]
     meta = dict(frame.get("result_meta") or {})
@@ -213,7 +205,7 @@ def _pivot(frame: dict[str, Any]) -> dict[str, Any]:
     return pivoted
 
 
-def _maybe_goal(text: str, goal: dict[str, Any] | None, now: datetime) -> dict[str, Any] | None:
+def _detect_goal_from_text(text: str, goal: dict[str, Any] | None, now: datetime) -> dict[str, Any] | None:
     if re.search(r"\b(investment|invest|buy to let)\b", text):
         return _make_goal("investment_search", now, goal)
     if re.search(r"\b(looking|want|need)\b", text) and re.search(r"\b(to rent|for rent|rental)\b", text):
@@ -231,7 +223,7 @@ def _make_goal(kind: str, now: datetime, current: dict[str, Any] | None) -> dict
     }
 
 
-def _touch_goal(goal: dict[str, Any] | None, now: datetime) -> dict[str, Any] | None:
+def _extend_goal_expiry(goal: dict[str, Any] | None, now: datetime) -> dict[str, Any] | None:
     if not goal:
         return goal
     refreshed = dict(goal)

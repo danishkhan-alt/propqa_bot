@@ -11,9 +11,10 @@ import threading
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agent.checkpointer.redis_checkpoint import RedisCheckpoint
+from agent.checkpointer.redis_checkpoint_saver import RedisCheckpointSaver
 from common.db import close_pool
 from common.logger import get_logger
+from config import ENVIRONMENT, ActiveConfig
 
 logger = get_logger("agent.checkpointer")
 
@@ -43,34 +44,23 @@ def delete_thread(thread_id: str) -> None:
 
 
 def close_checkpointer() -> None:
-    """Drop the saver. The next `get_checkpointer` opens a new one."""
+    """Drop the saver. The next `get_checkpointer` opens a new one, and the chat graph
+    recompiles with it."""
     global _saver
     with _lock:
         saver = _saver
         _saver = None
-        _drop_compiled_graph()
     _close_saver(saver)
     close_pool("checkpointer")
-    from agent.memory.session.bootstrap import close_memory
-
-    close_memory()
-
-
-def _drop_compiled_graph() -> None:
-    from agent.graph import workflow
-
-    workflow._graph = None
 
 
 def _open_saver() -> BaseCheckpointSaver:
-    from config import ENVIRONMENT, ActiveConfig
-
     if ENVIRONMENT.is_test:
         return InMemorySaver()
     if not ActiveConfig.REDIS_URL:
         raise RuntimeError("REDIS_URL is required for chat checkpoints")
 
-    saver = RedisCheckpoint(
+    saver = RedisCheckpointSaver(
         redis_url=ActiveConfig.REDIS_URL,
         ttl={"default_ttl": _CHECKPOINT_TTL_MINUTES, "refresh_on_read": True},
     )

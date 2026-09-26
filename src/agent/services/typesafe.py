@@ -17,7 +17,7 @@ logger = get_logger("agent.typesafe")
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
 # Rate limited or overloaded, or a server error: worth one more try.
-_RETRY_STATUS = frozenset({429, 500, 502, 503, 504, 529})
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 529})
 _RETRY_DELAY_SECONDS = 0.4
 
 
@@ -86,6 +86,6 @@ class SystemOneClient:
             if response.status_code == 200:
                 return response
             error = TypeSafeError(f"status {response.status_code}: {response.text[:200]}")
-            if response.status_code not in _RETRY_STATUS:
+            if response.status_code not in _RETRYABLE_STATUS_CODES:
                 break
         raise TypeSafeError(str(error)) from error

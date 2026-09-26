@@ -5,9 +5,10 @@ from typing import Any
 from common.cache.factory import get_cache
 from common.cache.protocol import MISSING
 from common.identity import Caller
+from config import ActiveConfig
 
 
-class UserCache:
+class CallerScopedCache:
     """A cache bound to one caller, with kind + id built into every key.
 
     Registered user A and visitor B can both write ``chat:last`` and never
@@ -25,15 +26,14 @@ class UserCache:
         self._cache = backend if backend is not None else get_cache()
 
     def get(self, key: str, default: Any = None) -> Any:
-        value = self._cache.get(self.scoped(key), MISSING)
+        value = self._cache.get(self.scoped_key(key), MISSING)
         return default if value is MISSING else value
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """``ttl=None`` uses the backend default, not 'forever'."""
-        from config import ActiveConfig
 
         timeout = ActiveConfig.CACHE_TTL_SECONDS if ttl is None else ttl
-        self._cache.set(self.scoped(key), value, ttl=timeout)
+        self._cache.set(self.scoped_key(key), value, ttl=timeout)
 
     def get_or_set(self, key: str, factory, ttl: int | None = None) -> Any:
         value = self.get(key, MISSING)
@@ -44,21 +44,21 @@ class UserCache:
         return computed
 
     def invalidate(self, key: str) -> None:
-        self._cache.delete(self.scoped(key))
+        self._cache.delete(self.scoped_key(key))
 
     def invalidate_category(self, category: str) -> None:
-        self._bump(self._caller_category_generation_key(category))
+        self._increment_generation(self._caller_category_generation_key(category))
 
     def invalidate_all(self) -> None:
-        self._bump(self._caller_generation_key())
+        self._increment_generation(self._caller_generation_key())
 
-    def scoped(self, key: str) -> str:
+    def scoped_key(self, key: str) -> str:
         """``chat:last`` becomes ``chat:registered:<id>:g1.1:last``."""
 
         category, separator, rest = key.partition(":")
         caller_generation, category_generation = self._generations(category)
         stem = (
-            f"{category}:{self.caller.scope}:"
+            f"{category}:{self.caller.identity_key}:"
             f"g{caller_generation}.{category_generation}"
         )
         return f"{stem}:{rest}" if separator else stem
@@ -70,13 +70,15 @@ class UserCache:
         return found.get(caller_key, 1), found.get(category_key, 1)
 
     def _caller_generation_key(self) -> str:
-        return f"generation:{self.caller.scope}"
+        return f"generation:{self.caller.identity_key}"
 
     def _caller_category_generation_key(self, category: str) -> str:
-        return f"generation:{self.caller.scope}:{category}"
+        return f"generation:{self.caller.identity_key}:{category}"
 
-    def _bump(self, generation_key: str) -> None:
+    def _increment_generation(self, generation_key: str) -> None:
         try:
             self._cache.incr(generation_key)
         except KeyError:
+            # Generation counters must outlive the values they version. An evicted counter
+            # restarts, and keys invalidated before it become reachable again, so no expiry.
             self._cache.set(generation_key, 2, ttl=None)

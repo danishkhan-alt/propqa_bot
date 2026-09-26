@@ -1,6 +1,6 @@
 """Postgres + pgvector backing for user_memories.
 
-The hot tier stays in Redis. This table is the durable copy.
+The memory cache stays in Redis. This table is the durable copy.
 """
 
 from __future__ import annotations
@@ -12,11 +12,16 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from agent.memory.models.column_map import SEED, ColumnSpec
-from agent.memory.storage.repository import new_id, token_similarity
-from agent.memory.models.types import MemoryRecord, MemorySettings, utcnow
+from agent.memory.models.column_map import (
+    DEFAULT_COLUMN_SPECS,
+    ColumnSpec,
+    parse_cluster,
+    parse_slot,
+)
+from agent.memory.models.records import MemoryRecord, MemorySettings, utcnow
+from agent.memory.storage.in_memory_repository import new_memory_id, token_similarity
 
-_conn: contextvars.ContextVar = contextvars.ContextVar("memory_pg_conn", default=None)
+_transaction_connection: contextvars.ContextVar = contextvars.ContextVar("memory_pg_conn", default=None)
 
 DDL = """
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -119,7 +124,7 @@ class PostgresMemoryRepository:
     def __init__(self, pool) -> None:
         self._pool = pool
 
-    def setup(self) -> None:
+    def ensure_schema(self) -> None:
         with self._pool.connection() as conn:
             conn.execute(DDL)
             conn.execute(COLUMN_MAP_UPGRADE)
@@ -148,27 +153,25 @@ class PostgresMemoryRepository:
                             spec.cluster.value if spec.cluster else None,
                             spec.exclusive,
                         )
-                        for spec in SEED
+                        for spec in DEFAULT_COLUMN_SPECS
                     ],
                 )
             conn.commit()
 
     @contextmanager
     def transaction(self):
-        if _conn.get() is not None:
+        if _transaction_connection.get() is not None:
             yield
             return
         with self._pool.connection() as conn:
             with conn.transaction():
-                token = _conn.set(conn)
+                token = _transaction_connection.set(conn)
                 try:
                     yield
                 finally:
-                    _conn.reset(token)
+                    _transaction_connection.reset(token)
 
-    def columns(self) -> dict[str, ColumnSpec]:
-        from agent.memory.models.column_map import parse_cluster, parse_slot
-
+    def get_column_specs(self) -> dict[str, ColumnSpec]:
         rows = self._fetch(
             """
             SELECT logical_col, physical_col, domain, value_type,
@@ -201,7 +204,7 @@ class PostgresMemoryRepository:
             "SELECT * FROM user_memories WHERE user_id = %s AND id = %s",
             (user_id, memory_id),
         )
-        return _record(rows[0]) if rows else None
+        return _row_to_record(rows[0]) if rows else None
 
     def get_active_slot(self, user_id: str, slot: str) -> MemoryRecord | None:
         rows = self._fetch(
@@ -212,7 +215,7 @@ class PostgresMemoryRepository:
             """,
             (user_id, slot),
         )
-        return _record(rows[0]) if rows else None
+        return _row_to_record(rows[0]) if rows else None
 
     def insert(self, record: MemoryRecord) -> MemoryRecord:
         self._execute(
@@ -249,7 +252,7 @@ class PostgresMemoryRepository:
                 record.slot,
                 record.content,
                 _json(record.structured),
-                _vector(record.embedding),
+                _to_pgvector_literal(record.embedding),
                 record.confidence,
                 record.importance,
                 record.provenance,
@@ -292,7 +295,7 @@ class PostgresMemoryRepository:
             params.append(moment)
         clause = " AND ".join(where)
         if embedding:
-            vector = _vector(embedding)
+            vector = _to_pgvector_literal(embedding)
             rows = self._fetch(
                 f"""
                 SELECT *, 1 - (embedding <=> %s::vector) AS similarity
@@ -303,14 +306,14 @@ class PostgresMemoryRepository:
                 """,
                 [vector, *params, vector, limit, offset],
             )
-            return [(_record(row), float(row["similarity"])) for row in rows]
+            return [(_row_to_record(row), float(row["similarity"])) for row in rows]
         rows = self._fetch(
             f"SELECT * FROM user_memories WHERE {clause} ORDER BY updated_at DESC LIMIT %s",
             [*params, max(limit * 5, 50)],
         )
         scored = []
         for row in rows:
-            record = _record(row)
+            record = _row_to_record(row)
             score = token_similarity(query, record.content) if query else 0.0
             scored.append((record, score))
         scored.sort(key=lambda pair: (pair[1], pair[0].updated_at), reverse=True)
@@ -326,17 +329,17 @@ class PostgresMemoryRepository:
             """,
             (user_id, moment),
         )
-        return [_record(row) for row in rows]
+        return [_row_to_record(row) for row in rows]
 
     def list_all(self, user_id: str) -> list[MemoryRecord]:
         rows = self._fetch("SELECT * FROM user_memories WHERE user_id = %s", (user_id,))
-        return [_record(row) for row in rows]
+        return [_row_to_record(row) for row in rows]
 
     def list_user_ids(self) -> list[str]:
         rows = self._fetch("SELECT DISTINCT user_id FROM user_memories ORDER BY user_id")
         return [row["user_id"] for row in rows]
 
-    def touch(self, memory_ids: list[str], *, now: datetime | None = None) -> None:
+    def record_access(self, memory_ids: list[str], *, now: datetime | None = None) -> None:
         if not memory_ids:
             return
         self._execute(
@@ -348,7 +351,7 @@ class PostgresMemoryRepository:
             (now or utcnow(), memory_ids),
         )
 
-    def hard_delete_status(self, *, status: str, older_than: datetime) -> int:
+    def hard_delete_by_status(self, *, status: str, older_than: datetime) -> int:
         return self._execute(
             "DELETE FROM user_memories WHERE status = %s AND updated_at < %s",
             (status, older_than),
@@ -382,7 +385,7 @@ class PostgresMemoryRepository:
         )
         return int(rows[0]["n"])
 
-    def decayed_recently(self, memory_id: str, *, since: datetime) -> bool:
+    def was_decayed_since(self, memory_id: str, *, since: datetime) -> bool:
         rows = self._fetch(
             """
             SELECT 1 FROM memory_events
@@ -410,7 +413,7 @@ class PostgresMemoryRepository:
         row["memory_id"] = str(row["memory_id"]) if row["memory_id"] else None
         return row
 
-    def mark_event(self, event_id: int, **detail: Any) -> None:
+    def merge_event_detail(self, event_id: int, **detail: Any) -> None:
         self._execute(
             "UPDATE memory_events SET detail = COALESCE(detail, '{}'::jsonb) || %s WHERE id = %s",
             (_json(detail), event_id),
@@ -474,7 +477,7 @@ class PostgresMemoryRepository:
         )
 
     def _fetch(self, sql: str, params: tuple | list = ()) -> list[dict]:
-        conn = _conn.get()
+        conn = _transaction_connection.get()
         if conn is None:
             with self._pool.connection() as owned:
                 with owned.cursor() as cur:
@@ -487,7 +490,7 @@ class PostgresMemoryRepository:
             return list(cur.fetchall()) if cur.description else []
 
     def _execute(self, sql: str, params: tuple | list = ()) -> int:
-        conn = _conn.get()
+        conn = _transaction_connection.get()
         if conn is None:
             with self._pool.connection() as owned:
                 with owned.cursor() as cur:
@@ -506,7 +509,7 @@ def _json(value: Any):
     return Jsonb(value)
 
 
-def _vector(values: list[float] | None) -> str | None:
+def _to_pgvector_literal(values: list[float] | None) -> str | None:
     if not values:
         return None
     return "[" + ",".join(f"{float(item):.8f}" for item in values) + "]"
@@ -521,7 +524,7 @@ def _parse_vector(value) -> list[float] | None:
     return [float(part) for part in text.split(",")]
 
 
-def _record(row: dict) -> MemoryRecord:
+def _row_to_record(row: dict) -> MemoryRecord:
     return MemoryRecord(
         id=str(row["id"]),
         user_id=row["user_id"],
@@ -549,14 +552,14 @@ def _record(row: dict) -> MemoryRecord:
 
 def _record_params(record: MemoryRecord) -> tuple:
     return (
-        record.id or new_id(),
+        record.id or new_memory_id(),
         record.user_id,
         record.type,
         record.cluster,
         record.slot,
         record.content,
         _json(record.structured),
-        _vector(record.embedding),
+        _to_pgvector_literal(record.embedding),
         record.confidence,
         record.importance,
         record.provenance,

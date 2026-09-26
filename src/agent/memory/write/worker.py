@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import sys
 
-from agent.memory.write.upsert import write_memories
-from agent.memory.maintenance.consolidate import consolidate_user
+from agent.memory.maintenance.consolidate import consolidate_all, consolidate_user
+from agent.memory.models.records import utcnow
+from agent.memory.session.backends import connect_memory_cache, open_long_term_store
 from agent.memory.write.extract import extract_turn
-from agent.memory.models.types import utcnow
+from agent.memory.write.upsert import write_memories
 from common.logger import get_logger
 
 logger = get_logger("agent.memory")
 
 
-def process_job(job: dict, repository, *, now=None, extract=None) -> list[str]:
+def process_extraction_job(job: dict, repository, *, now=None, extract=None) -> list[str]:
     user_id = str(job.get("user_id") or "").strip()
     if not user_id:
         return []
@@ -31,43 +32,40 @@ def process_job(job: dict, repository, *, now=None, extract=None) -> list[str]:
     return touched
 
 
-def drain(hot, repository, *, limit: int = 50) -> int:
+def drain_extraction_queue(memory_cache, repository, *, limit: int = 50) -> int:
     done = 0
-    for entry_id, job in hot.read(count=limit, block_ms=0):
+    for entry_id, job in memory_cache.read_extraction_jobs(count=limit, block_ms=0):
         try:
-            process_job(job, repository)
+            process_extraction_job(job, repository)
         except Exception:
             logger.exception("memory job failed")
             continue
-        hot.ack(entry_id)
+        memory_cache.ack_extraction_job(entry_id)
         done += 1
     return done
 
 
-def run_forever(hot, repository) -> None:
+def consume_extraction_stream_forever(memory_cache, repository) -> None:
     while True:
-        jobs = hot.read(count=10, block_ms=2000)
+        jobs = memory_cache.read_extraction_jobs(count=10, block_ms=2000)
         if not jobs:
             continue
         for entry_id, job in jobs:
             try:
-                process_job(job, repository)
+                process_extraction_job(job, repository)
             except Exception:
                 logger.exception("memory job failed")
                 continue
-            hot.ack(entry_id)
+            memory_cache.ack_extraction_job(entry_id)
 
 
 def main(argv: list[str] | None = None) -> None:
-    from agent.memory.maintenance.consolidate import consolidate_all
-    from agent.memory.session.bootstrap import open_hot, open_long_term_store
-
     args = list(sys.argv[1:] if argv is None else argv)
     store = open_long_term_store()
     if "--consolidate" in args:
         consolidate_all(store.repository)
         return
-    run_forever(open_hot(), store.repository)
+    consume_extraction_stream_forever(connect_memory_cache(), store.repository)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from agent.schemas.listing import MentionKind
+from agent.enums.listing import MentionKind
+from agent.schemas.routes import unwrap_checkpoint_payload
 
 
 class GroundedPlace(BaseModel):
@@ -44,10 +45,10 @@ class Grounding(BaseModel):
 
     names: list[GroundedName] = Field(default_factory=list)
 
-    def unresolved(self) -> list[str]:
+    def unresolved_names(self) -> list[str]:
         return [name.text for name in self.names if not name.is_resolved]
 
-    def notes(self) -> list[str]:
+    def user_facing_notes(self) -> list[str]:
         """What the reply should tell the user about how their names were read."""
         notes: list[str] = []
         for name in self.names:
@@ -57,10 +58,7 @@ class Grounding(BaseModel):
                 notes.append(f"'{name.text}' did not match a known place or name, so it was searched as text.")
         return notes
 
-    def places(self) -> list[GroundedPlace]:
-        return [name.place for name in self.names if name.place is not None]
-
-    def stored_in(self, table: str, kind: str) -> list[str]:
+    def stored_values_in(self, table: str, kind: str) -> list[str]:
         """Stored values of one kind in one table, e.g. developers in public.properties."""
         return [
             match.value
@@ -98,6 +96,5 @@ def as_grounding(value: Grounding | dict[str, Any] | None) -> Grounding | None:
         return None
     if isinstance(value, Grounding):
         return value
-    from agent.schemas.routes import checkpoint_payload
 
-    return Grounding.model_validate(checkpoint_payload(value))
+    return Grounding.model_validate(unwrap_checkpoint_payload(value))

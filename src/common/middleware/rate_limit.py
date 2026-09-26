@@ -6,10 +6,10 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from common.errors.rate_limited import RateLimited
-from common.http.request_response import api_error
+from common.http.response_builders import api_error_response
 from common.identity import Caller
 from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
-from common.ratelimit.keys import by_ip
+from common.ratelimit.keys import ip_rate_limit_key
 from common.ratelimit.limiter import limiter
 from common.ratelimit.rules import API_REGISTERED, API_VISITOR
 
@@ -39,31 +39,31 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
         try:
-            _apply(request)
+            _enforce_default_rate_limit(request)
         except RateLimited as error:
-            response = api_error(error, request)
+            response = api_error_response(error, request)
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
 
-def _apply(request: Request) -> None:
+def _enforce_default_rate_limit(request: Request) -> None:
     caller = getattr(request.state, "caller", None)
     if isinstance(caller, Caller) and caller.is_registered:
-        limiter.enforce(caller.scope, API_REGISTERED)
+        limiter.enforce(caller.identity_key, API_REGISTERED)
         return
     if isinstance(caller, Caller) and caller.is_visitor:
-        limiter.enforce(caller.scope, API_VISITOR)
+        limiter.enforce(caller.identity_key, API_VISITOR)
         return
-    limiter.enforce(by_ip(request), API_VISITOR)
+    limiter.enforce(ip_rate_limit_key(request), API_VISITOR)
 
 
 def _declares_own_limit(request: Request) -> bool:
-    endpoint = _endpoint(request)
+    endpoint = _find_endpoint(request)
     return bool(endpoint is not None and getattr(endpoint, RATE_LIMITS_ATTRIBUTE, None))
 
 
-def _endpoint(request: Request):
+def _find_endpoint(request: Request):
     """The view for this path. Routing has not run yet, so match it here."""
     found = request.scope.get("endpoint")
     if found is not None:

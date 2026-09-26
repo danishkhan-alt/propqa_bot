@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from agent.schemas.routes import as_domain_route
-from agent.services.catalog_index import render_catalog, table_count
+from agent.services.catalog_prompt_text import count_domain_tables, render_catalog
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
@@ -22,7 +22,7 @@ def load_domain_catalog(state: ChatState) -> dict:
             "extra_data": {
                 "domain_ids": domain.domain_ids,
                 "join_ids": domain.join_ids,
-                "table_count": table_count(loaded),
+                "table_count": count_domain_tables(loaded),
             }
         },
     )

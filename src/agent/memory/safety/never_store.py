@@ -20,17 +20,17 @@ PHONE = re.compile(
     r"(?:\+971|00971|0)[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{4}\b|\b\d{3}[-.]\d{3}[-.]\d{4}\b"
 )
 EMIRATES_ID = re.compile(r"\b784[-\s]?\d{4}[-\s]?\d{7}[-\s]?\d\b")
-SQL = re.compile(
+SQL_STATEMENT_PATTERN = re.compile(
     r"\b(select\s+.+\s+from|insert\s+into|delete\s+from|drop\s+table|union\s+select)\b",
     re.IGNORECASE,
 )
-DOTTED = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\b", re.IGNORECASE)
-PROTECTED = re.compile(
+DOTTED_IDENTIFIER_PATTERN = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\b", re.IGNORECASE)
+SENSITIVE_TOPIC_PATTERN = re.compile(
     r"\b(nationality|religion|muslim|christian|hindu|jewish|buddhist|cancer|diabetes|"
     r"hiv|pregnant|passport|emirates id|salary|my income|exact income)\b",
     re.IGNORECASE,
 )
-THIRD_PARTY = re.compile(
+THIRD_PARTY_PREFERENCE_PATTERN = re.compile(
     r"\b(my (?:wife|husband|son|daughter|mother|father|friend|colleague)|"
     r"he prefers|she prefers|their budget)\b",
     re.IGNORECASE,

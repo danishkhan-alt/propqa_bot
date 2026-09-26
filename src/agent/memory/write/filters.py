@@ -13,7 +13,7 @@ def _canon_val(value: Any) -> Any:
     return value
 
 
-def _canon(structured: dict[str, Any] | None) -> tuple | None:
+def _canonical_filter_key(structured: dict[str, Any] | None) -> tuple | None:
     if not structured:
         return None
     items = []
@@ -25,8 +25,8 @@ def _canon(structured: dict[str, Any] | None) -> tuple | None:
     return tuple(items)
 
 
-def same_filter(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bool:
-    return _canon(left) == _canon(right)
+def is_same_filter(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bool:
+    return _canonical_filter_key(left) == _canonical_filter_key(right)
 
 
 def can_merge_filters(
@@ -85,7 +85,7 @@ def merge_filters(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
-def to_filter(structured: dict[str, Any]) -> tuple[str, Any]:
+def to_filter_spec_entry(structured: dict[str, Any]) -> tuple[str, Any]:
     """Turn a slotted predicate into the FilterSpec fragment QueryFrame stores."""
 
     key = str(structured["col"]).split(".")[-1]

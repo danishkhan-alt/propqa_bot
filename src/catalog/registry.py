@@ -16,7 +16,7 @@ RECIPES_PATH = CATALOG_DIR / "recipes.yaml"
 # Keys the grounding code reads. The SQL model never sees them.
 _GROUNDING_KEYS = ("named_values",)
 # A column this full or fuller is shown without a fill rate.
-_FULL_ENOUGH = 0.95
+_HIDE_FILL_RATE_AT_OR_ABOVE = 0.95
 
 
 def list_domains() -> list[dict]:
@@ -45,28 +45,28 @@ def load_column_profiles(domain_id: str) -> dict:
     return _read_yaml(path)
 
 
-def domain_prompt(domain: dict) -> str:
+def render_domain_prompt(domain: dict) -> str:
     """YAML fragment the SQL agent can be given as schema context, with measured column facts."""
     visible = {key: value for key, value in domain.items() if key not in _GROUNDING_KEYS}
     profiles = load_column_profiles(str(domain.get("id") or ""))
     if profiles:
-        visible["tables"] = [_with_profile(table, profiles) for table in visible.get("tables") or []]
+        visible["tables"] = [_merge_column_profile_into_table(table, profiles) for table in visible.get("tables") or []]
     return yaml.safe_dump(visible, sort_keys=False, allow_unicode=True, width=100)
 
 
-def load_prompt(domain_ids: list[str]) -> str:
-    parts = [domain_prompt(load_domain(domain_id)) for domain_id in domain_ids]
+def render_domains_prompt(domain_ids: list[str]) -> str:
+    parts = [render_domain_prompt(load_domain(domain_id)) for domain_id in domain_ids]
     return "\n---\n".join(parts)
 
 
-def date_coverage(tables: set[str] | list[str]) -> list[dict]:
+def get_table_date_coverage(tables: set[str] | list[str]) -> list[dict]:
     """Measured date spans of the given tables, as {table, column, covers}."""
-    index = _coverage_index()
+    index = _date_coverage_by_table()
     return [dict(span) for name in sorted({str(t).lower() for t in tables}) for span in index.get(name, ())]
 
 
 @lru_cache(maxsize=1)
-def _coverage_index() -> dict[str, tuple[dict, ...]]:
+def _date_coverage_by_table() -> dict[str, tuple[dict, ...]]:
     index: dict[str, tuple[dict, ...]] = {}
     for domain in list_domains():
         profiles = load_column_profiles(domain["id"])
@@ -87,7 +87,7 @@ def _coverage_index() -> dict[str, tuple[dict, ...]]:
     return index
 
 
-def named_columns() -> list[dict]:
+def load_named_value_declarations() -> list[dict]:
     """Every `named_values` declaration across the catalog."""
     declared: list[dict] = []
     for domain in list_domains():
@@ -102,7 +102,7 @@ def load_recipes() -> list[dict]:
     return list(_read_yaml(RECIPES_PATH).get("recipes") or [])
 
 
-def name_aliases() -> dict[str, list[str]]:
+def load_name_aliases() -> dict[str, list[str]]:
     if not NAME_ALIASES_PATH.exists():
         return {}
     payload = _read_yaml(NAME_ALIASES_PATH)
@@ -119,7 +119,7 @@ def _parsed_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def _with_profile(table: dict, profiles: dict) -> dict:
+def _merge_column_profile_into_table(table: dict, profiles: dict) -> dict:
     measured = profiles.get(table.get("qualified_name") or table.get("name")) or {}
     if not measured:
         return table
@@ -128,7 +128,7 @@ def _with_profile(table: dict, profiles: dict) -> dict:
         facts = measured.get(column.get("name")) or {}
         shown = dict(column)
         filled = facts.get("filled")
-        if filled is not None and filled < _FULL_ENOUGH:
+        if filled is not None and filled < _HIDE_FILL_RATE_AT_OR_ABOVE:
             shown["filled"] = f"{filled:.0%}"
         for listed in ("values", "common_values"):
             if facts.get(listed):

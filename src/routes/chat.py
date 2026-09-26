@@ -8,74 +8,29 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent.graph.runner import stream_turn
-from agent.sql.listing_details import MAX_FOCUSED_LISTINGS
 from common.identity import Caller
+from common.logger import get_logger
 from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
-from common.ratelimit.keys import by_caller
+from common.ratelimit.keys import caller_rate_limit_key
 from common.ratelimit.limiter import limiter
-from common.ratelimit.rules import CHAT_REGISTERED, CHAT_VISITOR, RateLimit
-from common.session import note_session, safe_thread_id, safe_user_id
+from common.ratelimit.rules import CHAT_REGISTERED, CHAT_VISITOR
+from common.schemas.rate_limit import RateLimit
+from common.session import record_session_activity
+from routes.schemas.chat import ChatRequest
 
 router = APIRouter()
 
 
-class ChatRequest(BaseModel):
-    """The chat UI sends ``session_id`` and ``user_id``. ``thread_id`` stays for callers that already use it.
-
-    ``focused_property_ids`` are the listings the user picked on screen to ask about.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    message: str = Field(min_length=1, max_length=4000)
-    thread_id: str | None = Field(default=None, max_length=64)
-    session_id: str | None = Field(default=None, max_length=64)
-    user_id: str | None = Field(default=None, max_length=80)
-    session_profile: dict | None = None
-    focused_property_ids: list[int] = Field(default_factory=list, max_length=MAX_FOCUSED_LISTINGS)
-
-    @field_validator("message")
-    @classmethod
-    def message_has_text(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("Message is empty.")
-        return text
-
-    @field_validator("thread_id", "session_id")
-    @classmethod
-    def thread_id_is_safe(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        text = safe_thread_id(value)
-        if text is None:
-            raise ValueError("Thread id must be letters and numbers.")
-        return text
-
-    @field_validator("user_id")
-    @classmethod
-    def user_id_is_safe(cls, value: str | None) -> str | None:
-        return safe_user_id(value)
-
-    @field_validator("focused_property_ids")
-    @classmethod
-    def focused_ids_are_listings(cls, value: list[int]) -> list[int]:
-        if any(item <= 0 for item in value):
-            raise ValueError("Listing ids must be positive.")
-        return list(dict.fromkeys(value))
-
-
-def chat_rule(caller: Caller | None) -> RateLimit:
+def chat_rate_limit_for(caller: Caller | None) -> RateLimit:
     if isinstance(caller, Caller) and caller.is_registered:
         return CHAT_REGISTERED
     return CHAT_VISITOR
 
 
 def enforce_chat_limit(request: Request) -> None:
-    limiter.enforce(by_caller(request), chat_rule(getattr(request.state, "caller", None)))
+    limiter.enforce(caller_rate_limit_key(request), chat_rate_limit_for(getattr(request.state, "caller", None)))
 
 
 @router.post("/chat")
@@ -84,7 +39,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
     caller = request.state.caller
     thread_id = body.thread_id or body.session_id or uuid.uuid4().hex
     user_id = body.user_id or caller.subject_id
-    note_session(user_id, thread_id, body.message)
+    record_session_activity(user_id, thread_id, body.message)
     graph = getattr(request.app.state, "chat_graph", None)
     models = getattr(request.app.state, "chat_models", None)
     sql_runner = getattr(request.app.state, "sql_runner", None)
@@ -106,12 +61,10 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
                 session_profile=body.session_profile,
                 focused_property_ids=body.focused_property_ids,
             ):
-                yield _sse(event)
+                yield _format_sse_event(event)
         except Exception:
-            from common.logger import get_logger
-
             get_logger("chat").exception("chat stream failed")
-            yield _sse({"event": "error", "detail": "I couldn't complete that reply."})
+            yield _format_sse_event({"event": "error", "detail": "I couldn't complete that reply."})
 
     return StreamingResponse(
         events(),
@@ -124,7 +77,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
     )
 
 
-def _sse(event: dict) -> str:
+def _format_sse_event(event: dict) -> str:
     name, payload = _client_payload(event)
     return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 

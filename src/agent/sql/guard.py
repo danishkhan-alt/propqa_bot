@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 import sqlglot
 from sqlglot import exp
 
-from agent.sql.listing_rules import LISTINGS_TABLE
+from agent.schemas.sql import SegmentRule
+from agent.sql.listing_sql_fragments import LISTINGS_TABLE
 from catalog import load_domains
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -39,21 +39,6 @@ def tables_in_domains(domain_ids: list[str]) -> set[str]:
     return allowed
 
 
-@dataclass(frozen=True)
-class SegmentRule:
-    """How one table's rows split into kinds of property that must not share an average.
-
-    segments: an average must group by or filter on at least one of these (villa or flat,
-    bedrooms, index series). basis: it must group by or filter on every one of these
-    (sale or rent, sales or mortgages), since those are different measures, not a mix.
-    """
-
-    table: str
-    columns: frozenset[str]
-    segments: tuple[str, ...]
-    basis: tuple[str, ...] = ()
-
-
 def segment_rules(domain_ids: list[str]) -> dict[str, SegmentRule]:
     """Rules for every loaded table that declares segments, by bare and qualified name."""
     rules: dict[str, SegmentRule] = {}
@@ -63,10 +48,15 @@ def segment_rules(domain_ids: list[str]) -> dict[str, SegmentRule]:
             basis = tuple(str(name).lower() for name in table.get("basis") or [])
             if not segments and not basis:
                 continue
-            qualified = str(table.get("qualified_name") or table.get("name") or "").lower()
+            qualified = str(
+                table.get("qualified_name") or table.get("name") or ""
+            ).lower()
             rule = SegmentRule(
                 table=qualified,
-                columns=frozenset(str(column.get("name") or "").lower() for column in table.get("columns") or []),
+                columns=frozenset(
+                    str(column.get("name") or "").lower()
+                    for column in table.get("columns") or []
+                ),
                 segments=segments,
                 basis=basis,
             )
@@ -75,7 +65,7 @@ def segment_rules(domain_ids: list[str]) -> dict[str, SegmentRule]:
     return rules
 
 
-def blended_averages(sql: str, rules: dict[str, SegmentRule]) -> list[str]:
+def blended_average_reasons(sql: str, rules: dict[str, SegmentRule]) -> list[str]:
     """Why an average in `sql` mixes kinds of property, one reason per table. Empty when it does not.
 
     An average (AVG, MEDIAN, PERCENTILE) over a declared table must split by a segment and
@@ -93,10 +83,10 @@ def blended_averages(sql: str, rules: dict[str, SegmentRule]) -> list[str]:
     averaged = _averaged_columns(statement)
     if not averaged:
         return []
-    split = _split_columns(statement)
+    split = _filtered_or_grouped_columns(statement)
     reasons: list[str] = []
     seen: set[str] = set()
-    for name in sorted(_referenced_tables(statement)):
+    for name in sorted(_tables_in_statement(statement)):
         rule = rules.get(name) or rules.get(name.rsplit(".", 1)[-1])
         if rule is None or rule.table in seen or not (averaged & rule.columns):
             continue
@@ -121,42 +111,66 @@ _PERCENTILES = (exp.PercentileCont, exp.PercentileDisc)
 def _averaged_columns(statement: exp.Expression) -> set[str]:
     names: set[str] = set()
     for node in statement.find_all(*_AVERAGES, exp.WithinGroup, *_PERCENTILES):
-        if isinstance(node, exp.WithinGroup) and not isinstance(node.this, _PERCENTILES):
+        if isinstance(node, exp.WithinGroup) and not isinstance(
+            node.this, _PERCENTILES
+        ):
             continue
         names.update(column.name.lower() for column in node.find_all(exp.Column))
     return names
 
 
-def _split_columns(statement: exp.Expression) -> set[str]:
+def _filtered_or_grouped_columns(statement: exp.Expression) -> set[str]:
     """Column names that filter or group rows, following aliases out of CTEs and subqueries."""
     split: set[str] = set()
     for clause in [*statement.find_all(exp.Where), *statement.find_all(exp.Having)]:
-        for term in clause.this.flatten() if isinstance(clause.this, exp.And) else [clause.this]:
-            if not _is_join_or_presence(term):
-                split.update(column.name.lower() for column in term.find_all(exp.Column))
+        for term in (
+            clause.this.flatten() if isinstance(clause.this, exp.And) else [clause.this]
+        ):
+            if not _is_join_or_not_null_check(term):
+                split.update(
+                    column.name.lower() for column in term.find_all(exp.Column)
+                )
     grouped: set[str] = set()
     for select in statement.find_all(exp.Select):
         projections = select.expressions
-        by_alias = {projection.alias.lower(): projection for projection in projections if projection.alias}
+        by_alias = {
+            projection.alias.lower(): projection
+            for projection in projections
+            if projection.alias
+        }
         group = select.args.get("group")
         keys = list(group.expressions) if group is not None else []
         for key in keys:
-            if isinstance(key, exp.Literal) and key.is_int and 0 < int(key.this) <= len(projections):
+            if (
+                isinstance(key, exp.Literal)
+                and key.is_int
+                and 0 < int(key.this) <= len(projections)
+            ):
                 key = projections[int(key.this) - 1]
-            elif isinstance(key, exp.Column) and not key.table and key.name.lower() in by_alias:
+            elif (
+                isinstance(key, exp.Column)
+                and not key.table
+                and key.name.lower() in by_alias
+            ):
                 key = by_alias[key.name.lower()]
             grouped.update(column.name.lower() for column in key.find_all(exp.Column))
     for window in statement.find_all(exp.Window):
         for key in window.args.get("partition_by") or []:
             grouped.update(column.name.lower() for column in key.find_all(exp.Column))
     # A grouped alias stands for the columns it was built from, in whichever scope named it.
-    aliases = [(alias.alias.lower(), alias) for alias in statement.find_all(exp.Alias) if alias.alias]
+    aliases = [
+        (alias.alias.lower(), alias)
+        for alias in statement.find_all(exp.Alias)
+        if alias.alias
+    ]
     changed = True
     while changed:
         changed = False
         for name, alias in aliases:
             if name in grouped:
-                inner = {column.name.lower() for column in alias.this.find_all(exp.Column)}
+                inner = {
+                    column.name.lower() for column in alias.this.find_all(exp.Column)
+                }
                 if not inner <= grouped:
                     grouped |= inner
                     changed = True
@@ -178,13 +192,13 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     statement = statements[0]
     if not isinstance(statement, exp.Query) or statement.find(exp.Into):
         raise SqlRejected("Only SELECT is allowed")
-    referenced = _referenced_tables(statement)
+    referenced = _tables_in_statement(statement)
     if not referenced:
         raise SqlRejected("Query does not use a catalog table")
     unknown = sorted(name for name in referenced if name not in allowed_tables)
     if unknown:
         raise SqlRejected("Query uses tables outside the loaded catalog")
-    if _unbracketed_or(statement):
+    if _has_unbracketed_or(statement):
         raise SqlRejected(
             "A WHERE mixes AND and OR without parentheses. AND binds first, so the other conditions "
             "do not apply to every OR branch. Put the OR alternatives in parentheses."
@@ -193,7 +207,7 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     return capped.sql(dialect="postgres")
 
 
-def _unbracketed_or(statement: exp.Expression) -> bool:
+def _has_unbracketed_or(statement: exp.Expression) -> bool:
     """An OR with an unparenthesized AND beneath it: `a AND b OR c` reads as `(a AND b) OR c`.
 
     Written that way it is nearly always a slip that drops a filter from one branch. sqlglot
@@ -223,8 +237,10 @@ def applied_conditions(sql: str) -> list[str]:
         # An aggregate's FILTER (WHERE ...) picks rows for one figure; it narrows no result.
         if isinstance(clause.parent, exp.Filter):
             continue
-        for term in clause.this.flatten() if isinstance(clause.this, exp.And) else [clause.this]:
-            if _is_join_or_presence(term):
+        for term in (
+            clause.this.flatten() if isinstance(clause.this, exp.And) else [clause.this]
+        ):
+            if _is_join_or_not_null_check(term):
                 continue
             text = term.sql(dialect="postgres")
             if text not in conditions:
@@ -237,7 +253,7 @@ def referenced_tables(sql: str) -> set[str]:
         statement = sqlglot.parse_one(sql or "", read="postgres")
     except sqlglot.errors.ParseError:
         return set()
-    return _referenced_tables(statement) if statement is not None else set()
+    return _tables_in_statement(statement) if statement is not None else set()
 
 
 def live_listing_id_column(sql: str) -> str | None:
@@ -278,13 +294,21 @@ def _direct_sources(select: exp.Select) -> dict[str, str]:
     for table in tables:
         if not isinstance(table, exp.Table) or not table.name:
             continue
-        full = f"{table.db.lower()}.{table.name.lower()}" if table.db else table.name.lower()
+        full = (
+            f"{table.db.lower()}.{table.name.lower()}"
+            if table.db
+            else table.name.lower()
+        )
         sources[table.alias_or_name.lower()] = full
     return sources
 
 
-def _is_join_or_presence(term: exp.Expression) -> bool:
-    if isinstance(term, exp.EQ) and isinstance(term.this, exp.Column) and isinstance(term.expression, exp.Column):
+def _is_join_or_not_null_check(term: exp.Expression) -> bool:
+    if (
+        isinstance(term, exp.EQ)
+        and isinstance(term.this, exp.Column)
+        and isinstance(term.expression, exp.Column)
+    ):
         return True
     # `a IS NOT NULL` parses as a negated Is; `NOT a IS NULL` as Not wrapping one.
     negated = isinstance(term, exp.Not)
@@ -294,7 +318,7 @@ def _is_join_or_presence(term: exp.Expression) -> bool:
     return negated != bool(check.args.get("negate"))
 
 
-def _referenced_tables(statement: exp.Expression) -> set[str]:
+def _tables_in_statement(statement: exp.Expression) -> set[str]:
     cte_names = {cte.alias.lower() for cte in statement.find_all(exp.CTE) if cte.alias}
     referenced: set[str] = set()
     for table in statement.find_all(exp.Table):
@@ -310,7 +334,11 @@ def _cap_rows(statement: exp.Expression, row_cap: int) -> exp.Expression:
     limit = statement.args.get("limit")
     if limit is not None:
         expression = limit.args.get("expression")
-        if isinstance(expression, exp.Literal) and expression.is_int and int(expression.this) <= cap:
+        if (
+            isinstance(expression, exp.Literal)
+            and expression.is_int
+            and int(expression.this) <= cap
+        ):
             return statement
     return statement.limit(cap)
 

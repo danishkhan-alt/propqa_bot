@@ -10,13 +10,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
 
-from agent.grounding.names import MatchTier, NameMatcher, normalize_name
+from agent.enums.grounding import MatchTier
+from agent.grounding.name_matching import NameMatcher, normalize_name
+from agent.schemas.grounding_index import NamedColumn, StoredValue
 
-MAX_VALUES_PER_COLUMN = 10
+MAX_MATCHES_PER_COLUMN = 10
 # A name counts as the same place as a canonical value when this share of its rows agree.
-SAME_PLACE_AGREEMENT = 0.8
+MIN_SAME_PLACE_ROW_SHARE = 0.8
 
 # Place kinds, broadest first. A broader kind wins a tie, as with places.
 PLACE_KIND_ORDER = {"area": 0, "community": 0, "master_project": 1, "project": 2, "building": 3}
@@ -27,36 +28,9 @@ PLACE_GROUP = "place"
 GROUPS_MATCHING_CONTAINING_NAMES = frozenset({"developer"})
 
 
-def name_group(kind: str) -> str:
+def name_group_for_kind(kind: str) -> str:
     """Place kinds are searched together; any other kind (developer, school) on its own."""
     return PLACE_GROUP if kind in PLACE_KIND_ORDER else kind
-
-
-@dataclass(frozen=True)
-class NamedColumn:
-    """A column whose values are names users type. Declared in the domain YAML."""
-
-    table: str
-    column: str
-    kind: str
-    same_place_as: str | None = None
-
-
-@dataclass(frozen=True)
-class StoredValue:
-    table: str
-    column: str
-    value: str
-    kind: str
-    row_count: int = 0
-    # Set when this value was reached from another name on the same rows.
-    same_place_as: str | None = None
-
-    def as_prompt(self) -> dict:
-        found = {"column": f"{self.table}.{self.column}", "value": self.value}
-        if self.same_place_as:
-            found["same_place_as"] = self.same_place_as
-        return found
 
 
 ValueKey = tuple[str, str, str]
@@ -76,7 +50,7 @@ class StoredValueIndex:
             key = (value.table, value.column, value.value)
             self._values[key] = value
             names = [value.value, *extra_names.get(normalize_name(value.value), [])]
-            self._matchers[(value.table, name_group(value.kind))].add(key, names)
+            self._matchers[(value.table, name_group_for_kind(value.kind))].add(key, names)
         self._same_place = dict(same_place)
 
     def __len__(self) -> int:
@@ -118,11 +92,11 @@ class StoredValueIndex:
             best_tier = min(best_tier, MatchTier.WORDS)
         best_keys = list(dict.fromkeys(hit.key for hit in hits if hit.tier >= best_tier))
         values = [self._values[key] for key in best_keys]
-        broadest = min(_kind_rank(value.kind) for value in values)
+        broadest = min(_place_kind_breadth_rank(value.kind) for value in values)
         kept = sorted(
-            (value for value in values if _kind_rank(value.kind) == broadest),
+            (value for value in values if _place_kind_breadth_rank(value.kind) == broadest),
             key=lambda value: -value.row_count,
-        )[:MAX_VALUES_PER_COLUMN]
+        )[:MAX_MATCHES_PER_COLUMN]
         linked = [
             self._same_place[key]
             for key in ((value.table, value.column, value.value) for value in kept)
@@ -155,7 +129,7 @@ def learn_same_place(
             top[name] = (canonical, count)
     learned: dict[ValueKey, StoredValue] = {}
     for name, (canonical, count) in top.items():
-        if normalize_name(canonical) == normalize_name(name) or count < SAME_PLACE_AGREEMENT * totals[name]:
+        if normalize_name(canonical) == normalize_name(name) or count < MIN_SAME_PLACE_ROW_SHARE * totals[name]:
             continue
         learned[(column.table, column.column, name)] = StoredValue(
             table=column.table,
@@ -177,5 +151,5 @@ def _alias_names(aliases: Mapping[str, list[str]]) -> dict[str, list[str]]:
     return extra
 
 
-def _kind_rank(kind: str) -> int:
+def _place_kind_breadth_rank(kind: str) -> int:
     return PLACE_KIND_ORDER.get(kind, len(PLACE_KIND_ORDER))

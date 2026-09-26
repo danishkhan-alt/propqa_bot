@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent.enums.memory import MemoryType
 from agent.memory.models.column_map import (
-    FILTER_COLUMNS,
+    LOGICAL_COLUMN_BY_FILTER_KEY,
     PROJECTION_DOMAINS,
     columns_for_domains,
     gate_column_for_cluster,
 )
-from agent.enums.memory import MemoryType
-from agent.memory.write.filters import to_filter
-from agent.memory.read.prompt_text import default_label, render_memory_block
-from agent.memory.models.types import clone_frame
+from agent.memory.models.records import clone_frame
+from agent.memory.read.prompt_text import format_default_label, render_memory_block
+from agent.memory.write.filters import to_filter_spec_entry
 
 
 def apply_saved_preferences(
@@ -27,7 +27,7 @@ def apply_saved_preferences(
     current = clone_frame(frame)
     if domains and not current.get("domain"):
         current["domain"] = domains[0]
-    visible = visible_memories(memories, domains)
+    visible = filter_memories_for_domains(memories, domains)
     block = render_memory_block(visible)
     if ignore:
         return current, [], block
@@ -45,17 +45,17 @@ def apply_saved_preferences(
         structured = item["structured"]
         if structured["col"] not in allowed:
             continue
-        key, value = to_filter(structured)
+        key, value = to_filter_spec_entry(structured)
         if key in predicates:
             continue
         predicates[key] = value
         labels.append(
-            default_label(item.get("slot"), structured, str(item.get("content") or key))
+            format_default_label(item.get("slot"), structured, str(item.get("content") or key))
         )
     for key, value in (profile or {}).get("structured", {}).items():
         if key in predicates:
             continue
-        logical = FILTER_COLUMNS.get(key)
+        logical = LOGICAL_COLUMN_BY_FILTER_KEY.get(key)
         if logical and logical not in allowed:
             continue
         predicates[key] = value
@@ -73,7 +73,7 @@ def apply_saved_preferences(
     return current, labels, block
 
 
-def visible_memories(
+def filter_memories_for_domains(
     memories: list[dict[str, Any]], domains: list[str]
 ) -> list[dict[str, Any]]:
     allowed = columns_for_domains(domains)

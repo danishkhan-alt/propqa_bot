@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
-from common.schemas.pagination import PaginationMetaData
+from common.schemas.pagination import PaginationMetadata
 
 T = TypeVar("T")
 
@@ -41,5 +41,5 @@ class PaginatedAPIResponse(BaseModel, Generic[T]):
     """Standardized paginated success envelope."""
 
     result: list[T]
-    metadata: PaginationMetaData
+    metadata: PaginationMetadata
     status: int = 200

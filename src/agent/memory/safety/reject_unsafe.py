@@ -5,16 +5,16 @@ from __future__ import annotations
 from dataclasses import replace
 
 from agent.memory.models.column_map import ColumnSpec
+from agent.memory.models.records import MemoryOperation
 from agent.memory.safety.never_store import (
-    DOTTED,
+    DOTTED_IDENTIFIER_PATTERN,
     EMAIL,
     EMIRATES_ID,
     PHONE,
-    PROTECTED,
-    SQL,
-    THIRD_PARTY,
+    SENSITIVE_TOPIC_PATTERN,
+    SQL_STATEMENT_PATTERN,
+    THIRD_PARTY_PREFERENCE_PATTERN,
 )
-from agent.memory.models.types import MemoryOp
 
 _location_checker = None
 
@@ -29,13 +29,13 @@ def set_location_checker(checker) -> None:
     _location_checker = checker
 
 
-def redact(text: str) -> str:
+def redact_contact_details(text: str) -> str:
     cleaned = EMAIL.sub("[redacted]", text or "")
     cleaned = PHONE.sub("[redacted]", cleaned)
     return EMIRATES_ID.sub("[redacted]", cleaned)
 
 
-def validate_memory(op: MemoryOp, columns: dict[str, ColumnSpec]) -> MemoryOp:
+def sanitize_memory_operation(op: MemoryOperation, columns: dict[str, ColumnSpec]) -> MemoryOperation:
     """Reject memories that would store SQL, secrets, or a column we do not own.
     
     This function is used to validate the content and evidence of a memory operation.
@@ -53,13 +53,13 @@ def validate_memory(op: MemoryOp, columns: dict[str, ColumnSpec]) -> MemoryOp:
         MemoryRejected: If the memory operation is rejected.
     """
     
-    content = redact(op.content)
-    evidence = redact(op.evidence)
+    content = redact_contact_details(op.content)
+    evidence = redact_contact_details(op.evidence)
     
     if (
-        PROTECTED.search(content)
-        or PROTECTED.search(evidence)
-        or THIRD_PARTY.search(content)
+        SENSITIVE_TOPIC_PATTERN.search(content)
+        or SENSITIVE_TOPIC_PATTERN.search(evidence)
+        or THIRD_PARTY_PREFERENCE_PATTERN.search(content)
     ):
         raise MemoryRejected("protected or third-party fact")
 
@@ -75,7 +75,7 @@ def validate_memory(op: MemoryOp, columns: dict[str, ColumnSpec]) -> MemoryOp:
         spec = columns.get(str(structured["col"]))
         if spec is None:
             raise MemoryRejected("unknown column")
-        _check_value(spec, structured.get("val"))
+        _validate_value_type(spec, structured.get("val"))
 
     confidence = min(1.0, max(0.0, float(op.confidence)))
 
@@ -111,9 +111,9 @@ def _looks_like_sql(text: str, columns: dict[str, ColumnSpec]) -> bool:
     
     if not text:
         return False
-    if SQL.search(text):
+    if SQL_STATEMENT_PATTERN.search(text):
         return True
-    for match in DOTTED.finditer(text):
+    for match in DOTTED_IDENTIFIER_PATTERN.finditer(text):
         token = match.group(0).lower()
         if (
             token in columns
@@ -124,7 +124,7 @@ def _looks_like_sql(text: str, columns: dict[str, ColumnSpec]) -> bool:
     return False
 
 
-def _check_value(spec: ColumnSpec, value) -> None:
+def _validate_value_type(spec: ColumnSpec, value) -> None:
     kind = spec.value_type
     if kind == "bool":
         if not isinstance(value, bool):

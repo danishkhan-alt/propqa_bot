@@ -62,7 +62,7 @@ DEFAULT_CLUSTERS: tuple[MemoryCluster, ...] = (
 
 ALL_CLUSTERS: frozenset[MemoryCluster] = frozenset(MemoryCluster)
 
-NON_COLUMN_EXCLUSIVE_SLOTS: frozenset[PreferenceSlot] = frozenset(
+EXCLUSIVE_SLOTS_WITHOUT_COLUMN: frozenset[PreferenceSlot] = frozenset(
     {
         PreferenceSlot.PERSONA,
         PreferenceSlot.PROJECTION_PREF,

@@ -9,59 +9,26 @@ reported, so the reply can say what was relaxed.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from functools import lru_cache
 from typing import Any
 
-from agent.grounding.names import normalize_name
-from agent.schemas.grounding import GroundedPlace
-from agent.schemas.listing import Completion, Furnishing, ListingFilters, ListingPurpose, ListingSort
-from agent.sql.listing_rules import ACTIVE_LISTING, ASKING_PRICE
+from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort
+from agent.grounding.name_matching import normalize_name
+from agent.schemas.listing_search import ListingQuery, ListingResult, ListingSearch, Relaxation
+from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION, ASKING_PRICE_SQL
+from catalog import load_domain
 
 _ORDER_BY = {
     ListingSort.NEWEST: "p.created_at DESC NULLS LAST",
-    ListingSort.PRICE_LOW: f"{ASKING_PRICE} ASC NULLS LAST",
-    ListingSort.PRICE_HIGH: f"{ASKING_PRICE} DESC NULLS LAST",
+    ListingSort.PRICE_LOW: f"{ASKING_PRICE_SQL} ASC NULLS LAST",
+    ListingSort.PRICE_HIGH: f"{ASKING_PRICE_SQL} DESC NULLS LAST",
     ListingSort.SIZE_LARGE: "p.area DESC NULLS LAST",
 }
 # Stored value of properties.purpose for each purpose the router can choose.
 _STORED_PURPOSE = {ListingPurpose.SALE: "for_sale", ListingPurpose.RENT: "for_rent"}
 
 ListingRunner = Callable[[str, dict[str, Any]], Any]
-
-
-@dataclass(frozen=True)
-class ListingSearch:
-    filters: ListingFilters
-    places: list[GroundedPlace] = field(default_factory=list)
-    developers: list[str] = field(default_factory=list)
-    # Place names nothing matched. Searched as address text so they are not silently dropped.
-    unmatched_places: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ListingQuery:
-    sql: str
-    count_sql: str
-    params: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class ListingResult:
-    ids: list[str]
-    total: int
-    query: ListingQuery
-    notes: list[str]
-    duration_ms: int
-
-
-@dataclass(frozen=True)
-class Relaxation:
-    """One way to loosen a search that matched nothing."""
-
-    note: str
-    applies: Callable[[ListingFilters], bool]
-    relax: Callable[[ListingFilters], ListingFilters]
 
 
 RELAXATIONS: tuple[Relaxation, ...] = (
@@ -98,13 +65,13 @@ RELAXATIONS: tuple[Relaxation, ...] = (
 )
 
 
-def category_ids(property_types: list[str]) -> tuple[list[int], list[str]]:
+def resolve_category_ids(property_types: list[str]) -> tuple[list[int], list[str]]:
     """Category ids for the types named, and the types no category matched."""
     by_name = _categories_by_name()
     ids: list[int] = []
     unknown: list[str] = []
     for text in property_types:
-        category = by_name.get(_singular(text))
+        category = by_name.get(_singularize(text))
         if category is None:
             unknown.append(text)
         elif category not in ids:
@@ -112,29 +79,29 @@ def category_ids(property_types: list[str]) -> tuple[list[int], list[str]]:
     return ids, unknown
 
 
-def category_names() -> list[str]:
+def property_type_names() -> list[str]:
     """Property type names the router chooses from, read from the catalog."""
     return sorted(set(_category_display_names()))
 
 
 def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> ListingQuery:
-    clauses = [ACTIVE_LISTING]
+    clauses = [ACTIVE_LISTING_CONDITION]
     params: dict[str, Any] = {}
     filters = search.filters
 
     if filters.purpose is not ListingPurpose.ANY:
         clauses.append("p.purpose = %(purpose)s")
         params["purpose"] = _STORED_PURPOSE[filters.purpose]
-    categories, _ = category_ids(filters.property_types)
+    categories, _ = resolve_category_ids(filters.property_types)
     if categories:
         clauses.append(
             "EXISTS (SELECT 1 FROM public.category_property cp "
             "WHERE cp.property_id = p.id AND cp.category_id = ANY(%(category_ids)s))"
         )
         params["category_ids"] = categories
-    _add_range(clauses, params, "p.rooms", "bedrooms", filters.bedrooms_min, filters.bedrooms_max)
-    _add_range(clauses, params, ASKING_PRICE, "price", filters.price_min, filters.price_max)
-    _add_range(clauses, params, "p.area", "size", filters.size_min_sqft, filters.size_max_sqft)
+    _add_range_filter(clauses, params, "p.rooms", "bedrooms", filters.bedrooms_min, filters.bedrooms_max)
+    _add_range_filter(clauses, params, ASKING_PRICE_SQL, "price", filters.price_min, filters.price_max)
+    _add_range_filter(clauses, params, "p.area", "size", filters.size_min_sqft, filters.size_max_sqft)
     if filters.furnishing is not Furnishing.ANY:
         clauses.append("p.furnished = %(furnishing)s")
         params["furnishing"] = filters.furnishing.value
@@ -166,7 +133,7 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
     notes: list[str] = []
     current = search
     query = build_listing_query(current, limit=limit, offset=offset)
-    total, duration_ms = _count(query, run)
+    total, duration_ms = _count_matching_listings(query, run)
     for relaxation in RELAXATIONS:
         if total:
             break
@@ -174,7 +141,7 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
             continue
         current = replace(current, filters=relaxation.relax(current.filters))
         query = build_listing_query(current, limit=limit, offset=offset)
-        total, elapsed = _count(query, run)
+        total, elapsed = _count_matching_listings(query, run)
         duration_ms += elapsed
         notes.append(relaxation.note)
     if not total:
@@ -190,14 +157,14 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
     )
 
 
-def _count(query: ListingQuery, run: ListingRunner) -> tuple[int, int]:
+def _count_matching_listings(query: ListingQuery, run: ListingRunner) -> tuple[int, int]:
     page = run(query.count_sql, query.params)
     rows = list(getattr(page, "rows", []) or [])
     total = int(rows[0].get("total") or 0) if rows else 0
     return total, int(getattr(page, "duration_ms", 0) or 0)
 
 
-def _add_range(
+def _add_range_filter(
     clauses: list[str],
     params: dict[str, Any],
     expression: str,
@@ -235,11 +202,11 @@ def _place_clause(search: ListingSearch, params: dict[str, Any]) -> str:
         params["place_address_names"] = address_names
     if search.unmatched_places:
         links.append("p.address_en ILIKE ANY(%(place_address_patterns)s)")
-        params["place_address_patterns"] = [f"%{_like_literal(text)}%" for text in search.unmatched_places]
+        params["place_address_patterns"] = [f"%{_escape_like_pattern(text)}%" for text in search.unmatched_places]
     return f"({' OR '.join(links)})" if links else ""
 
 
-def _like_literal(text: str) -> str:
+def _escape_like_pattern(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -250,7 +217,7 @@ def _categories_by_name() -> dict[str, int]:
     for value in _property_categories():
         for text in (value.get("name"), value.get("slug")):
             if text:
-                by_name[_singular(str(text))] = int(value["id"])
+                by_name[_singularize(str(text))] = int(value["id"])
     return by_name
 
 
@@ -260,13 +227,11 @@ def _category_display_names() -> list[str]:
 
 @lru_cache(maxsize=1)
 def _property_categories() -> tuple[dict, ...]:
-    from catalog import load_domain
-
     enums = load_domain("listings").get("enums") or []
     values = next((enum.get("values") or [] for enum in enums if enum.get("name") == "PropertyCategory"), [])
     return tuple(values)
 
 
-def _singular(text: str) -> str:
+def _singularize(text: str) -> str:
     words = normalize_name(text).split()
     return " ".join(word[:-1] if len(word) > 3 and word.endswith("s") else word for word in words)

@@ -20,6 +20,14 @@ from typing import Any
 
 import yaml
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import InMemorySaver
+
+from agent.context import AgentContext
+from agent.graph.workflow import build_chat_graph
+from agent.grounding import get_grounding_cache
+from agent.sql.execute import fetch_reference_rows
+from common.db import close_pools
+from common.schemas.pagination import DEFAULT_PER_PAGE
 
 GOLDEN_PATH = Path(__file__).resolve().parent / "sql_golden.yaml"
 
@@ -71,11 +79,8 @@ class CaseScore:
 
 
 def main(case_ids: list[str]) -> int:
-    from agent.grounding import grounding_cache
-    from common.db import close_pools
-
     cases = [case for case in _load_cases() if not case_ids or case["id"] in case_ids]
-    if grounding_cache().load_now() is None:
+    if get_grounding_cache().load_now() is None:
         print("Grounding index did not load; the eval would not reflect production.")
         return 2
     scores: list[CaseScore] = []
@@ -102,11 +107,6 @@ def _load_cases() -> list[dict]:
 
 
 def _run_case(case: dict) -> TurnOutcome:
-    from langgraph.checkpoint.memory import InMemorySaver
-
-    from agent.context import AgentContext
-    from agent.graph.workflow import build_chat_graph
-
     # In memory only: the eval never writes to the chatbot database.
     graph = build_chat_graph(InMemorySaver())
     thread = f"eval-{case['id']}-{uuid.uuid4().hex[:8]}"
@@ -122,14 +122,14 @@ def _run_case(case: dict) -> TurnOutcome:
                 context=AgentContext(user_id="eval"),
                 stream_mode="updates",
             ):
-                _record(update, outcome)
+                _record_node_update(update, outcome)
         except Exception as exc:
             outcome.error = f"{type(exc).__name__}: {exc}"[:300]
         outcome.seconds = time.perf_counter() - started
     return outcome
 
 
-def _record(update: dict, outcome: TurnOutcome) -> None:
+def _record_node_update(update: dict, outcome: TurnOutcome) -> None:
     for node, value in update.items():
         if not isinstance(value, dict):
             continue
@@ -172,8 +172,6 @@ def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
 
 
 def _score_listings(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
-    from common.schemas.pagination import DEFAULT_PER_PAGE
-
     truth = _truth_listing_ids(expected, expected.get("where") or "TRUE")
     relaxed = False
     if not truth and expected.get("relaxed_where"):
@@ -197,8 +195,6 @@ def _score_listings(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
 
 
 def _truth_listing_ids(expected: dict, where: str) -> set[str]:
-    from agent.sql.execute import fetch_reference_rows
-
     names = [str(name).lower() for name in expected.get("place") or []]
     if names:
         sql = PLACE_LISTINGS_SQL.format(where=where)
@@ -209,11 +205,9 @@ def _truth_listing_ids(expected: dict, where: str) -> set[str]:
 
 
 def _score_value(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
-    from agent.sql.execute import fetch_reference_rows
-
     tolerance = float(expected.get("tolerance") or 0)
-    truths = [_number(next(iter(fetch_reference_rows(sql)[0].values()))) for sql in expected["sql"]]
-    answered = [number for row in outcome.rows[:1] for number in map(_number, row.values()) if number is not None]
+    truths = [_to_float(next(iter(fetch_reference_rows(sql)[0].values()))) for sql in expected["sql"]]
+    answered = [number for row in outcome.rows[:1] for number in map(_to_float, row.values()) if number is not None]
     for truth in truths:
         if truth is None:
             continue
@@ -235,7 +229,7 @@ def _score_rows_contain(texts: list[str], outcome: TurnOutcome) -> tuple[bool, s
     return not missing and bool(outcome.rows), f"rows={len(outcome.rows)} missing={missing}"
 
 
-def _number(value: Any) -> float | None:
+def _to_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:

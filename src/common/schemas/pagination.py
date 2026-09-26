@@ -9,7 +9,7 @@ DEFAULT_PER_PAGE = 10
 MAX_PER_PAGE = 100
 
 
-class PaginationMetaData(BaseModel):
+class PaginationMetadata(BaseModel):
     total: int
     per_page: int
     page: int
@@ -23,7 +23,7 @@ class PageRequest(BaseModel):
     per_page: int = Field(default=DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE)
 
 
-def page_request(*, page: int = 1, per_page: int | None = None) -> PageRequest:
+def build_page_request(*, page: int = 1, per_page: int | None = None) -> PageRequest:
     """One page of any list. Properties and agents use the same window.
 
     A count the user asked for replaces the default page size, and cannot
@@ -33,10 +33,10 @@ def page_request(*, page: int = 1, per_page: int | None = None) -> PageRequest:
     return PageRequest(page=page, per_page=size)
 
 
-def page_meta(*, total: int, page: int, per_page: int) -> PaginationMetaData:
+def build_pagination_metadata(*, total: int, page: int, per_page: int) -> PaginationMetadata:
     last_page = max(1, (total + per_page - 1) // per_page) if total else 1
     current = min(page, last_page)
-    return PaginationMetaData(
+    return PaginationMetadata(
         total=total,
         per_page=per_page,
         page=current,
@@ -46,10 +46,10 @@ def page_meta(*, total: int, page: int, per_page: int) -> PaginationMetaData:
     )
 
 
-def paginate(items: Sequence[Any], request: PageRequest) -> tuple[list[Any], PaginationMetaData]:
+def paginate(items: Sequence[Any], request: PageRequest) -> tuple[list[Any], PaginationMetadata]:
     """One page of an in-memory sequence. Prefer ``page_meta`` when SQL already counted."""
 
-    metadata = page_meta(total=len(items), page=request.page, per_page=request.per_page)
+    metadata = build_pagination_metadata(total=len(items), page=request.page, per_page=request.per_page)
     start = (metadata.page - 1) * request.per_page
     end = start + request.per_page
     return list(items[start:end]), metadata

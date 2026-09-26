@@ -2,6 +2,6 @@
 
 LISTINGS_TABLE = "public.properties"
 
-ACTIVE_LISTING = "p.status = 'active' AND p.deleted_at IS NULL"
+ACTIVE_LISTING_CONDITION = "p.status = 'active' AND p.deleted_at IS NULL"
 # price_max holds the asking price for sale and rent alike; price_min is a rarely set lower bound.
-ASKING_PRICE = "COALESCE(p.price_max, p.price_min)"
+ASKING_PRICE_SQL = "COALESCE(p.price_max, p.price_min)"

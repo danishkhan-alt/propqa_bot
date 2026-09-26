@@ -13,23 +13,28 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
-from agent.schemas.routes import DomainRoute, QueryRoute
-from agent.schemas.sql import SqlDraft
-from agent.sql.execute import SqlFailed, SqlPage, json_ready
 from agent.schemas.grounding import GroundedName, Grounding, StoredMatch
+from agent.schemas.routes import DomainRoute, QueryRoute
+from agent.schemas.sql import SqlDraft, SqlPage
+from agent.sql.execute import SqlFailed, to_json_safe
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
-    blended_averages,
+    blended_average_reasons,
     prepare_select,
     segment_rules,
     tables_in_domains,
 )
-from agent.sql.listings import listing_ids_from
-from agent.sql.lookup import BLENDED_NOTE, EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY, run_sql_lookup
-from agent.sql.recipes import bind_recipe, recipe, recipes
-from catalog import list_domains
+from agent.sql.listing_card_ids import listing_card_ids_from_rows
+from agent.sql.lookup import (
+    BLENDED_AVERAGE_NOTE,
+    EMPTY_LOOKUP_REPLY,
+    FAILED_LOOKUP_REPLY,
+    run_sql_lookup,
+)
+from agent.sql.recipes import bind_recipe, get_recipe, load_recipes_by_id
 from agent.sql.trace import trace_sql_attempt
+from catalog import list_domains
 
 
 class _Draft:
@@ -268,8 +273,8 @@ def test_graph_hides_a_database_error():
 
 
 def test_json_ready_keeps_money_exact():
-    assert json_ready(Decimal("1650000.50")) == "1650000.50"
-    assert json_ready(date(2026, 1, 2)) == "2026-01-02"
+    assert to_json_safe(Decimal("1650000.50")) == "1650000.50"
+    assert to_json_safe(date(2026, 1, 2)) == "2026-01-02"
 
 
 class _GraphModels:
@@ -354,7 +359,7 @@ def test_a_listing_list_keeps_only_property_ids():
         {"property_id": 19806, "project_name_en": "Creek Tower"},
         {"building_id": 589050, "community_name_english": "Al Murar"},
     ]
-    assert listing_ids_from(state, rows) == ["15802", "19806", "589050"]
+    assert listing_card_ids_from_rows(state, rows) == ["15802", "19806", "589050"]
 
     state["query_route"] = QueryRoute(
         route=Route.NEED_DB,
@@ -363,7 +368,7 @@ def test_a_listing_list_keeps_only_property_ids():
         confidence=1,
         rationale="Average price.",
     )
-    assert listing_ids_from(state, rows) == []
+    assert listing_card_ids_from_rows(state, rows) == []
 
 
 def test_trace_survives_a_langfuse_outage():
@@ -397,7 +402,7 @@ def test_rows_that_are_live_listings_become_listing_cards_on_any_intent():
     state["domain_route"] = DomainRoute(domain_ids=["listings"], join_ids=[], confidence=1, rationale="Listing.")
     rows = [{"property_id": 7952, "title_en": "Marina flat", "permit_number": None}]
     sql = "SELECT p.id AS property_id, p.title_en, p.permit_number FROM public.properties AS p WHERE p.id = 7952"
-    assert listing_ids_from(state, rows, sql) == ["7952"]
+    assert listing_card_ids_from_rows(state, rows, sql) == ["7952"]
 
 
 def test_a_dld_property_id_is_not_a_listing():
@@ -406,8 +411,8 @@ def test_a_dld_property_id_is_not_a_listing():
         route=Route.NEED_DB, turn_kind=TurnKind.NEW, intent=Intent.LOOKUP, confidence=1, rationale="DLD unit."
     )
     rows = [{"property_id": 55, "amount": 1000000}]
-    assert listing_ids_from(state, rows, "SELECT t.property_id, t.amount FROM dld.transactions t") == []
-    assert listing_ids_from(state, rows, "SELECT avg(p.price_max) AS property_id FROM public.properties p") == []
+    assert listing_card_ids_from_rows(state, rows, "SELECT t.property_id, t.amount FROM dld.transactions t") == []
+    assert listing_card_ids_from_rows(state, rows, "SELECT avg(p.price_max) AS property_id FROM public.properties p") == []
 
 
 # Kinds of property and fixed recipes
@@ -415,34 +420,34 @@ def test_a_dld_property_id_is_not_a_listing():
 
 def test_an_average_must_not_mix_kinds_of_property():
     rules = segment_rules(["transactions", "market"])
-    mixed = blended_averages(
+    mixed = blended_average_reasons(
         "SELECT area_name_en, avg(actual_worth) FROM real_estate_transactions WHERE trans_group_en = 'Sales' "
         "GROUP BY area_name_en",
         rules,
     )
     assert len(mixed) == 1 and "property_sub_type_en" in mixed[0]
-    assert "trans_group_en" in blended_averages(
+    assert "trans_group_en" in blended_average_reasons(
         "SELECT property_sub_type_en, avg(actual_worth) FROM real_estate_transactions GROUP BY 1", rules
     )[0]
     # A presence check is not a split; filtering to the kind the user named is.
-    assert blended_averages(
+    assert blended_average_reasons(
         "SELECT avg(sale_price) FROM public.price_trend_buy_fact WHERE rooms_en IS NOT NULL", rules
     )
-    assert not blended_averages(
+    assert not blended_average_reasons(
         "SELECT avg(sale_price) FROM public.price_trend_buy_fact WHERE rooms_en = '2 B/R'", rules
     )
     # A grouping reached through a CTE alias counts, and so does a median.
-    assert not blended_averages(
+    assert not blended_average_reasons(
         "WITH s AS (SELECT rooms_en AS layout, sale_price FROM public.price_trend_buy_fact) "
         "SELECT CASE WHEN layout = 'Studio' THEN 0 ELSE 1 END AS beds, "
         "percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) FROM s GROUP BY 1",
         rules,
     )
-    assert blended_averages(
+    assert blended_average_reasons(
         "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) FROM public.price_trend_buy_fact", rules
     )
     # Counts and totals are not averages.
-    assert not blended_averages("SELECT count(*) FROM real_estate_transactions", rules)
+    assert not blended_average_reasons("SELECT count(*) FROM real_estate_transactions", rules)
 
 
 def test_every_declared_segment_is_a_column_of_its_table_or_a_join():
@@ -463,7 +468,7 @@ def test_a_blended_draft_is_redrafted_once_then_answered_with_a_note():
     assert "mixes kinds of property" in draft.errors[1]
     assert len(runner.calls) == 1
     assert update["sql_result"]["status"] == "rows"
-    assert BLENDED_NOTE in update["sql_result"]["notes"]
+    assert BLENDED_AVERAGE_NOTE in update["sql_result"]["notes"]
 
 
 def test_an_aggregate_filter_is_not_reported_as_a_condition():
@@ -488,8 +493,8 @@ def _grounded(*values: str, table: str = "public.price_trend_buy_fact", kind: st
 
 
 def test_a_recipe_binds_only_the_names_it_takes():
-    overview = recipe("dubai_market_overview")
-    community = recipe("community_sale_prices_by_bedrooms")
+    overview = get_recipe("dubai_market_overview")
+    community = get_recipe("community_sale_prices_by_bedrooms")
     assert bind_recipe(overview, Grounding()) is not None
     assert bind_recipe(overview, _grounded("Dubai Marina")) is None
     assert bind_recipe(community, Grounding()) is None
@@ -504,11 +509,11 @@ def test_a_recipe_binds_only_the_names_it_takes():
 
 
 def test_every_recipe_passes_the_guard_and_splits_kinds_of_property():
-    for item in recipes().values():
+    for item in load_recipes_by_id().values():
         grounding = _grounded("Dubai Marina") if item.params else Grounding()
         bound = bind_recipe(item, grounding)
         guarded = prepare_select(bound.sql, tables_in_domains(list(item.domains)), 100)
-        assert blended_averages(guarded, segment_rules(list(item.domains))) == [], item.id
+        assert blended_average_reasons(guarded, segment_rules(list(item.domains))) == [], item.id
 
 
 def test_a_chosen_recipe_answers_without_drafting_sql():

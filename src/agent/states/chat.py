@@ -5,7 +5,7 @@ from typing import Annotated, TypedDict
 from langgraph.graph.message import add_messages
 
 from agent.schemas.grounding import Grounding
-from agent.schemas.routes import Assumptions, DomainRoute, LastNeedDb, QueryRoute
+from agent.schemas.routes import DomainRoute, LastNeedDb, LookupAssumptions, QueryRoute
 
 
 class ChatState(TypedDict, total=False):
@@ -19,7 +19,7 @@ class ChatState(TypedDict, total=False):
     catalog_context: str
     grounding: Grounding | None
     last_need_db: LastNeedDb | None
-    assumptions: Assumptions | None
+    assumptions: LookupAssumptions | None
     awaiting_sql: bool
     query_frame: dict | None
     goal: dict | None

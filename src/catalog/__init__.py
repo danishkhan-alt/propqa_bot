@@ -1,23 +1,23 @@
 from catalog.registry import (
-    date_coverage,
-    domain_prompt,
+    get_table_date_coverage,
     list_domains,
     load_domain,
     load_domains,
-    load_prompt,
+    load_name_aliases,
+    load_named_value_declarations,
     load_recipes,
-    name_aliases,
-    named_columns,
+    render_domain_prompt,
+    render_domains_prompt,
 )
 
 __all__ = [
-    "date_coverage",
-    "domain_prompt",
+    "get_table_date_coverage",
+    "render_domain_prompt",
     "list_domains",
     "load_domain",
     "load_domains",
-    "load_prompt",
+    "render_domains_prompt",
     "load_recipes",
-    "name_aliases",
-    "named_columns",
+    "load_name_aliases",
+    "load_named_value_declarations",
 ]

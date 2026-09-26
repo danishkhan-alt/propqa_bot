@@ -1,24 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True, slots=True)
-class RateLimit:
-    """How many, how often, and under what name.
-
-    ``scope`` is part of the cache key, so two limits never share a counter
-    even when they measure the same caller.
-    """
-
-    scope: str
-    limit: int
-    window_seconds: int
-
-    @property
-    def description(self) -> str:
-        return f"{self.limit} per {self.window_seconds}s"
-
+from common.schemas.rate_limit import RateLimit
 
 # Sign-in: counted on failure only, so a good password does not eat quota
 # and an attacker cannot lock someone out by succeeding against their address.
@@ -31,7 +13,7 @@ SIGN_IN_CALLER = (SIGN_IN_CALLER_BURST, SIGN_IN_CALLER_HOURLY)
 SIGN_IN_ACCOUNT = (SIGN_IN_ACCOUNT_BURST, SIGN_IN_ACCOUNT_HOURLY)
 
 TOKEN_REFRESH = RateLimit("auth.token_refresh", 30, 300)
-REGISTER = RateLimit("auth.register", 5, 3600)
+REGISTER_ATTEMPTS = RateLimit("auth.register", 5, 3600)
 
 # Default ceilings. Visitors are cheaper to flood; registered users share an
 # office NAT so they get a higher per-person cap.
