@@ -24,7 +24,8 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft, SqlPage
-from agent.services.llm import invoke_structured_with_fallback, is_openai_reasoning_model
+from agent.services.llm.calls import invoke_structured_with_fallback
+from agent.services.llm.providers import is_openai_reasoning_model
 from agent.validator import sanitize_domain_route, sanitize_query_route
 
 GOLDEN = Path(__file__).resolve().parents[2] / "evals" / "router_golden.yaml"
@@ -385,7 +386,7 @@ def _schema_counts(node, counts=None) -> dict:
 def test_the_router_schema_stays_inside_the_structured_output_limits():
     # The API rejects more than 16 union-typed or 24 optional fields, and optional fields
     # slow grammar compilation, so every field is required and unions stay under the cap.
-    from agent.services.llm import build_strict_output_schema
+    from agent.services.llm.output_schema import build_strict_output_schema
 
     counts = _schema_counts(build_strict_output_schema(QueryRoute))
     assert counts["optional"] == 0
@@ -415,7 +416,7 @@ def test_a_reply_of_the_wrong_shape_is_retried_then_replaced():
 
 def test_router_schemas_are_accepted_by_strict_mode():
     # Strict mode needs closed objects and no keywords beside a $ref.
-    from agent.services.llm import build_strict_output_schema
+    from agent.services.llm.output_schema import build_strict_output_schema
 
     def walk(node):
         if isinstance(node, dict):

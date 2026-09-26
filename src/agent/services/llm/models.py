@@ -1,19 +1,17 @@
+"""The models the chat graph calls: routing, SQL drafting, and replies."""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
 
-import anthropic
-import openai
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
 
 from agent.enums.routing import TurnKind
 from agent.prompts.answer import DIRECT_ANSWER_SYSTEM, UNAVAILABLE_ANSWER_SYSTEM
 from agent.prompts.domain_router import DOMAIN_ROUTER_SYSTEM
+from agent.prompts.follow_up import FOLLOW_UP_KIND_SYSTEM
 from agent.prompts.query_router import QUERY_ROUTER_SYSTEM
 from agent.prompts.reply import FOCUSED_LISTINGS_REPLY_SYSTEM, STRUCTURED_REPLY_SYSTEM
 from agent.prompts.sql import SQL_ANSWER_SYSTEM, SQL_DRAFT_SYSTEM
@@ -22,248 +20,26 @@ from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft
 from agent.services import jev_domain_router
-from agent.services.typesafe import SystemOneClient, TypeSafeError
+from agent.services.jev_domain_router import build_jev_client
+from agent.services.llm.calls import (
+    invoke_structured_with_fallback,
+    stream_structured_reply_with_fallback,
+    stream_text_deltas,
+)
+from agent.services.llm.fallbacks import (
+    DOMAIN_ROUTE_FALLBACK,
+    FOLLOW_UP_KIND_FALLBACK,
+    QUERY_ROUTE_FALLBACK,
+    SQL_DRAFT_FALLBACK,
+)
+from agent.services.llm.output_schema import build_strict_output_schema
+from agent.services.llm.providers import build_cached_system_message, build_chat_models, constrained_output_options
+from agent.services.typesafe import TypeSafeError
 from agent.sql.recipes import load_recipes_by_id
 from catalog import list_domains
 from common.logger import get_logger
-from config import ActiveConfig
 
 logger = get_logger("agent.router")
-
-QUERY_ROUTE_FALLBACK = QueryRoute(
-    route="need_db",
-    turn_kind="new",
-    confidence=0.3,
-    rationale="Router output was invalid; defaulting to a database lookup.",
-)
-
-DOMAIN_ROUTE_FALLBACK = DomainRoute(
-    domain_ids=[],
-    join_ids=[],
-    confidence=0.3,
-    rationale="Domain router output was invalid.",
-)
-
-FOLLOW_UP_KIND_SYSTEM = """Classify this follow-up against the current query frame. Do not answer the user.
-
-kind is one of:
-- refine: same search, with a change to filters, sort, projection, or a row reference
-- pivot: same place or property, different subject
-- new: unrelated request
-"""
-
-FOLLOW_UP_KIND_FALLBACK = FollowUpClassification(kind="new")
-
-_TRANSIENT_CLIENT_STATUS_CODES = frozenset({408, 409, 429})
-
-SQL_DRAFT_FALLBACK = SqlDraft(sql="", purpose="The draft was empty.")
-REPLY_FALLBACK = StructuredReply(
-    intro_text="Sorry, I couldn't put that answer together just now. Could you ask me again?"
-)
-
-
-def build_strict_output_schema(model: type[BaseModel]) -> dict:
-    """The JSON schema a structured call is constrained to, with every field required.
-
-    The API allows at most 24 optional and 16 union-typed fields, and each optional field
-    makes the grammar slower to compile. Here every field is required, nullable ones as
-    unions, so the model always writes each field. Python defaults still apply wherever
-    code builds these models. Objects are closed, as OpenAI's strict mode requires.
-    """
-    schema = model.model_json_schema(mode="serialization")
-    defs = schema.get("$defs", {})
-    shaped = _inline_annotated_refs({key: value for key, value in schema.items() if key != "$defs"}, defs)
-    used = _referenced_defs(shaped, defs)
-    if used:
-        shaped["$defs"] = {name: _inline_annotated_refs(defs[name], defs) for name in used}
-    return _require_every_property(shaped)
-
-
-def _referenced_defs(node, defs: dict) -> list[str]:
-    """Definitions still reached by a $ref, following refs inside definitions too."""
-    found: list[str] = []
-    pending = [node]
-    while pending:
-        current = pending.pop()
-        if isinstance(current, list):
-            pending.extend(current)
-        elif isinstance(current, dict):
-            ref = current.get("$ref")
-            name = ref.removeprefix("#/$defs/") if isinstance(ref, str) else None
-            if name in defs and name not in found:
-                found.append(name)
-                pending.append(_inline_annotated_refs(defs[name], defs))
-            pending.extend(current.values())
-    return found
-
-
-def _inline_annotated_refs(node, defs: dict):
-    """Strict mode rejects a $ref with sibling keywords, so inline that definition instead.
-
-    The field's description is kept; its default is dropped, since every field is written.
-    """
-    if isinstance(node, list):
-        return [_inline_annotated_refs(item, defs) for item in node]
-    if not isinstance(node, dict):
-        return node
-    ref = node.get("$ref")
-    if isinstance(ref, str) and len(node) > 1 and ref.startswith("#/$defs/"):
-        target = defs.get(ref.removeprefix("#/$defs/"))
-        if isinstance(target, dict):
-            siblings = {key: value for key, value in node.items() if key not in ("$ref", "default")}
-            return _inline_annotated_refs({**target, **siblings}, defs)
-    return {key: _inline_annotated_refs(value, defs) for key, value in node.items()}
-
-
-def _require_every_property(node):
-    if isinstance(node, dict):
-        shaped = {key: _require_every_property(value) for key, value in node.items()}
-        if isinstance(shaped.get("properties"), dict):
-            shaped["required"] = list(shaped["properties"])
-            shaped["additionalProperties"] = False
-        return shaped
-    if isinstance(node, list):
-        return [_require_every_property(item) for item in node]
-    return node
-
-
-def invoke_structured_with_fallback(
-    runnable, messages: list, config: RunnableConfig | None, fallback
-):
-    """Call a structured runnable once, retry once, then return the fallback.
-
-    The reply is validated as the fallback's model inside each attempt, so an answer of the
-    wrong shape is retried and then replaced, never raised into the graph.
-    """
-    shape = type(fallback)
-
-    def once(payload: list):
-        result = runnable.invoke(payload, config=config)
-        if isinstance(result, dict) and "parsed" in result:
-            error = result.get("parsing_error")
-            if error:
-                raise ValueError(str(error))
-            result = result.get("parsed")
-            if result is None:
-                raise ValueError("structured output was empty")
-        return result if isinstance(result, shape) else shape.model_validate(result)
-
-    try:
-        return once(messages)
-    except Exception as first_error:
-        logger.warning(
-            "router structured output failed",
-            extra={"extra_data": {"error": type(first_error).__name__}},
-        )
-        if is_permanent_api_error(first_error):
-            return fallback
-        retry = [
-            *messages,
-            HumanMessage(content="Return valid JSON matching the schema. No prose."),
-        ]
-        try:
-            return once(retry)
-        except Exception as second_error:
-            logger.warning(
-                "router structured output retry failed",
-                extra={"extra_data": {"error": type(second_error).__name__}},
-            )
-            return fallback
-
-
-def is_permanent_api_error(error: Exception) -> bool:
-    """A 4xx the provider SDK does not retry (bad request, auth, not found, too long).
-
-    The same request fails the same way again, so a second attempt only adds a round trip.
-    408, 409, and 429 are transient, as are 5xx and connection errors.
-    """
-    if not isinstance(error, (anthropic.APIStatusError, openai.APIStatusError)):
-        return False
-    return 400 <= error.status_code < 500 and error.status_code not in _TRANSIENT_CLIENT_STATUS_CODES
-
-
-def _anthropic_chat_models():
-    api_key = ActiveConfig.ANTHROPIC_API_KEY or None
-
-    def main(effort: str):
-        # Thinking tokens come out of max_tokens, so each route gets the full output
-        # budget and an explicit effort instead of a small hard cap.
-        return ChatAnthropic(
-            model=ActiveConfig.AI_MODEL,
-            api_key=api_key,
-            max_tokens=ActiveConfig.LLM_MAX_OUTPUT_TOKENS,
-            thinking={"type": "adaptive"},
-            effort=effort,
-        )
-
-    router = ChatAnthropic(model=ActiveConfig.ROUTER_MODEL, api_key=api_key, max_tokens=1024)
-    return router, main(ActiveConfig.AI_REPLY_EFFORT), main(ActiveConfig.AI_SQL_EFFORT)
-
-
-def _openai_chat_models():
-    api_key = ActiveConfig.OPENAI_API_KEY or None
-
-    def build(model: str, effort: str, max_tokens: int):
-        # Reasoning tokens come out of max_tokens, as with Claude's thinking. A model that
-        # does not reason (gpt-4.1, gpt-4o) rejects the effort setting, so it gets none.
-        reasoning = {"reasoning_effort": effort} if effort and is_openai_reasoning_model(model) else {}
-        return ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            max_tokens=max_tokens,
-            stream_usage=True,
-            **reasoning,
-        )
-
-    # The router reasons as well, so it needs more headroom than a Claude router.
-    router = build(ActiveConfig.ROUTER_MODEL, ActiveConfig.ROUTER_EFFORT, 4096)
-    answer = build(ActiveConfig.AI_MODEL, ActiveConfig.AI_REPLY_EFFORT, ActiveConfig.LLM_MAX_OUTPUT_TOKENS)
-    sql = build(ActiveConfig.AI_MODEL, ActiveConfig.AI_SQL_EFFORT, ActiveConfig.LLM_MAX_OUTPUT_TOKENS)
-    return router, answer, sql
-
-
-def is_openai_reasoning_model(model: str) -> bool:
-    """OpenAI's reasoning families: the o-series and gpt-5, except its non-reasoning chat variant."""
-    name = model.lower().rsplit("/", 1)[-1]
-    if name.startswith("gpt-5"):
-        return "-chat" not in name
-    return len(name) > 1 and name[0] == "o" and name[1].isdigit()
-
-
-_CHAT_MODEL_BUILDERS_BY_PROVIDER = {"anthropic": _anthropic_chat_models, "openai": _openai_chat_models}
-
-
-def constrained_output_options() -> dict:
-    """Options that make a json_schema call enforce its schema on the active provider.
-
-    Claude's json_schema method always constrains decoding. OpenAI only does when strict
-    is set; without it the schema is a hint, and the model can answer in another shape.
-    """
-
-    return {"strict": True} if ActiveConfig.LLM_PROVIDER == "openai" else {}
-
-
-def build_cached_system_message(text: str) -> SystemMessage:
-    """A system message the provider may reuse across calls that start with it.
-
-    OpenAI caches any repeated prefix of 1024 tokens or more on its own. Claude caches
-    only up to a block marked with cache_control, so the marker is added there.
-    """
-
-    if ActiveConfig.LLM_PROVIDER == "anthropic":
-        return SystemMessage(content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}])
-    return SystemMessage(content=text)
-
-
-def build_chat_models():
-    """(router, answer, sql) chat models from the provider set by LLM_PROVIDER."""
-
-    provider = ActiveConfig.LLM_PROVIDER
-    if provider not in _CHAT_MODEL_BUILDERS_BY_PROVIDER:
-        raise ValueError(
-            f"LLM_PROVIDER={provider!r} is not supported; use one of {sorted(_CHAT_MODEL_BUILDERS_BY_PROVIDER)}"
-        )
-    return _CHAT_MODEL_BUILDERS_BY_PROVIDER[provider]()
 
 
 class LangChainAgentModels:
@@ -330,7 +106,14 @@ class LangChainAgentModels:
     ) -> DomainRoute:
         if self._jev is not None:
             try:
-                return _route_domain_jev(self._jev, message, turn_kind, last_need_db)
+                return jev_domain_router.route_domain(
+                    self._jev,
+                    message=message,
+                    turn_kind=turn_kind,
+                    last_need_db=last_need_db,
+                    domains=list_domains(),
+                    recipes={item.id: item.when for item in load_recipes_by_id().values()},
+                )
             except TypeSafeError as exc:
                 logger.warning(
                     "router.domain.jev failed; using the router model",
@@ -357,7 +140,7 @@ class LangChainAgentModels:
         memory_block: str = "",
         config: RunnableConfig | None = None,
     ):
-        yield from _stream_text_deltas(
+        yield from stream_text_deltas(
             self._answer,
             [
                 SystemMessage(content=DIRECT_ANSWER_SYSTEM),
@@ -395,7 +178,7 @@ class LangChainAgentModels:
         history: str,
         config: RunnableConfig | None = None,
     ):
-        yield from _stream_text_deltas(
+        yield from stream_text_deltas(
             self._answer,
             [
                 SystemMessage(content=UNAVAILABLE_ANSWER_SYSTEM),
@@ -492,7 +275,7 @@ class LangChainAgentModels:
             "filters": filters or [],
             "coverage": coverage or [],
         }
-        yield from _stream_text_deltas(
+        yield from stream_text_deltas(
             self._sql_answer,
             [
                 SystemMessage(content=SQL_ANSWER_SYSTEM),
@@ -634,101 +417,6 @@ class LangChainAgentModels:
             config,
             FOLLOW_UP_KIND_FALLBACK,
         ).kind
-
-
-def stream_structured_reply_with_fallback(
-    runnable,
-    messages: list,
-    config: RunnableConfig | None,
-    on_text: Callable[[str], None] | None,
-) -> StructuredReply:
-    """Stream intro_text through `on_text`, then validate the whole reply.
-
-    If the stream breaks after text was shown, keep that text rather than replace it.
-    If it breaks before, fall back to one non-streaming call with a retry, unless the
-    provider rejected the request outright, which a second call would repeat.
-    """
-    shown = ""
-    latest: dict = {}
-    try:
-        for partial in runnable.stream(messages, config=config):
-            if not isinstance(partial, dict):
-                continue
-            latest = partial
-            text = partial.get("intro_text")
-            # A partial string only grows. Anything else is a half-parsed escape; wait for more.
-            if isinstance(text, str) and len(text) > len(shown) and text.startswith(shown):
-                delta, shown = text[len(shown):], text
-                if on_text is not None:
-                    on_text(delta)
-        return StructuredReply.model_validate(latest)
-    except Exception as exc:
-        logger.warning(
-            "answer.structured stream failed",
-            extra={"extra_data": {"error": type(exc).__name__, "shown": bool(shown)}},
-        )
-        if shown.strip():
-            return StructuredReply(intro_text=shown)
-        if is_permanent_api_error(exc):
-            reply = REPLY_FALLBACK
-        else:
-            reply = invoke_structured_with_fallback(runnable, messages, config, REPLY_FALLBACK)
-    if on_text is not None and reply.intro_text:
-        on_text(reply.intro_text)
-    return reply
-
-
-def _stream_text_deltas(runnable, messages: list, config: RunnableConfig | None):
-    for chunk in runnable.stream(messages, config=config):
-        text = _chunk_text(chunk)
-        if text:
-            yield text
-
-
-def _chunk_text(chunk) -> str:
-    content = getattr(chunk, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and block.get("type") == "text":
-                parts.append(str(block.get("text") or ""))
-        return "".join(parts)
-    return ""
-
-
-def build_jev_client(domain_router: str | None = None) -> SystemOneClient | None:
-    """The Jev client when the domain router (DOMAIN_ROUTER by default) is jev, else None."""
-
-    router = domain_router or ActiveConfig.DOMAIN_ROUTER
-    if router == "llm":
-        return None
-    if router != "jev":
-        raise ValueError(f"DOMAIN_ROUTER={router!r} is not supported; use 'jev' or 'llm'")
-    return SystemOneClient(
-        api_key=ActiveConfig.JEV_API_KEY,
-        model=ActiveConfig.JEV_MODEL,
-        timeout_seconds=ActiveConfig.JEV_TIMEOUT_MS / 1000,
-    )
-
-
-def _route_domain_jev(
-    client: SystemOneClient,
-    message: str,
-    turn_kind: TurnKind,
-    last_need_db: LastNeedDb | None,
-) -> DomainRoute:
-    return jev_domain_router.route_domain(
-        client,
-        message=message,
-        turn_kind=turn_kind,
-        last_need_db=last_need_db,
-        domains=list_domains(),
-        recipes={item.id: item.when for item in load_recipes_by_id().values()},
-    )
 
 
 _models: LangChainAgentModels | None = None

@@ -14,7 +14,7 @@ from agent.context import AgentContext
 from agent.grounding import get_grounding_cache, ground_names
 from agent.schemas.grounding import GroundedName, Grounding
 from agent.schemas.routes import as_domain_route, as_query_route
-from agent.services.llm import get_default_models
+from agent.services.llm.models import get_default_models
 from agent.services.stream_events import publish_stream_event
 from agent.services.tracing import get_langfuse_client
 from agent.sql.cards import fetch_listing_card_rows, fetch_listing_cards

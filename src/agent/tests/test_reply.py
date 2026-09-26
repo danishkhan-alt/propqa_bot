@@ -19,7 +19,8 @@ from agent.schemas.reply import (
     StructuredReply,
 )
 from agent.schemas.routes import QueryRoute
-from agent.services.llm import REPLY_FALLBACK, stream_structured_reply_with_fallback
+from agent.services.llm.calls import stream_structured_reply_with_fallback
+from agent.services.llm.fallbacks import REPLY_FALLBACK
 from agent.sql.cards import fetch_listing_cards, prompt_listing_facts
 
 
