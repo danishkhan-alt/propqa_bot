@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from agent.enums.routing import TurnKind
-from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
+from agent.enums.routing import Intent, TurnKind
+from agent.schemas.routes import Assumptions, DomainRoute, LastNeedDb, QueryRoute
+from common.schemas.pagination import page_request
 
 MAX_PRIMARY = 3
 MAX_TOTAL = 3
+# Row results share one page window. An average or a single lookup does not.
+_PAGED_INTENTS = frozenset({Intent.LIST, Intent.RANK})
 
 
 def apply_query_policy(
@@ -91,3 +94,16 @@ def _known_ids() -> set[str]:
     from catalog import list_domains
 
     return {str(domain["id"]) for domain in list_domains()}
+
+
+def build_lookup_assumptions(route: QueryRoute) -> Assumptions:
+    """Keep the model's purpose and order. Page a list with the shared window."""
+    if route.intent not in _PAGED_INTENTS:
+        return Assumptions(purpose=route.purpose, limit=route.limit, order=route.order)
+    window = page_request(per_page=route.limit)
+    return Assumptions(
+        purpose=route.purpose,
+        limit=window.per_page,
+        order=route.order,
+        page=window.page,
+    )

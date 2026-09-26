@@ -19,7 +19,7 @@ from langgraph.types import Command
 
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
-from agent.graphs.workflow import build_chat_graph
+from agent.graph.workflow import build_chat_graph
 from agent.sql.execute import SqlPage
 from agent.memory.write.upsert import write_memories
 from agent.memory.maintenance.consolidate import consolidate_user

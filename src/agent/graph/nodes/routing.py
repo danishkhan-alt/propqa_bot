@@ -1,4 +1,4 @@
-"""Graph nodes that pick the route and the data domains for a turn."""
+"""Graph nodes that choose the route and the data domains for a turn, and the branches after them."""
 
 from __future__ import annotations
 
@@ -6,14 +6,11 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
-from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.memory import load_working_memory_and_profile
-from agent.graphs.runtime import models_for
+from agent.enums.routing import Route, TurnKind
+from agent.graph.nodes.runtime import models_for
 from agent.reply.clarify import merge_profile
 from agent.schemas.routes import (
-    Assumptions,
     DomainRoute,
-    QueryRoute,
     as_domain_route,
     as_last_need_db,
     as_query_route,
@@ -23,24 +20,10 @@ from agent.services.transcript import history_summary, latest_user_text
 from agent.sql.listing_search import category_names
 from agent.sql.recipes import recipe_index_text
 from agent.states.chat import ChatState
-from agent.validator import apply_query_policy, sanitize_domain_route
+from agent.validator import apply_query_policy, build_lookup_assumptions, sanitize_domain_route
 from common.logger import get_logger
-from common.schemas.pagination import page_request
 
-logger = get_logger("agent.router")
-
-# Row results share one page window. An average or a single lookup does not.
-_PAGED_INTENTS = frozenset({Intent.LIST, Intent.RANK})
-
-
-def load_session_context(
-    state: ChatState,
-    runtime: Runtime[AgentContext],
-    config: RunnableConfig,
-) -> dict:
-    update = {"user_id": runtime.context.user_id}
-    update.update(load_working_memory_and_profile(runtime, config))
-    return update
+logger = get_logger("agent.routing")
 
 
 def choose_query_route(
@@ -81,7 +64,7 @@ def choose_query_route(
     )
     assumptions = None
     if route.route is Route.NEED_DB:
-        assumptions = _build_lookup_assumptions(route)
+        assumptions = build_lookup_assumptions(route)
     update: dict = {
         "query_route": route,
         "assumptions": assumptions,
@@ -156,16 +139,3 @@ def next_step_after_domain_choice(state: ChatState) -> str:
     if domain is not None and domain.domain_ids:
         return "personalize_search_frame"
     return "write_reply"
-
-
-def _build_lookup_assumptions(route: QueryRoute) -> Assumptions:
-    """Keep the model's purpose and order. Page a list with the shared window."""
-    if route.intent not in _PAGED_INTENTS:
-        return Assumptions(purpose=route.purpose, limit=route.limit, order=route.order)
-    window = page_request(per_page=route.limit)
-    return Assumptions(
-        purpose=route.purpose,
-        limit=window.per_page,
-        order=route.order,
-        page=window.page,
-    )

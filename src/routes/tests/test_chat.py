@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.workflow import build_chat_graph
+from agent.graph.workflow import build_chat_graph
 from agent.memory.session.bootstrap import close_memory
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, QueryRoute

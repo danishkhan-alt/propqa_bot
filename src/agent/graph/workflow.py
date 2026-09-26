@@ -8,25 +8,29 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agent.checkpointer import get_checkpointer
 from agent.context import AgentContext
-from agent.graphs.answer import write_reply
-from agent.graphs.catalog import load_domain_catalog, record_search_and_clear_turn_state
-from agent.graphs.focus import load_focused_listings, next_step_after_session_context
-from agent.graphs.memory import (
-    personalize_search_frame,
+from agent.graph.nodes.catalog import load_domain_catalog
+from agent.graph.nodes.focus import (
+    load_focused_listings,
+    next_step_after_session_context,
+)
+from agent.graph.nodes.lookup import resolve_mentioned_names, run_warehouse_lookup
+from agent.graph.nodes.memory import (
     ask_before_forgetting_memory,
+    load_session_context,
+    next_step_after_search_frame_update,
+    personalize_search_frame,
     queue_memory_extraction,
     recall_long_term_memories,
     update_search_frame,
-    next_step_after_search_frame_update,
 )
-from agent.graphs.router import (
+from agent.graph.nodes.reply import write_reply
+from agent.graph.nodes.routing import (
     choose_data_domains,
-    load_session_context,
     choose_query_route,
     next_step_after_domain_choice,
     next_step_after_query_route,
 )
-from agent.graphs.sql import resolve_mentioned_names, run_warehouse_lookup
+from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
 from agent.states.chat import ChatInput, ChatState
 from common.logger import get_logger
 
@@ -65,13 +69,29 @@ def build_chat_graph(checkpointer=None, store=None) -> CompiledStateGraph:
         builder.add_node(node.__name__, with_node_timing(node))
 
     builder.add_edge(START, "load_session_context")
-    builder.add_conditional_edges("load_session_context", next_step_after_session_context, ["load_focused_listings", "recall_long_term_memories"])
+    builder.add_conditional_edges(
+        "load_session_context",
+        next_step_after_session_context,
+        ["load_focused_listings", "recall_long_term_memories"],
+    )
     builder.add_edge("load_focused_listings", "write_reply")
     builder.add_edge("recall_long_term_memories", "update_search_frame")
-    builder.add_conditional_edges("update_search_frame", next_step_after_search_frame_update, ["ask_before_forgetting_memory", "choose_query_route"])
+    builder.add_conditional_edges(
+        "update_search_frame",
+        next_step_after_search_frame_update,
+        ["ask_before_forgetting_memory", "choose_query_route"],
+    )
     builder.add_edge("ask_before_forgetting_memory", END)
-    builder.add_conditional_edges("choose_query_route", next_step_after_query_route, ["choose_data_domains", "write_reply"])
-    builder.add_conditional_edges("choose_data_domains", next_step_after_domain_choice, ["personalize_search_frame", "write_reply"])
+    builder.add_conditional_edges(
+        "choose_query_route",
+        next_step_after_query_route,
+        ["choose_data_domains", "write_reply"],
+    )
+    builder.add_conditional_edges(
+        "choose_data_domains",
+        next_step_after_domain_choice,
+        ["personalize_search_frame", "write_reply"],
+    )
     builder.add_edge("personalize_search_frame", "load_domain_catalog")
     builder.add_edge("load_domain_catalog", "resolve_mentioned_names")
     builder.add_edge("resolve_mentioned_names", "run_warehouse_lookup")
@@ -96,7 +116,10 @@ def with_node_timing(node):
             return node(*args, **kwargs)
         finally:
             elapsed_ms = int((time.perf_counter() - started) * 1000)
-            logger.info("node.timing", extra={"extra_data": {"node": node.__name__, "ms": elapsed_ms}})
+            logger.info(
+                "node.timing",
+                extra={"extra_data": {"node": node.__name__, "ms": elapsed_ms}},
+            )
 
     return run
 

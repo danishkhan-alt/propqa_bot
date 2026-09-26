@@ -6,13 +6,12 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
-from agent.context import AgentContext, RouterModels
+from agent.context import AgentContext
 from agent.enums.routing import Route
-from agent.graphs.runtime import models_for
-from agent.memory.read.prompt_text import append_memory_notes
+from agent.graph.nodes.runtime import models_for
 from agent.reply.clarify import Question, next_question
-from agent.reply.figures import reply_blocks
-from agent.schemas.reply import StructuredReply
+from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
+from agent.reply.streaming import stream_memory_notes, stream_prose_reply, stream_structured_reply
 from agent.schemas.routes import (
     QueryRoute,
     as_assumptions,
@@ -26,9 +25,8 @@ from agent.sql.lookup import EMPTY_LOOKUP_REPLY, FAILED_LOOKUP_REPLY
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
-logger = get_logger("agent.router")
+logger = get_logger("agent.reply")
 
-FOCUSED_LISTINGS_DATA_NOTE = "the listing's advert and nearby places"
 MISSING_LISTINGS_REPLY = (
     "I couldn't find the listings you selected. They may have been taken off the market. "
     "Remove them from the chat and pick another listing to ask about."
@@ -51,7 +49,7 @@ def write_reply(
 
     if query.route is Route.DIRECT_ANSWER:
         question = _next_profile_question(state, query, has_listings=False)
-        structured = _stream_structured_reply(
+        structured = stream_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -61,7 +59,7 @@ def write_reply(
             config=config,
         )
         if structured is None:
-            text = _stream_prose_reply(
+            text = stream_prose_reply(
                 models_for(runtime),
                 "answer_direct",
                 message=message,
@@ -71,7 +69,7 @@ def write_reply(
             )
         else:
             text = structured
-        text = _append_and_stream_memory_notes(text, state)
+        text = _stream_memory_notes(text, state)
         return _reply_state_update(state, text, question if structured is not None else None)
 
     domain = as_domain_route(state.get("domain_route"))
@@ -107,7 +105,7 @@ def _reply_from_lookup_results(
             rows, columns = [], []
         else:
             rows = rows[:PROMPT_LISTING_LIMIT]
-    note = _describe_data_sources(result.get("domain_ids") or [])
+    note = describe_data_sources(result.get("domain_ids") or [])
     search_notes = [str(item) for item in (result.get("notes") or [])]
     filters = [str(item) for item in (result.get("filters") or [])]
     coverage = list(result.get("coverage") or [])
@@ -116,7 +114,7 @@ def _reply_from_lookup_results(
     structured = None
     if status in ("rows", "empty"):
         question = _next_profile_question(state, query, has_listings=bool(listing_ids))
-        structured = _stream_structured_reply(
+        structured = stream_structured_reply(
             models_for(runtime),
             message=message,
             messages=messages,
@@ -141,7 +139,7 @@ def _reply_from_lookup_results(
     if structured is not None:
         text = structured
     elif status == "rows":
-        text = _stream_prose_reply(
+        text = stream_prose_reply(
             models_for(runtime),
             "answer_from_sql",
             message=message,
@@ -166,7 +164,7 @@ def _reply_from_lookup_results(
     else:
         text = FAILED_LOOKUP_REPLY
         publish("text", delta=text)
-    text = _append_and_stream_memory_notes(text, state)
+    text = _stream_memory_notes(text, state)
     logger.info(
         "answer.synthesize",
         extra={
@@ -197,9 +195,9 @@ def _reply_about_focused_listings(
     listings = list(state.get("focused_listings") or [])
     structured = None
     if listings:
-        structured = _stream_structured_reply(
+        structured = stream_structured_reply(
             models_for(runtime),
-            method="draft_listing_reply",
+            method_name="draft_listing_reply",
             message=message,
             messages=messages,
             listings=listings,
@@ -234,66 +232,21 @@ def _reply_without_data(
     messages: list,
     config: RunnableConfig,
 ) -> dict:
-    text = _stream_prose_reply(
+    text = stream_prose_reply(
         models_for(runtime),
         "answer_unavailable",
         message=message,
         history=history_summary(messages, limit=ANSWER_HISTORY),
         config=config,
     )
-    text = _append_and_stream_memory_notes(text, state)
+    text = _stream_memory_notes(text, state)
     return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
 
 
-def _stream_prose_reply(models: RouterModels, name: str, **kwargs) -> str:
-    """Stream each text piece as the model produces it, and return the reply."""
-    stream = getattr(models, f"stream_{name}", None)
-    if callable(stream):
-        parts: list[str] = []
-        for delta in stream(**kwargs):
-            piece = delta if isinstance(delta, str) else str(delta or "")
-            if not piece:
-                continue
-            parts.append(piece)
-            publish("text", delta=piece)
-        return "".join(parts).strip()
-    text = str(getattr(models, name)(**kwargs) or "").strip()
-    if text:
-        publish("text", delta=text)
-    return text
-
-
-def _append_and_stream_memory_notes(text: str, state: ChatState) -> str:
-    noted = append_memory_notes(
+def _stream_memory_notes(text: str, state: ChatState) -> str:
+    return stream_memory_notes(
         text, state.get("disclosure") or "", state.get("memory_question") or ""
     )
-    extra = noted[len(text) :] if noted.startswith(text) else ""
-    if extra.strip():
-        publish("text", delta=extra)
-    return noted
-
-
-_SOURCE_PHRASE_BY_DOMAIN = {
-    "listings": "live asking prices and registered property records",
-    "transactions": "registered sales and rent contracts",
-    "market": "official price indices and community averages",
-    "regulations": "owners-association service charges",
-    "developers": "project and developer records",
-    "schools": "school ratings and fees",
-    "amenities": "parks, healthcare, and building amenities",
-    "rta": "metro, roads, and parking",
-    "agencies": "licensed brokers and offices",
-    "locations": "community records",
-}
-
-
-def _describe_data_sources(domain_ids: list) -> str:
-    phrases: list[str] = []
-    for domain_id in domain_ids:
-        phrase = _SOURCE_PHRASE_BY_DOMAIN.get(str(domain_id))
-        if phrase and phrase not in phrases:
-            phrases.append(phrase)
-    return "; ".join(phrases)
 
 
 def _next_profile_question(
@@ -314,56 +267,3 @@ def _reply_state_update(state: ChatState, text: str, question: Question | None) 
     if question is not None:
         update["profile_asked"] = [*(state.get("profile_asked") or []), question.id]
     return update
-
-
-def _stream_structured_reply(
-    models: RouterModels,
-    *,
-    method: str = "draft_reply",
-    message: str,
-    messages: list,
-    session_profile: dict,
-    question: Question | None,
-    config: RunnableConfig,
-    **fields,
-) -> str | None:
-    """Stream a structured reply when the model supports it. Otherwise the caller streams prose."""
-    draft = getattr(models, method, None)
-    if not callable(draft):
-        return None
-    if question is not None:
-        fields["follow_up_question"] = question.prompt
-    try:
-        parsed = draft(
-            message=message,
-            history=history_summary(messages, limit=ANSWER_HISTORY),
-            session_profile=session_profile,
-            on_text=lambda delta: publish("text", delta=delta),
-            config=config,
-            **fields,
-        )
-    except Exception:
-        logger.warning("answer.structured failed", exc_info=True)
-        return None
-    reply = (
-        parsed
-        if isinstance(parsed, StructuredReply)
-        else StructuredReply.model_validate(parsed)
-    )
-    payload = reply.model_dump()
-    # Listings have their own photo cards, so their rows are never laid out as figures.
-    figure_rows = [] if fields.get("listings") else list(fields.get("rows") or [])
-    payload.update(reply_blocks(reply, figure_rows, list(fields.get("columns") or [])))
-    payload["question"] = question.payload() if question is not None else None
-    if question is not None:
-        # The question already has its own tap options; a chip repeating it is noise.
-        asked = question.prompt.casefold()
-        payload["suggested_followups"] = [
-            item for item in reply.suggested_followups if item.casefold() not in asked
-        ]
-    note = fields.get("data_note") or ""
-    if note and not payload.get("data_source_note"):
-        payload["data_source_note"] = note
-    payload["session_profile"] = session_profile
-    publish("reply", type="reply", reply=payload)
-    return reply.intro_text.strip()

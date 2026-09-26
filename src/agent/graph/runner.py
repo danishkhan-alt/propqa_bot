@@ -7,12 +7,12 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
 from agent.context import AgentContext, RouterModels
-from agent.graphs.workflow import get_chat_graph
+from agent.graph.workflow import get_chat_graph
 from agent.schemas.routes import as_query_route
 from agent.services.tracing import langfuse_client
 from common.logger import get_logger
 
-logger = get_logger("agent.router")
+logger = get_logger("agent.runner")
 
 
 def run_turn(
@@ -86,7 +86,9 @@ async def stream_turn(
             Command(resume=message)
             if paused_at_start
             else _build_turn_input(
-                message, session_profile=session_profile, focused_property_ids=focused_property_ids
+                message,
+                session_profile=session_profile,
+                focused_property_ids=focused_property_ids,
             )
         )
         async for item in compiled.astream(
@@ -100,7 +102,11 @@ async def stream_turn(
             if mode == "custom" and isinstance(chunk, dict) and chunk.get("event"):
                 yield chunk
                 continue
-            if mode == "updates" and isinstance(chunk, dict) and "__interrupt__" in chunk:
+            if (
+                mode == "updates"
+                and isinstance(chunk, dict)
+                and "__interrupt__" in chunk
+            ):
                 prompt = _interrupt_prompt_text(chunk["__interrupt__"])
                 if prompt:
                     yield {"event": "text", "delta": prompt}

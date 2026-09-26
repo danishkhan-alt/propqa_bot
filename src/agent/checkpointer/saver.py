@@ -57,7 +57,7 @@ def close_checkpointer() -> None:
 
 
 def _drop_compiled_graph() -> None:
-    from agent.graphs import workflow
+    from agent.graph import workflow
 
     workflow._graph = None
 

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent.graphs.chat import stream_turn
+from agent.graph.runner import stream_turn
 from agent.sql.listing_details import MAX_FOCUSED_LISTINGS
 from common.identity import Caller
 from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE

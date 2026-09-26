@@ -14,7 +14,7 @@ from agent.sql.listing_details import focused_listing_facts, load_details_from_w
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
-logger = get_logger("agent.router")
+logger = get_logger("agent.focus")
 
 
 def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
@@ -42,4 +42,8 @@ def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> d
 
 
 def next_step_after_session_context(state: ChatState) -> str:
-    return "load_focused_listings" if state.get("focused_property_ids") else "recall_long_term_memories"
+    return (
+        "load_focused_listings"
+        if state.get("focused_property_ids")
+        else "recall_long_term_memories"
+    )

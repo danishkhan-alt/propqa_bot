@@ -10,8 +10,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.catalog import load_domain_catalog, record_search_and_clear_turn_state
-from agent.graphs.workflow import build_chat_graph
+from agent.graph.nodes.catalog import load_domain_catalog
+from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
+from agent.graph.workflow import build_chat_graph
 from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
     DomainRoute,
