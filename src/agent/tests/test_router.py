@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graphs.catalog import catalog_load, finalize
-from agent.graphs.chat import build_chat_graph
+from agent.graphs.workflow import build_chat_graph
 from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
     DomainRoute,

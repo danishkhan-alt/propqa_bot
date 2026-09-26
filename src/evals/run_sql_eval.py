@@ -105,7 +105,7 @@ def _run_case(case: dict) -> TurnOutcome:
     from langgraph.checkpoint.memory import InMemorySaver
 
     from agent.context import AgentContext
-    from agent.graphs.chat import build_chat_graph
+    from agent.graphs.workflow import build_chat_graph
 
     # In memory only: the eval never writes to the chatbot database.
     graph = build_chat_graph(InMemorySaver())

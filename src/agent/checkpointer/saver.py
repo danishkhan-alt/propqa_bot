@@ -57,9 +57,9 @@ def close_checkpointer() -> None:
 
 
 def _drop_compiled_graph() -> None:
-    from agent.graphs import chat as chat_graph
+    from agent.graphs import workflow
 
-    chat_graph._graph = None
+    workflow._graph = None
 
 
 def _open_saver() -> BaseCheckpointSaver:

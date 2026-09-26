@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent.checkpointer import RedisCheckpoint, delete_thread
 from agent.context import AgentContext
 from agent.enums.routing import Route, TurnKind
-from agent.graphs.chat import build_chat_graph
+from agent.graphs.workflow import build_chat_graph
 from agent.schemas.routes import (
     Assumptions,
     DomainRoute,

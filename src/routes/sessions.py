@@ -143,7 +143,7 @@ def _graph(request: Request):
     compiled = getattr(request.app.state, "chat_graph", None)
     if compiled is not None:
         return compiled
-    from agent.graphs.chat import get_chat_graph
+    from agent.graphs.workflow import get_chat_graph
 
     return get_chat_graph()
 

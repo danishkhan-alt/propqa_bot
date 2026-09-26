@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
-from agent.graphs.chat import build_chat_graph
+from agent.graphs.workflow import build_chat_graph
 from agent.grounding import GroundingIndex
 from agent.grounding.places import Breadth, ListingLinks, LocationNode, build_place_directory
 from agent.grounding.stored_values import StoredValue, StoredValueIndex
