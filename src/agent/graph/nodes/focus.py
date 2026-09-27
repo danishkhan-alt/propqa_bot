@@ -10,7 +10,7 @@ from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
 from agent.sql.cards import fetch_listing_card_rows
-from agent.sql.listing_details import fetch_focused_listing_facts, fetch_listing_detail_rows
+from agent.sql.listing_details import fetch_focused_listings, fetch_listing_detail_rows
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
@@ -21,7 +21,7 @@ def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> d
     if runtime.context is None:
         raise RuntimeError("AgentContext is required")
     ids = list(state.get("focused_property_ids") or [])
-    listings = fetch_focused_listing_facts(
+    focused = fetch_focused_listings(
         ids,
         runtime.context.listing_loader or fetch_listing_card_rows,
         runtime.context.listing_detail_loader or fetch_listing_detail_rows,
@@ -31,14 +31,19 @@ def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> d
         extra={
             "extra_data": {
                 "ids": ids,
-                "found": len(listings),
+                "found": len(focused.facts),
+                "map_pins": len(focused.map_pins),
                 "user_id": runtime.context.user_id,
             }
         },
     )
     # No lookup runs this turn. Clearing the route keeps record_search_and_clear_turn_state from recording the
     # previous search again, so a later "cheaper" still refines that search.
-    return {"focused_listings": listings, "query_route": None}
+    return {
+        "focused_listings": focused.facts,
+        "focused_map_pins": focused.map_pins,
+        "query_route": None,
+    }
 
 
 def next_step_after_session_context(state: ChatState) -> str:

@@ -59,14 +59,19 @@ def publish_structured_reply(
     session_profile: dict,
     question: ProfileQuestion | None,
     config: RunnableConfig,
+    map_pins: list[dict] | None = None,
     **fields,
 ) -> str | None:
-    """Stream a structured reply when the model supports it. Otherwise the caller streams prose."""
+    """Stream a structured reply when the model supports it. Otherwise the caller streams prose.
+
+    `map_pins` are the places this turn's data can pin; the model only says whether to show them.
+    """
     draft = getattr(models, method_name, None)
     if not callable(draft):
         return None
     if question is not None:
         fields["follow_up_question"] = question.prompt
+    fields["map_available"] = bool(map_pins)
     try:
         parsed = draft(
             message=message,
@@ -88,7 +93,7 @@ def publish_structured_reply(
     # Listings have their own photo cards, so their rows are never laid out as figures.
     figure_rows = [] if fields.get("listings") else list(fields.get("rows") or [])
     payload.update(
-        build_reply_blocks(reply, figure_rows, list(fields.get("columns") or []))
+        build_reply_blocks(reply, figure_rows, list(fields.get("columns") or []), map_pins)
     )
     payload["question"] = question.to_ui_payload() if question is not None else None
     if question is not None:

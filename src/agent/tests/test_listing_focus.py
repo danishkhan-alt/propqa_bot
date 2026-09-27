@@ -14,7 +14,7 @@ from agent.graph.runner import _build_turn_input
 from agent.graph.workflow import build_chat_graph
 from agent.schemas.reply import StructuredReply
 from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
-from agent.sql.listing_details import MAX_FOCUSED_LISTINGS, fetch_focused_listing_facts
+from agent.sql.listing_details import MAX_FOCUSED_LISTINGS, fetch_focused_listings
 
 CARDS = {
     201: {
@@ -51,14 +51,18 @@ DETAILS = {
         "plot_area": Decimal("0"),
         "amenities": ["Shared Pool", "Balcony or Terrace"],
         "views": ["Pool View"],
+        "lat": 25.2012,
+        "lng": 55.3471,
         "nearby_places": {
-            "parks": [{"name": "Dubai Creek Harbor Park", "km": Decimal("0.1")}],
+            "parks": [{"name": "Dubai Creek Harbor Park", "km": Decimal("0.1"), "lat": 25.2003, "lng": 55.3480}],
             "schools": [],
             "hospitals": "not a list",
         },
         "metro_station": "Creek Metro Station",
         "metro_line": "Green Metro line",
         "metro_km": Decimal("1.5"),
+        "metro_lat": Decimal("25.219370"),
+        "metro_lng": Decimal("55.338690"),
     },
 }
 
@@ -75,7 +79,7 @@ def _details(ids: list[int]) -> list[dict]:
 
 
 def test_a_focused_listing_carries_its_card_and_advert_details():
-    facts = fetch_focused_listing_facts([201], _cards, _details)
+    facts = fetch_focused_listings([201], _cards, _details).facts
     assert facts == [
         {
             "property_id": "201",
@@ -99,8 +103,27 @@ def test_a_focused_listing_carries_its_card_and_advert_details():
     ]
 
 
+def test_a_focused_listing_pins_itself_its_metro_and_what_is_nearby():
+    pins = fetch_focused_listings([201], _cards, _details).map_pins
+    assert pins == [
+        {"lat": 25.2012, "lng": 55.3471, "label": "Harbour Gate Tower 2", "detail": "", "kind": "listing"},
+        {
+            "lat": 25.21937,
+            "lng": 55.33869,
+            "label": "Creek Metro Station",
+            "detail": "Green Metro line · 1.5 km away",
+            "kind": "metro",
+        },
+        {"lat": 25.2003, "lng": 55.348, "label": "Dubai Creek Harbor Park", "detail": "0.1 km away", "kind": "nearby"},
+    ]
+
+
+def test_a_listing_without_a_pin_has_nothing_to_map():
+    assert fetch_focused_listings([368], _cards, _details).map_pins == []
+
+
 def test_listings_keep_the_order_picked_and_a_gone_listing_is_dropped():
-    facts = fetch_focused_listing_facts([368, 999, 201], _cards, _details)
+    facts = fetch_focused_listings([368, 999, 201], _cards, _details).facts
     assert [fact["property_id"] for fact in facts] == ["368", "201"]
     assert facts[0]["rent_aed"] == {"amount": 95000, "period": "yearly"}
     assert "amenities" not in facts[0]
@@ -110,7 +133,7 @@ def test_a_detail_failure_still_answers_from_the_card():
     def broken(ids: list[int]) -> list[dict]:
         raise RuntimeError("warehouse down")
 
-    facts = fetch_focused_listing_facts([201], _cards, broken)
+    facts = fetch_focused_listings([201], _cards, broken).facts
     assert facts[0]["building"] == "Harbour Gate Tower 2"
     assert "amenities" not in facts[0]
 
@@ -122,7 +145,7 @@ def test_no_more_listings_are_read_than_the_ui_can_attach():
         seen.append(ids)
         return []
 
-    fetch_focused_listing_facts(list(range(1, 20)), record, record)
+    fetch_focused_listings(list(range(1, 20)), record, record)
     assert all(len(ids) == MAX_FOCUSED_LISTINGS for ids in seen)
 
 
@@ -130,10 +153,6 @@ def test_no_more_listings_are_read_than_the_ui_can_attach():
 
 
 class _FocusModels:
-    def __init__(self) -> None:
-        self.routed = 0
-        self.drafts: list[dict] = []
-
     def route_query(self, **kwargs) -> QueryRoute:
         self.routed += 1
         return QueryRoute(route=Route.DIRECT_ANSWER, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Chat.")
@@ -144,10 +163,15 @@ class _FocusModels:
     def answer_direct(self, **kwargs) -> str:
         return "Hello."
 
+    def __init__(self, *, show_map: bool = False) -> None:
+        self.routed = 0
+        self.drafts: list[dict] = []
+        self.show_map = show_map
+
     def draft_listing_reply(self, **kwargs) -> StructuredReply:
         self.drafts.append(kwargs)
         kwargs["on_text"]("It is a **3-bed** in Harbour Gate Tower 2.")
-        return StructuredReply(intro_text="It is a **3-bed** in Harbour Gate Tower 2.")
+        return StructuredReply(intro_text="It is a **3-bed** in Harbour Gate Tower 2.", show_map=self.show_map)
 
 
 def _graph_and_context(models: _FocusModels):
@@ -185,6 +209,7 @@ def test_a_question_about_picked_listings_skips_routing_and_reads_the_advert():
     assert state["messages"][-1].content == "It is a **3-bed** in Harbour Gate Tower 2."
     assert state["query_route"] is None
     assert state["focused_listings"] == []
+    assert state["focused_map_pins"] == []
     # The previous search is kept, so "cheaper" after this still refines it.
     assert state["last_need_db"].intent_summary == "2 beds in the creek"
 
@@ -214,3 +239,41 @@ def test_listings_that_are_gone_get_a_plain_reply_without_a_model_call():
     assert models.drafts == []
     assert models.routed == 0
     assert state["messages"][-1].content == MISSING_LISTINGS_REPLY
+
+
+def test_a_question_about_what_is_nearby_shows_the_listing_on_a_map():
+    models = _FocusModels(show_map=True)
+    graph, context = _graph_and_context(models)
+    config = {"configurable": {"thread_id": "focus-map", "user_id": "user-1"}}
+
+    events = list(
+        graph.stream(
+            _build_turn_input("How far is the metro?", focused_property_ids=[201]),
+            config=config,
+            context=context,
+            stream_mode="custom",
+        )
+    )
+
+    assert models.drafts[0]["map_available"] is True
+    assert "lat" not in str(models.drafts[0]["listings"])
+    reply = next(event["reply"] for event in events if event.get("event") == "reply")
+    assert [pin["kind"] for pin in reply["map"]["pins"]] == ["listing", "metro", "nearby"]
+
+
+def test_no_map_when_the_answer_does_not_ask_for_one():
+    models = _FocusModels()
+    graph, context = _graph_and_context(models)
+    config = {"configurable": {"thread_id": "focus-no-map", "user_id": "user-1"}}
+
+    events = list(
+        graph.stream(
+            _build_turn_input("Is there parking?", focused_property_ids=[201]),
+            config=config,
+            context=context,
+            stream_mode="custom",
+        )
+    )
+
+    reply = next(event["reply"] for event in events if event.get("event") == "reply")
+    assert reply["map"] is None

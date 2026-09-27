@@ -36,7 +36,8 @@ figures: lays out numbers from rows under your text. You pick columns; the produ
 Each column gets a short label a buyer understands ("Median price", "Yearly change", "Sales") and a unit: aed, aed_per_sqft, sqft, percent (a level already in percent, such as a yield), change (a percent rise or fall, shown with an arrow), fraction (0 to 1), count, number, year, or text. Skip ids, coordinates, internal codes, and any column that only names a unit or an indicator. Pick the columns that answer the question; a table reads best with three or four. Keep intro_text focused on what the figures mean rather than repeating each one.
 When rows split by kind of property (apartments and villas, bedroom counts), the kinds are the answer: say how they differ, lead with the one that fits this buyer when you know it, and never average them yourself or quote one number for all of them.
 explainer: a short written aid, for a question about how something works or whether to do it, when there are no cards and no figures. kind "steps" for a process in order, "pros_cons" for a decision (points are the upsides, cautions the risks, each naming its option when there are two), "callout" for one key thing to watch, else "none". title up to 6 words, each point one short sentence, at most 6. Never state a price, fee, rate, or date in it unless rows show it.
-Use at most one of cards, figures, and explainer.
+show_map: true when the answer is about where places are, such as stations, stops, schools, or what is near a place, and map_available is true. The product pins the places from the rows; you never write a coordinate. false for prices, fees, rules, trends, and listings. With a map, figures layout is "none" and explainer "none"; you may say the places are pinned on the map below.
+Use at most one of cards, figures, the map, and explainer.
 exclusions_note: one muted line on what you left out and why, only when the rows support it. Otherwise empty.
 data_source_note: a short noun phrase naming the data, from data_note, such as "live asking prices and registered property records", plus the date span only when the rows include dates. No leading "Based on". Never invent a year or a source.
 suggested_followups: up to three next steps, each 3 to 7 words, written as the user would say them and naming the place when there is one, such as "Show ready homes instead", "Compare with JVC", or "Service charges in Dubai Marina". Never a question, and never the follow_up_question. Empty for a greeting.
@@ -66,6 +67,7 @@ intro_text is markdown. Bold only key figures.
 - A price is for sale unless purpose is rent; rent carries its period.
 
 figures: layout "none". cards: empty.
+show_map: true when map_available is true and they ask where a listing is or what is near it: the metro, schools, parks, shops. The map pins each listing, its nearest metro, and the nearby places. false for anything else, such as price, parking, or features. With a map, explainer is "none".
 explainer: "pros_cons" only when they ask whether a listing is a good choice or which one to pick; points from the facts, cautions for what is missing or worth checking. Otherwise "none".
 exclusions_note: empty.
 data_source_note: from data_note.

@@ -2,12 +2,15 @@
 
 Read when the user picks listings in the UI and asks about them. One fixed statement, so the
 turn needs no SQL model. Distances come from PostGIS, measured from the listing's pin.
+Coordinates become map pins and never enter the facts the answer model reads.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from agent.reply.place_map import map_pin
 from agent.sql.cards import ListingLoader, fetch_listing_cards, prompt_listing_facts, to_json_number
 from agent.sql.execute import run_against_warehouse
 from common.logger import get_logger
@@ -41,12 +44,16 @@ SELECT
     p.no_of_cheques,
     p.permit_number,
     p.is_verified,
+    ST_Y(here.pin) AS lat,
+    ST_X(here.pin) AS lng,
     amenity.names AS amenities,
     outlook.names AS views,
     nearby.places AS nearby_places,
     metro.name AS metro_station,
     metro.line AS metro_line,
-    metro.km AS metro_km
+    metro.km AS metro_km,
+    metro.lat AS metro_lat,
+    metro.lng AS metro_lng
 FROM wanted w
 JOIN public.properties p ON p.id = w.id AND p.deleted_at IS NULL
 LEFT JOIN LATERAL (
@@ -69,13 +76,18 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
     SELECT jsonb_object_agg(kind, places) AS places
     FROM (
-        SELECT kind.key AS kind, jsonb_agg(jsonb_build_object('name', near.name, 'km', near.km) ORDER BY near.km) AS places
+        SELECT kind.key AS kind, jsonb_agg(
+            jsonb_build_object('name', near.name, 'km', near.km, 'lat', near.lat, 'lng', near.lng)
+            ORDER BY near.km
+        ) AS places
         FROM jsonb_each(
             CASE WHEN json_typeof(p.near_by_locations) = 'object' THEN p.near_by_locations::jsonb END
         ) kind
         CROSS JOIN LATERAL (
             SELECT
                 place->>'name' AS name,
+                (place->>'latitude')::float8 AS lat,
+                (place->>'longitude')::float8 AS lng,
                 ROUND((ST_DistanceSphere(
                     here.pin,
                     ST_SetSRID(ST_MakePoint((place->>'longitude')::float8, (place->>'latitude')::float8), 4326)
@@ -93,6 +105,8 @@ LEFT JOIN LATERAL (
     SELECT
         m.location_name_english AS name,
         m.line_name AS line,
+        m.station_location_latitude AS lat,
+        m.station_location_longitude AS lng,
         ROUND((ST_DistanceSphere(
             here.pin,
             ST_SetSRID(ST_MakePoint(m.station_location_longitude::float8, m.station_location_latitude::float8), 4326)
@@ -127,15 +141,23 @@ def fetch_listing_detail_rows(ids: list[int]) -> list[dict[str, Any]]:
     return page.rows
 
 
-def fetch_focused_listing_facts(
+@dataclass(frozen=True)
+class FocusedListings:
+    """Facts for the answer model, and the pins a map of these listings would show."""
+
+    facts: list[dict[str, Any]] = field(default_factory=list)
+    map_pins: list[dict[str, Any]] = field(default_factory=list)
+
+
+def fetch_focused_listings(
     ids: list[int],
     card_loader: ListingLoader,
     detail_loader: ListingDetailLoader,
-) -> list[dict[str, Any]]:
+) -> FocusedListings:
     """Card facts plus advert details for each listing that still exists, in the order given."""
     ids = ids[:MAX_FOCUSED_LISTINGS]
     if not ids:
-        return []
+        return FocusedListings()
     try:
         details = {str(row.get("id")): row for row in detail_loader(ids) or [] if row.get("id") is not None}
     except Exception:
@@ -144,10 +166,13 @@ def fetch_focused_listing_facts(
     # An id the loader could not fill comes back as an id-only card: that listing is gone.
     cards = [card for card in fetch_listing_cards([str(item) for item in ids], card_loader) if len(card) > 1]
     facts: list[dict[str, Any]] = []
+    pins: list[dict[str, Any]] = []
     for card, fact in zip(cards, prompt_listing_facts(cards)):
-        fact.update(_detail_facts(details.get(card["id"]) or {}))
+        detail = details.get(card["id"]) or {}
+        fact.update(_detail_facts(detail))
         facts.append(fact)
-    return facts
+        pins.extend(_listing_map_pins(card, detail))
+    return FocusedListings(facts=facts, map_pins=pins)
 
 
 def _detail_facts(row: dict[str, Any]) -> dict[str, Any]:
@@ -196,3 +221,45 @@ def _nearest_metro_fact(row: dict[str, Any]) -> dict[str, Any] | None:
         return None
     metro = {"station": row["metro_station"], "line": row.get("metro_line"), "km": to_json_number(row.get("metro_km"))}
     return {key: value for key, value in metro.items() if value is not None}
+
+
+def _listing_map_pins(card: dict[str, Any], row: dict[str, Any]) -> list[dict[str, Any]]:
+    """The listing, its nearest metro, and the nearby places, each with its distance.
+
+    Nearby places keep no kind: the advert's grouping is noisy (a gym under schools), so a
+    pin names only the place itself.
+    """
+    name = card.get("building_name") or card.get("project_name") or card.get("title_en") or "This listing"
+    pins = [
+        map_pin(
+            row.get("lat"),
+            row.get("lng"),
+            label=str(name),
+            detail=str(card.get("master_project_name") or ""),
+            kind="listing",
+        )
+    ]
+    metro = _nearest_metro_fact(row)
+    if metro is not None:
+        detail = " · ".join(
+            part for part in (metro.get("line"), _distance_text(metro.get("km"))) if part
+        )
+        pins.append(map_pin(row.get("metro_lat"), row.get("metro_lng"), label=metro["station"], detail=detail, kind="metro"))
+    places = row.get("nearby_places")
+    for items in places.values() if isinstance(places, dict) else []:
+        for item in items if isinstance(items, list) else []:
+            if isinstance(item, dict) and item.get("name"):
+                pins.append(
+                    map_pin(
+                        item.get("lat"),
+                        item.get("lng"),
+                        label=str(item["name"]),
+                        detail=_distance_text(to_json_number(item.get("km"))),
+                        kind="nearby",
+                    )
+                )
+    return [pin for pin in pins if pin is not None]
+
+
+def _distance_text(km: Any) -> str:
+    return f"{km} km away" if km is not None else ""

@@ -16,6 +16,7 @@ When several series are shown together, leave out one whose latest period is yea
 A date column with covers holds almost all its rows in that span. For "now", "recent", or "last N months/years", end the window at the end of covers, not at CURRENT_DATE, when covers ends before today. Name the span in purpose. When the user named a period outside covers, keep their period and the date column that means what they asked; do not switch to another date column to reach it, because that answers a different question. The reply will explain the span.
 When the user asked for an average, count, or total, aggregate. When they asked for a list, select the useful columns and order them as they asked.
 Do not select every column.
+When the result lists individual places, such as stations, stops, schools, or parking zones, also select their latitude and longitude columns when the table has them, so the places can be pinned on a map. Not for a count, total, or average.
 Whenever the result is individual listings from public.properties, include id AS property_id, so each one is shown as its listing.
 When listing_ids_only is true, the user wants to see properties. SELECT only the listing id. For public.properties that is id AS property_id. For a DLD unit, plot, or land row it is property_id. For a building row it is building_id. Filter in WHERE as usual. Do not select any other column. The product shows each property from that id.
 

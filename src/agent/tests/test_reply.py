@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import anthropic
 import httpx
 import pytest
@@ -9,6 +11,7 @@ import pytest
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.reply.buyer_profile import merge_profile, pick_next_profile_question
 from agent.reply.figures import build_explainer, build_figures, build_reply_blocks, format_figure
+from agent.reply.place_map import MAX_MAP_PINS, build_place_map, find_coordinate_pair, split_place_rows
 from agent.schemas.profile import ProfileSignals
 from agent.schemas.reply import (
     Explainer,
@@ -322,6 +325,7 @@ def test_only_one_block_is_shown_under_the_text():
     carded = reply.model_copy(update={"cards": [ReplyCard(title="JVC")]})
     assert build_reply_blocks(carded, rows, ["n"]) == {
         "cards": [ReplyCard(title="JVC").model_dump()],
+        "map": None,
         "figures": None,
         "explainer": None,
     }
@@ -425,3 +429,87 @@ def test_a_period_after_today_is_left_out():
     rows = [{"year": "2024", "rent": 1}, {"year": "2025", "rent": 2}, {"year": "2026", "rent": 3}, {"year": "2999", "rent": 9}]
     table = build_figures(_spec("table", [("rent", "Rent", "aed")], "year"), rows, ["year", "rent"])
     assert [row[0] for row in table["rows"]] == ["2024", "2025", "2026"]
+
+
+# Map
+
+
+@pytest.mark.parametrize(
+    "columns, pair",
+    [
+        (["name", "lat", "long"], ("lat", "long")),
+        (["station_location_latitude", "station_location_longitude"], ("station_location_latitude", "station_location_longitude")),
+        (["station_location_latitiude", "station_location_longitiude"], ("station_location_latitiude", "station_location_longitiude")),
+        (["project_lat", "project_lng", "lat", "lng"], ("project_lat", "project_lng")),
+        (["latitude_attr", "longitude_attr"], ("latitude_attr", "longitude_attr")),
+    ],
+)
+def test_a_coordinate_pair_is_found_however_the_table_names_it(columns, pair):
+    found = find_coordinate_pair(columns)
+    assert (found.latitude, found.longitude) == pair
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [["project_lat", "lng"], ["start_lat", "start_lon", "end_lat", "end_lon"], ["latency_ms", "longest_stay"], ["name"]],
+)
+def test_no_pair_when_the_columns_do_not_place_a_row(columns):
+    assert find_coordinate_pair(columns) is None
+
+
+def test_place_rows_lose_their_coordinates_and_become_pins():
+    rows = [
+        {
+            "location_name_english": "Business Bay Metro Station",
+            "location_name_arabic": "محطة",
+            "line_name": "Red Metro line",
+            "station_location_latitude": Decimal("25.191430"),
+            "station_location_longitude": Decimal("55.260530"),
+        },
+        {
+            "location_name_english": "Nowhere Station",
+            "location_name_arabic": "x",
+            "line_name": "Red Metro line",
+            "station_location_latitude": Decimal("0"),
+            "station_location_longitude": Decimal("0"),
+        },
+    ]
+    columns = list(rows[0])
+    kept_rows, kept_columns, pins = split_place_rows(rows, columns)
+    assert kept_columns == ["location_name_english", "location_name_arabic", "line_name"]
+    assert all("station_location_latitude" not in row for row in kept_rows)
+    assert pins == [
+        {"lat": 25.19143, "lng": 55.26053, "label": "Business Bay Metro Station", "detail": "Red Metro line", "kind": "place"}
+    ]
+
+
+def test_rows_without_coordinates_pass_through_untouched():
+    rows = [{"area_en": "JVC", "median_rent": 70000}]
+    assert split_place_rows(rows, ["area_en", "median_rent"]) == (rows, ["area_en", "median_rent"], [])
+
+
+def test_the_map_shows_each_place_once_and_caps_its_pins():
+    pin = {"lat": 25.1, "lng": 55.2, "label": "A", "detail": "", "kind": "place"}
+    many = [{**pin, "label": f"Stop {i}"} for i in range(MAX_MAP_PINS + 5)]
+    assert build_place_map([pin, dict(pin)]) == {"pins": [pin], "hidden_pins": 0}
+    shown = build_place_map(many)
+    assert len(shown["pins"]) == MAX_MAP_PINS and shown["hidden_pins"] == 5
+    assert build_place_map([]) is None
+
+
+def test_an_interchange_station_is_one_pin_naming_every_line():
+    green = {"lat": 25.254855, "lng": 55.304252, "label": "BurJuman Metro Station", "detail": "Green Metro line", "kind": "place"}
+    red = {**green, "detail": "Red Metro line"}
+    assert build_place_map([green, red, dict(red)])["pins"] == [{**green, "detail": "Green Metro line · Red Metro line"}]
+
+
+def test_a_map_the_reply_asks_for_replaces_figures():
+    rows = [{"n": 5}]
+    pins = [{"lat": 25.1, "lng": 55.2, "label": "A", "detail": "", "kind": "place"}]
+    reply = StructuredReply(intro_text="x", show_map=True, figures=_spec("stats", [("n", "Count", "count")]))
+    blocks = build_reply_blocks(reply, rows, ["n"], pins)
+    assert blocks["map"] == {"pins": pins, "hidden_pins": 0} and blocks["figures"] is None
+
+    unasked = reply.model_copy(update={"show_map": False})
+    assert build_reply_blocks(unasked, rows, ["n"], pins)["map"] is None
+    assert build_reply_blocks(reply, rows, ["n"], [])["figures"] is not None

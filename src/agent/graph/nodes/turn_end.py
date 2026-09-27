@@ -30,6 +30,7 @@ def record_search_and_clear_turn_state(state: ChatState, config: RunnableConfig)
         "listing_ids": [],
         "listing_cards": [],
         "focused_listings": [],
+        "focused_map_pins": [],
         "awaiting_sql": False,
     }
     query = as_query_route(state.get("query_route"))

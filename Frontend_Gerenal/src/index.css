@@ -443,3 +443,53 @@
 .context-bar-fill {
   transition: width 0.4s ease-out;
 }
+
+/* ── Reply map pins (PlaceMap) ───────────────────────────────────────────── */
+.propqa-map {
+  font-family: inherit;
+  z-index: 0; /* keep Leaflet panes under the app's sticky header and dialogs */
+}
+.propqa-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--pin);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(16, 21, 39, 0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.propqa-pin--active {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pin) 25%, transparent), 0 2px 6px rgba(16, 21, 39, 0.4);
+}
+.propqa-pin-tooltip.leaflet-tooltip {
+  border: 1px solid #e8ecf3;
+  border-radius: 10px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(20, 20, 24, 0.08);
+}
+.propqa-pin-tooltip.leaflet-tooltip-top::before {
+  border-top-color: #e8ecf3;
+}
+.propqa-pin-tip__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #101527;
+}
+.propqa-pin-tip__detail {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #747288;
+}
+.propqa-map .leaflet-tile-pane {
+  filter: grayscale(0.9) contrast(0.92) brightness(1.04);
+}
+.propqa-map .leaflet-control-attribution {
+  font-size: 9px;
+}

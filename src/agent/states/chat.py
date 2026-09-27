@@ -40,6 +40,7 @@ class ChatState(TypedDict, total=False):
     session_profile: dict
     focused_property_ids: list[int]
     focused_listings: list
+    focused_map_pins: list
 
 
 class ChatInput(TypedDict, total=False):
