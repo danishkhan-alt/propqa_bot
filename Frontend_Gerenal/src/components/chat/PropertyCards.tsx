@@ -2,7 +2,7 @@
  * PropertyCards — strip (chat) or Figma horizontal sidebar listing cards.
  */
 
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ExternalLink,
@@ -56,9 +56,12 @@ import {
   pickCardListingHref,
 } from "@/lib/propertyCard";
 import type { PropertyCard } from "@/store/chatStore";
+import type { PropertyFocusRequest } from "@/store/propertyFocusStore";
 
 /** Sidebar Figma list: ~3×239px cards per page. */
 const SIDEBAR_PAGE_SIZE = 3;
+// How long a listing opened from elsewhere (a map pin) stays outlined.
+const FOCUS_HIGHLIGHT_MS = 2400;
 
 /**
  * Build a compact page-number sequence with ellipses for large page counts,
@@ -101,6 +104,8 @@ interface PropertyCardsProps {
   onToggleInquiryProperty?: (propertyId: number) => void;
   attachedPropertyIds?: number[];
   onToggleAttachedProperty?: (propertyId: number, card: PropertyCard) => void;
+  /** Bring this listing into view and outline it, when it is one of `cards`. */
+  focusRequest?: PropertyFocusRequest | null;
 }
 
 export function PropertyCards({
@@ -115,6 +120,7 @@ export function PropertyCards({
   onToggleInquiryProperty,
   attachedPropertyIds = [],
   onToggleAttachedProperty,
+  focusRequest = null,
 }: PropertyCardsProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetChannel, setSheetChannel] = useState<CtaChannel | null>(null);
@@ -144,6 +150,27 @@ export function PropertyCards({
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const index = cards.findIndex((card) => parsePropertyId(card) === focusRequest.propertyId);
+    if (index < 0) return;
+    if (isSidebar) setPage(Math.floor(index / SIDEBAR_PAGE_SIZE) + 1);
+    setHighlightId(focusRequest.propertyId);
+    const timer = window.setTimeout(() => setHighlightId(null), FOCUS_HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focusRequest, cards, isSidebar]);
+
+  // Runs after the page holding the listing has rendered.
+  useEffect(() => {
+    if (highlightId == null) return;
+    listRef.current
+      ?.querySelector(`[data-property-id="${highlightId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [highlightId, page]);
 
   const pagedCards = useMemo(() => {
     if (!isSidebar) return cards;
@@ -206,6 +233,7 @@ export function PropertyCards({
       )}
 
       <div
+        ref={listRef}
         className={cn(
           isSidebar ? "flex flex-col gap-3 pr-1" : "cards-strip",
         )}
@@ -235,6 +263,7 @@ export function PropertyCards({
                 ? () => onToggleAttachedProperty(parsePropertyId(card)!, card)
                 : undefined
             }
+            highlighted={highlightId != null && parsePropertyId(card) === highlightId}
           />
         ))}
       </div>
@@ -322,6 +351,7 @@ function PropertyCardItem({
   onToggleInquiry,
   attachedSelected = false,
   onToggleAttached,
+  highlighted = false,
 }: {
   card: PropertyCard;
   layout?: "strip" | "sidebar";
@@ -331,6 +361,7 @@ function PropertyCardItem({
   onToggleInquiry?: () => void;
   attachedSelected?: boolean;
   onToggleAttached?: () => void;
+  highlighted?: boolean;
 }) {
   if (layout === "sidebar") {
     return (
@@ -342,6 +373,7 @@ function PropertyCardItem({
         onToggleInquiry={onToggleInquiry}
         attachedSelected={attachedSelected}
         onToggleAttached={onToggleAttached}
+        highlighted={highlighted}
       />
     );
   }
@@ -363,6 +395,7 @@ function SidebarFigmaCard({
   onToggleInquiry,
   attachedSelected = false,
   onToggleAttached,
+  highlighted = false,
 }: {
   card: PropertyCard;
   showCtas?: boolean;
@@ -371,6 +404,7 @@ function SidebarFigmaCard({
   onToggleInquiry?: () => void;
   attachedSelected?: boolean;
   onToggleAttached?: () => void;
+  highlighted?: boolean;
 }) {
   const title = pickFigmaCardTitle(card);
   const location = pickCardLocation(card);
@@ -408,9 +442,11 @@ function SidebarFigmaCard({
 
   return (
     <article
+      data-property-id={propertyId ?? undefined}
       className={cn(
         "relative flex h-[239px] w-full min-w-0 shrink-0 flex-row overflow-hidden rounded-2xl",
-        "shadow-[0px_0px_20px_3px_rgba(20,20,24,0.04)]",
+        "shadow-[0px_0px_20px_3px_rgba(20,20,24,0.04)] transition-shadow duration-300",
+        highlighted && "ring-2 ring-[#101527] ring-offset-2",
       )}
     >
       {/* Image column */}

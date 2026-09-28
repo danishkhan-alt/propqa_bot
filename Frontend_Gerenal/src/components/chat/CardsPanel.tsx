@@ -2,7 +2,7 @@
  * CardsPanel — scrollable list of per-query property groups (nested Collapsible).
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { PropertyCard } from "@/store/chatStore";
+import { usePropertyFocusStore } from "@/store/propertyFocusStore";
+import { cardPropertyIds } from "@/lib/propertyIds";
 import { PropertyCards } from "./PropertyCards";
 
 export interface CardGroup {
@@ -65,6 +67,18 @@ export function CardsPanel({
       return next;
     });
   }, [groups.length, groups[groups.length - 1]?.messageId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A listing picked elsewhere (a map pin) opens in the newest group that shows it.
+  const focusRequest = usePropertyFocusStore((state) => state.request);
+  const focusGroupId = useMemo(() => {
+    if (!focusRequest) return null;
+    const group = [...groups].reverse().find((g) => cardPropertyIds(g.cards).includes(focusRequest.propertyId));
+    return group?.messageId ?? null;
+  }, [focusRequest, groups]);
+
+  useEffect(() => {
+    if (focusGroupId) setGroupOpen(focusGroupId, true);
+  }, [focusGroupId, focusRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setGroupOpen(id: string, open: boolean) {
     setExpanded((prev) => {
@@ -142,6 +156,7 @@ export function CardsPanel({
                       onToggleInquiryProperty={onToggleInquiryProperty}
                       attachedPropertyIds={attachedPropertyIds}
                       onToggleAttachedProperty={onToggleAttachedProperty}
+                      focusRequest={group.messageId === focusGroupId ? focusRequest : null}
                     />
                   </div>
                 </CollapsibleContent>

@@ -41,11 +41,16 @@ import {
 } from "@/lib/followUpSuggestions";
 import { pickFigmaCardTitle, pickCardImages } from "@/lib/propertyCard";
 import type { PropertyCard } from "@/store/chatStore";
+import { usePropertyFocusStore } from "@/store/propertyFocusStore";
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(true);
+  const propertyFocus = usePropertyFocusStore((state) => state.request);
+  useEffect(() => {
+    if (propertyFocus) setPropertiesPanelOpen(true);
+  }, [propertyFocus]);
   const [authGateOpen, setAuthGateOpen] = useState(false);
   const [authGateTab, setAuthGateTab] = useState<"login" | "register">("login");
 

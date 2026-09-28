@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PlaceMap, { type ReplyMap } from "@/components/chat/PlaceMap";
 import { StructuredAnswer } from "@/components/chat/StructuredAnswer";
+import { usePropertyFocusStore } from "@/store/propertyFocusStore";
 
 const map: ReplyMap = {
   pins: [
@@ -74,6 +75,37 @@ describe("PlaceMap for a search near stations", () => {
     expect(legend.getByText("Listing")).toBeInTheDocument();
     expect(legend.getByText("Red line")).toBeInTheDocument();
     expect(legend.getByText("Tram")).toBeInTheDocument();
+  });
+
+  beforeEach(() => usePropertyFocusStore.setState({ request: null }));
+
+  it("opens a listing picked on the map in the properties panel", async () => {
+    const user = userEvent.setup();
+    render(<PlaceMap map={search} />);
+    const items = within(screen.getByRole("list", { name: "Places on the map" })).getAllByRole("button");
+    await user.click(items[1]);
+    expect(usePropertyFocusStore.getState().request?.propertyId).toBe(102);
+  });
+
+  it("opens nothing for a station", async () => {
+    const user = userEvent.setup();
+    render(<PlaceMap map={search} />);
+    const items = within(screen.getByRole("list", { name: "Places on the map" })).getAllByRole("button");
+    await user.click(items[2]);
+    expect(usePropertyFocusStore.getState().request).toBeNull();
+  });
+
+  it("hides the map and its list when collapsed, and shows them again", async () => {
+    const user = userEvent.setup();
+    render(<PlaceMap map={search} />);
+    const toggle = screen.getByRole("button", { name: /2 listings on the map/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("list", { name: "Places on the map" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Legend" })).toBeNull();
+    await user.click(toggle);
+    expect(screen.getByRole("list", { name: "Places on the map" })).toBeVisible();
   });
 
   it("draws the rail lines under the pins", () => {
