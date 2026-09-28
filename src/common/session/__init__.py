@@ -6,6 +6,7 @@ from common.session.sidebar_sessions import (
     list_user_sessions,
     record_session_activity,
     remove_sidebar_session,
+    transfer_sidebar_session,
 )
 from common.session.transcript import restore_turns_from_checkpoint
 
@@ -17,4 +18,5 @@ __all__ = [
     "safe_user_id",
     "list_user_sessions",
     "restore_turns_from_checkpoint",
+    "transfer_sidebar_session",
 ]

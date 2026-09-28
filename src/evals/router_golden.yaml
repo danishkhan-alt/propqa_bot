@@ -40,3 +40,11 @@
   message: what is 2+2
   expect_route: out_of_scope
   deterministic: false
+- id: golden_visa_definition
+  message: What is the UAE Golden Visa?
+  expect_route: direct_answer
+  deterministic: false
+- id: golden_visa_properties
+  message: What properties qualify for the UAE Golden Visa?
+  expect_route: need_db
+  deterministic: false

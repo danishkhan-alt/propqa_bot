@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, MentionKind, NearStation
 
@@ -28,6 +28,9 @@ class NameMention(BaseModel):
 # A short walk to the platform, when the user asks for "near the metro" without a distance.
 DEFAULT_STATION_KM = 1.0
 MAX_STATION_KM = 5.0
+# Smallest property value that qualifies an owner for the 10-year UAE Golden Visa. Only a
+# property bought counts; a tenancy never does.
+GOLDEN_VISA_MIN_PRICE_AED = 2_000_000
 
 
 class ListingFilters(BaseModel):
@@ -59,6 +62,17 @@ class ListingFilters(BaseModel):
         default=0,
         description="How close to the station, in km, when they said it ('within 500 m' is 0.5). 0 when they did not.",
     )
+    golden_visa: bool = Field(
+        default=False,
+        description="True when they want properties that qualify for the UAE Golden Visa. False otherwise.",
+    )
+
+    @model_validator(mode="after")
+    def golden_visa_is_a_purchase(self) -> "ListingFilters":
+        # The price floor is a hard condition in the query, so loosening a price range never drops it.
+        if self.golden_visa:
+            self.purpose = ListingPurpose.SALE
+        return self
 
     @field_validator("bedrooms_min", "bedrooms_max", mode="before")
     @classmethod

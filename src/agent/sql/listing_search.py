@@ -15,6 +15,7 @@ from typing import Any
 
 from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, NearStation
 from agent.grounding.name_matching import normalize_name
+from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED
 from agent.schemas.listing_search import ListingQuery, ListingResult, ListingSearch, Relaxation
 from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION, ASKING_PRICE_SQL
 from agent.sql.transit import near_station_clause
@@ -114,6 +115,10 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
         params["category_ids"] = categories
     _add_range_filter(clauses, params, "p.rooms", "bedrooms", filters.bedrooms_min, filters.bedrooms_max)
     _add_range_filter(clauses, params, ASKING_PRICE_SQL, "price", filters.price_min, filters.price_max)
+    if filters.golden_visa:
+        # Eligibility, not a preference: no relaxation removes it.
+        clauses.append(f"{ASKING_PRICE_SQL} >= %(golden_visa_min)s")
+        params["golden_visa_min"] = GOLDEN_VISA_MIN_PRICE_AED
     _add_range_filter(clauses, params, "p.area", "size", filters.size_min_sqft, filters.size_max_sqft)
     if filters.furnishing is not Furnishing.ANY:
         clauses.append("p.furnished = %(furnishing)s")

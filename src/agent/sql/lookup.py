@@ -15,7 +15,7 @@ from langchain_core.runnables import RunnableConfig
 from agent.enums.listing import MentionKind, NearStation
 from agent.enums.routing import Intent
 from agent.schemas.grounding import Grounding, as_grounding
-from agent.schemas.listing import ListingFilters
+from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters
 from agent.schemas.listing_search import ListingSearch
 from agent.schemas.recipes import BoundRecipe
 from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
@@ -319,9 +319,13 @@ def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> Lis
 def _stated_listing_filters(search: ListingSearch) -> list[str]:
     """The user's own listing filters, as `field: value`, for the reply to name."""
     stated = search.filters.model_dump(
-        mode="json", exclude_defaults=True, exclude={"near_station", "station_within_km"}
+        mode="json", exclude_defaults=True, exclude={"near_station", "station_within_km", "golden_visa"}
     )
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
+    if search.filters.golden_visa:
+        conditions.append(
+            f"qualifies for the UAE Golden Visa: for sale at AED {GOLDEN_VISA_MIN_PRICE_AED:,} or more"
+        )
     if search.filters.near_station is not NearStation.ANY:
         conditions.append(
             f"within {search.filters.station_km:g} km of {STATION_LABELS[search.filters.near_station]}"

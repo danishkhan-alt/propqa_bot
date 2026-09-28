@@ -13,6 +13,7 @@ from config import ActiveConfig
 logger = get_logger(__name__)
 
 API_PATH_PREFIX = "/api/"
+REQUEST_PARTS = frozenset({"body", "query", "path", "header", "cookie"})
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -25,8 +26,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError):
         fields = [
-            {"field": ".".join(str(p) for p in e["loc"]), "problem": e["msg"]}
-            for e in exc.errors()
+            {"field": _field_name(e["loc"]), "problem": _problem_text(e)} for e in exc.errors()
         ]
         detail = "; ".join(f"{f['field']}: {f['problem']}" for f in fields)
         return api_error_response(InvalidRequestBody(detail, fields), request)
@@ -45,6 +45,22 @@ def register_exception_handlers(app: FastAPI) -> None:
         if error.status >= 500:
             logger.exception("Unhandled API exception")
         return api_error_response(error, request)
+
+
+def _field_name(location: tuple) -> str:
+    """``("body", "password")`` reads as ``password``; the request part is noise to a user."""
+    parts = list(location)
+    if len(parts) > 1 and parts[0] in REQUEST_PARTS:
+        parts = parts[1:]
+    return ".".join(str(part) for part in parts)
+
+
+def _problem_text(error: dict) -> str:
+    """A validator's own message, without pydantic's ``Value error,`` prefix."""
+    cause = (error.get("ctx") or {}).get("error")
+    if error.get("type") == "value_error" and cause is not None:
+        return str(cause)
+    return error["msg"]
 
 
 def _is_api_request(request: Request) -> bool:

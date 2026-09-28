@@ -18,7 +18,7 @@ from agent.grounding.places import build_place_directory
 from agent.grounding.stored_values import StoredValueIndex
 from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding
 from agent.schemas.grounding_index import ListingCountsByPlaceLink, LocationNode, StoredValue
-from agent.schemas.listing import ListingFilters, NameMention
+from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters, NameMention
 from agent.schemas.listing_search import ListingSearch
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft, SqlPage
@@ -335,6 +335,36 @@ def test_the_reply_is_told_how_close_to_a_station_in_plain_words():
     assert _stated_listing_filters(near) == ["purpose: rent", "within 1 km of a metro station"]
     close = ListingSearch(filters=ListingFilters(near_station=NearStation.TRAM, station_within_km=0.5))
     assert _stated_listing_filters(close) == ["within 0.5 km of a tram stop"]
+
+
+def test_golden_visa_searches_only_sales_at_the_qualifying_price():
+    filters = ListingFilters.model_validate({"purpose": "rent", "golden_visa": True})
+    assert filters.purpose is ListingPurpose.SALE
+    query = build_listing_query(ListingSearch(filters=filters), limit=10, offset=0)
+    assert query.params["purpose"] == "for_sale"
+    assert "COALESCE(p.price_max, p.price_min) >= %(golden_visa_min)s" in query.sql
+    assert query.params["golden_visa_min"] == GOLDEN_VISA_MIN_PRICE_AED
+
+
+def test_relaxing_the_price_never_drops_below_the_golden_visa_threshold():
+    runner = _CountingRunner(totals=[0, 4], ids=[1, 2])
+    filters = ListingFilters(golden_visa=True, price_max=1_500_000)
+    result = search_listings(ListingSearch(filters=filters, places=[MARINA]), runner, limit=10, offset=0)
+    assert result.ids == ["1", "2"]
+    _, page_params = runner.calls[-1]
+    assert "price_max" not in page_params
+    assert page_params["golden_visa_min"] == GOLDEN_VISA_MIN_PRICE_AED
+    assert page_params["purpose"] == "for_sale"
+
+
+def test_the_reply_is_told_the_golden_visa_condition_in_plain_words():
+    from agent.sql.lookup import _stated_listing_filters
+
+    search = ListingSearch(filters=ListingFilters(golden_visa=True))
+    assert _stated_listing_filters(search) == [
+        "purpose: sale",
+        "qualifies for the UAE Golden Visa: for sale at AED 2,000,000 or more",
+    ]
 
 
 class _MetroSearchModels(_ListingModels):
