@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin } from "lucide-react";
+import { ChevronDown, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePropertyFocusStore } from "@/store/propertyFocusStore";
 
 export type MapPinKind = "listing" | "metro" | "tram" | "nearby" | "place";
 export type RailLineKey = "red" | "green" | "tram" | "";
@@ -91,6 +92,13 @@ function markerIcon(pin: ReplyMapPin, number: number, active: boolean): L.DivIco
   });
 }
 
+/** The listing a pin stands for, when its card can be opened in the properties panel. */
+function listingId(pin: ReplyMapPin): number | null {
+  if (pin.kind !== "listing" || !pin.property_id) return null;
+  const id = Number(pin.property_id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 /** Tooltip content built from text nodes: labels come from the data, never as markup. */
 function tooltipContent(pin: ReplyMapPin): HTMLElement {
   const box = document.createElement("div");
@@ -104,6 +112,12 @@ function tooltipContent(pin: ReplyMapPin): HTMLElement {
     detail.className = "propqa-pin-tip__detail";
     detail.textContent = pin.detail;
     box.appendChild(detail);
+  }
+  if (listingId(pin) !== null) {
+    const hint = document.createElement("p");
+    hint.className = "propqa-pin-tip__detail";
+    hint.textContent = "Click to open the listing";
+    box.appendChild(hint);
   }
   return box;
 }
@@ -134,7 +148,18 @@ export default function PlaceMap({ map }: { map: ReplyMap }) {
   const leaflet = useRef<L.Map | null>(null);
   const markers = useRef<L.Marker[]>([]);
   const [active, setActive] = useState<number | null>(null);
+  const [open, setOpen] = useState(true);
+  const mapId = useId();
+  const focusProperty = usePropertyFocusStore((state) => state.focusProperty);
   const numbers = pinNumbers(pins);
+
+  // Picking a listing, on the map or in the list, also opens its card in the properties panel.
+  const pick = useRef((index: number) => setActive(index));
+  pick.current = (index: number) => {
+    setActive(index);
+    const id = pins[index] ? listingId(pins[index]) : null;
+    if (id !== null) focusProperty(id);
+  };
 
   useEffect(() => {
     if (!container.current || !pins.length) return;
@@ -168,7 +193,7 @@ export default function PlaceMap({ map }: { map: ReplyMap }) {
         zIndexOffset: pin.kind === "listing" ? 1000 : 0,
       })
         .bindTooltip(tooltipContent(pin), { direction: "top", offset: [0, -4], className: "propqa-pin-tooltip" })
-        .on("click", () => setActive(index))
+        .on("click", () => pick.current(index))
         .addTo(instance),
     );
 
@@ -208,6 +233,7 @@ export default function PlaceMap({ map }: { map: ReplyMap }) {
   }, [active, pins]);
 
   if (!pins.length) return null;
+  const bodyId = `place-map-${mapId}`;
   const legend = legendEntries(pins, lines);
   const listings = pins.filter((pin) => pin.kind === "listing").length;
   const heading =
@@ -220,11 +246,22 @@ export default function PlaceMap({ map }: { map: ReplyMap }) {
   return (
     <figure className={`${PANEL} flex flex-col overflow-hidden`}>
       <figcaption className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-[#101527]">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="-mx-1 flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-[#101527] hover:bg-[#F5F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8ECF3]"
+        >
+          <ChevronDown
+            className={cn("size-3.5 text-[#747288] transition-transform duration-200", !open && "-rotate-90")}
+            aria-hidden
+          />
           <MapPin className="size-3.5 text-[#747288]" aria-hidden />
           {heading}
-        </span>
-        {legend.length > 1 && (
+          <span className="sr-only">{open ? "(hide map)" : "(show map)"}</span>
+        </button>
+        {open && legend.length > 1 && (
           <ul className="flex flex-wrap gap-3" aria-label="Legend">
             {legend.map((entry) => (
               <li key={entry.label} className="flex items-center gap-1.5 text-[11px] text-[#494A58]">
@@ -236,55 +273,58 @@ export default function PlaceMap({ map }: { map: ReplyMap }) {
         )}
       </figcaption>
 
-      <div
-        ref={container}
-        className="propqa-map h-64 w-full border-y border-[#E8ECF3] bg-[#F5F7FA] sm:h-72"
-        role="img"
-        aria-label={`Map of ${pins.map((pin) => pin.label).join(", ")}`}
-      />
+      {/* Hidden rather than unmounted, so the map keeps its view; Leaflet re-measures on show. */}
+      <div id={bodyId} hidden={!open}>
+        <div
+          ref={container}
+          className="propqa-map h-64 w-full border-y border-[#E8ECF3] bg-[#F5F7FA] sm:h-72"
+          role="img"
+          aria-label={`Map of ${pins.map((pin) => pin.label).join(", ")}`}
+        />
 
-      <ol className="grid max-h-56 gap-0.5 overflow-y-auto p-2 sm:grid-cols-2" aria-label="Places on the map">
-        {pins.map((pin, index) => (
-          <li key={pin.property_id ?? `${pin.label}-${index}`}>
-            <button
-              type="button"
-              onClick={() => setActive(index)}
-              aria-pressed={active === index}
-              className={cn(
-                "flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-[#F5F7FA]",
-                active === index && "bg-[#F0F4FF] hover:bg-[#F0F4FF]",
-              )}
-            >
-              <span
-                className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                style={{ background: styleFor(pin).color }}
-                aria-hidden
+        <ol className="grid max-h-56 gap-0.5 overflow-y-auto p-2 sm:grid-cols-2" aria-label="Places on the map">
+          {pins.map((pin, index) => (
+            <li key={pin.property_id ?? `${pin.label}-${index}`}>
+              <button
+                type="button"
+                onClick={() => pick.current(index)}
+                aria-pressed={active === index}
+                className={cn(
+                  "flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-[#F5F7FA]",
+                  active === index && "bg-[#F0F4FF] hover:bg-[#F0F4FF]",
+                )}
               >
-                {numbers[index] === 0 ? <HomeGlyph /> : numbers[index]}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-xs font-medium text-[#141B34]" dir="auto" title={pin.label}>
-                    {pin.label}
-                  </span>
-                  {pin.property_id && (
-                    <span
-                      className="shrink-0 rounded border border-dashed border-[#D8DDE6] px-1 text-[10px] leading-4 text-[#747288]"
-                      title="Property ID, as on its card"
-                    >
-                      {pin.property_id}
-                    </span>
-                  )}
+                <span
+                  className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                  style={{ background: styleFor(pin).color }}
+                  aria-hidden
+                >
+                  {numbers[index] === 0 ? <HomeGlyph /> : numbers[index]}
                 </span>
-                {pin.detail && <span className="truncate text-[11px] text-[#747288]">{pin.detail}</span>}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      {map.hidden_pins ? (
-        <p className="px-4 pb-2 text-[11px] text-[#979CAE]">+{map.hidden_pins} more not shown</p>
-      ) : null}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs font-medium text-[#141B34]" dir="auto" title={pin.label}>
+                      {pin.label}
+                    </span>
+                    {pin.property_id && (
+                      <span
+                        className="shrink-0 rounded border border-dashed border-[#D8DDE6] px-1 text-[10px] leading-4 text-[#747288]"
+                        title="Property ID, as on its card"
+                      >
+                        {pin.property_id}
+                      </span>
+                    )}
+                  </span>
+                  {pin.detail && <span className="truncate text-[11px] text-[#747288]">{pin.detail}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        {map.hidden_pins ? (
+          <p className="px-4 pb-2 text-[11px] text-[#979CAE]">+{map.hidden_pins} more not shown</p>
+        ) : null}
+      </div>
     </figure>
   );
 }

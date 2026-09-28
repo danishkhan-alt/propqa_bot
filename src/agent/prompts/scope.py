@@ -15,5 +15,7 @@ GOLDEN_VISA_FACTS = (
     f"at least AED {GOLDEN_VISA_MIN_PRICE_AED:,}. It can be one property or several whose values add "
     "up, off-plan from a DLD-approved developer, or mortgaged with the bank's approval. Renting a "
     "home never qualifies, so only properties for sale are relevant. The ICP and the Dubai Land "
-    "Department set and can change the rules, so the buyer should confirm them before relying on them."
+    "Department set and can change the rules, so the buyer should confirm them before relying on them. "
+    "Bring the Golden Visa up only when the user asks about it or about residence; do not mention "
+    "it in other answers or suggest it as a next step."
 )
