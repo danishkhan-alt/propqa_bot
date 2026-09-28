@@ -11,6 +11,7 @@ from agent.graph.workflow import get_chat_graph
 from agent.memory.maintenance.privacy import delete_user_memory
 from agent.memory.models.records import ALL_CLUSTERS
 from agent.memory.session.backends import get_repository
+from auth.middleware import require_user_id
 from common.logger import get_logger
 from common.session import (
     list_user_sessions,
@@ -19,11 +20,15 @@ from common.session import (
     restore_turns_from_checkpoint,
     safe_thread_id,
     safe_user_id,
+    transfer_sidebar_session,
 )
 from routes.schemas.sessions import ForgetSessionsRequest, NewSessionRequest, SavePreferencesRequest
 
 logger = get_logger("sessions")
 router = APIRouter()
+
+# Browser guests use this prefix. Account ids are bare uuids, so a claim can only take a guest chat.
+GUEST_USER_ID_PREFIX = "anon-"
 
 
 @router.post("/sessions/new")
@@ -80,9 +85,14 @@ def forget_session_and_user_memory(request: Request, session_id: str, body: Forg
 
 
 @router.post("/sessions/{session_id}/claim")
-def claim_session(session_id: str, body: ForgetSessionsRequest | None = None) -> dict:
-    del session_id, body
-    return {"status": "ok"}
+def claim_session(request: Request, session_id: str, body: ForgetSessionsRequest | None = None) -> dict:
+    """Move a chat started as a guest into the signed-in account's sidebar."""
+    user_id = require_user_id(request)
+    guest_user_id = (body.guest_user_id if body is not None else None) or ""
+    claimed = guest_user_id.startswith(GUEST_USER_ID_PREFIX) and transfer_sidebar_session(
+        session_id, guest_user_id, user_id
+    )
+    return {"status": "ok", "claimed": claimed}
 
 
 @router.get("/sessions/{session_id}/quota")

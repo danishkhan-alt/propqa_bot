@@ -62,6 +62,26 @@ def remove_sidebar_session(session_id: str) -> str | None:
     return thread_id
 
 
+def transfer_sidebar_session(session_id: str, from_owner: str, to_owner: str) -> bool:
+    """Move a chat to another owner, only if ``from_owner`` owns it now."""
+    thread_id = safe_thread_id(session_id)
+    source = safe_user_id(from_owner)
+    target = safe_user_id(to_owner)
+    if thread_id is None or source is None or target is None:
+        return False
+    if get_cache().get(_owner_key(thread_id), None) != source:
+        return False
+    source_rows = _load_sessions(source)
+    moved = next((row for row in source_rows if row.session_id == thread_id), None)
+    if moved is None:
+        return False
+    _save_sessions(source, [row for row in source_rows if row.session_id != thread_id])
+    target_rows = [row for row in _load_sessions(target) if row.session_id != thread_id]
+    _save_sessions(target, [moved, *target_rows][:_MAX_SIDEBAR_SESSIONS])
+    _remember_owner(thread_id, target)
+    return True
+
+
 def _load_sessions(user_id: str) -> list[SidebarSession]:
     stored = get_cache().get(_sessions_key(user_id), None)
     if not isinstance(stored, list):

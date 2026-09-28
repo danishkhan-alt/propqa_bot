@@ -1,4 +1,4 @@
-"""Reply blocks laid out from the lookup rows, and the one-block limit per reply.
+"""Reply blocks laid out from the lookup rows and map pins, and the one-block limit per reply.
 
 The answer model only names columns, labels, and units. Every value shown is copied
 from the rows here, so a figure on screen always matches the data.
@@ -11,6 +11,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
+from agent.reply.place_map import build_place_map
 from agent.schemas.reply import (
     Explainer,
     FigureColumn,
@@ -126,18 +127,26 @@ def build_explainer(explainer: Explainer | None) -> dict[str, Any] | None:
 
 
 def build_reply_blocks(
-    reply: StructuredReply, rows: list[dict[str, Any]], columns: list[str]
+    reply: StructuredReply,
+    rows: list[dict[str, Any]],
+    columns: list[str],
+    map_pins: list[dict[str, Any]] | None = None,
+    map_lines: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """At most one block under the text: comparison cards, then figures, then an explainer."""
+    """At most one block under the text: comparison cards, then a map, then figures, then an explainer."""
     if reply.cards:
         return {
             "cards": [card.model_dump() for card in reply.cards],
+            "map": None,
             "figures": None,
             "explainer": None,
         }
-    figures = build_figures(reply.figures, rows, columns)
-    explainer = None if figures is not None else build_explainer(reply.explainer)
-    return {"cards": [], "figures": figures, "explainer": explainer}
+    place_map = build_place_map(map_pins, map_lines) if reply.show_map else None
+    figures = None if place_map is not None else build_figures(reply.figures, rows, columns)
+    explainer = (
+        None if place_map is not None or figures is not None else build_explainer(reply.explainer)
+    )
+    return {"cards": [], "map": place_map, "figures": figures, "explainer": explainer}
 
 
 def _build_stats_layout(

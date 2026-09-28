@@ -344,6 +344,7 @@ class LangChainAgentModels:
         coverage: list[dict] | None = None,
         session_profile: dict | None = None,
         follow_up_question: str | None = None,
+        map_available: bool = False,
         on_text: Callable[[str], None] | None = None,
         config: RunnableConfig | None = None,
     ) -> StructuredReply:
@@ -366,6 +367,7 @@ class LangChainAgentModels:
             "filters": filters or [],
             "coverage": coverage or [],
             "follow_up_question": follow_up_question,
+            "map_available": map_available,
         }
         messages = [
             build_cached_system_message(STRUCTURED_REPLY_SYSTEM),
@@ -382,6 +384,7 @@ class LangChainAgentModels:
         memory_block: str = "",
         data_note: str = "",
         session_profile: dict | None = None,
+        map_available: bool = False,
         on_text: Callable[[str], None] | None = None,
         config: RunnableConfig | None = None,
     ) -> StructuredReply:
@@ -393,6 +396,7 @@ class LangChainAgentModels:
             "memory_block": memory_block,
             "listings": listings,
             "data_note": data_note,
+            "map_available": map_available,
         }
         messages = [
             build_cached_system_message(FOCUSED_LISTINGS_REPLY_SYSTEM),

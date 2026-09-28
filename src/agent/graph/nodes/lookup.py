@@ -22,6 +22,7 @@ from agent.sql.execute import run_against_warehouse
 from agent.sql.guard import tables_in_domains
 from agent.sql.listing_sql_fragments import LISTINGS_TABLE
 from agent.sql.lookup import run_listing_lookup, run_sql_lookup, uses_listing_search
+from agent.sql.transit import fetch_nearest_station_rows, nearest_station_pins
 from agent.states.chat import ChatState
 from common.logger import get_logger
 
@@ -99,4 +100,20 @@ def run_warehouse_lookup(
         cards = fetch_listing_cards(ids, loader)
         update["listing_cards"] = cards
         publish_stream_event("listings", ids=ids, cards=cards)
+        kinds = list((update.get("sql_result") or {}).get("station_kinds") or [])
+        if kinds:
+            update["map_pins"] = _station_map_pins(runtime, ids, cards, kinds)
     return update
+
+
+def _station_map_pins(
+    runtime: Runtime[AgentContext], ids: list, cards: list[dict], kinds: list[str]
+) -> list[dict]:
+    """A search near stations pins each listing and the station it is near."""
+    loader = runtime.context.nearest_station_loader or fetch_nearest_station_rows
+    try:
+        rows = loader([int(item) for item in ids if str(item).isdigit()], kinds)
+    except Exception:
+        logger.warning("transit.nearest_station failed", exc_info=True)
+        return []
+    return nearest_station_pins(cards, list(rows or []))

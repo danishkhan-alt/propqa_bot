@@ -40,6 +40,8 @@ class ChatState(TypedDict, total=False):
     session_profile: dict
     focused_property_ids: list[int]
     focused_listings: list
+    # Places this turn's data can pin on a map: picked listings, or a search near stations.
+    map_pins: list
 
 
 class ChatInput(TypedDict, total=False):

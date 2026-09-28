@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.grounding import Breadth
-from agent.enums.listing import ListingPurpose, ListingSort, MentionKind
+from agent.enums.listing import ListingPurpose, ListingSort, MentionKind, NearStation
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
 from agent.grounding import GroundingIndex
@@ -18,7 +18,7 @@ from agent.grounding.places import build_place_directory
 from agent.grounding.stored_values import StoredValueIndex
 from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding
 from agent.schemas.grounding_index import ListingCountsByPlaceLink, LocationNode, StoredValue
-from agent.schemas.listing import ListingFilters, NameMention
+from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters, NameMention
 from agent.schemas.listing_search import ListingSearch
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft, SqlPage
@@ -297,3 +297,161 @@ def test_the_reply_is_told_only_the_filters_the_user_gave():
 
     assert _stated_listing_filters(search) == ["purpose: sale", "price_max: 2000000.0", "place: Dubai Marina"]
     assert _stated_listing_filters(ListingSearch(filters=ListingFilters())) == []
+
+
+def test_a_search_near_the_metro_keeps_listings_within_a_short_walk():
+    query = build_listing_query(
+        ListingSearch(filters=ListingFilters(near_station=NearStation.METRO)), limit=10, offset=0
+    )
+    assert "ST_DistanceSphere" in query.sql and "chatbot_ai.metro_stations" in query.sql
+    assert query.params["station_kinds"] == ["metro"]
+    assert query.params["station_meters"] == 1000
+
+    tram = build_listing_query(
+        ListingSearch(filters=ListingFilters(near_station="metro_or_tram", station_within_km=0.5)), limit=10, offset=0
+    )
+    assert tram.params["station_kinds"] == ["metro", "tram"]
+    assert tram.params["station_meters"] == 500
+    assert "station_kinds" not in build_listing_query(ListingSearch(filters=ListingFilters()), limit=10, offset=0).params
+
+
+def test_a_station_search_widens_the_walk_before_it_drops_the_station():
+    runner = _CountingRunner(totals=[0, 0, 4], ids=[1, 2, 3, 4])
+    filters = ListingFilters(near_station=NearStation.METRO, station_within_km=0.5)
+    result = search_listings(ListingSearch(filters=filters, places=[MARINA]), runner, limit=10, offset=0)
+    assert [params.get("station_meters") for _, params in runner.calls[:3]] == [500, 2000, None]
+    assert result.filters.near_station is NearStation.ANY
+    assert len(result.notes) == 2 and "2 km" in result.notes[0]
+
+    runner = _CountingRunner(totals=[0, 3], ids=[1, 2, 3])
+    result = search_listings(ListingSearch(filters=filters), runner, limit=10, offset=0)
+    assert result.filters.near_station is NearStation.METRO and result.filters.station_km == 2
+
+
+def test_the_reply_is_told_how_close_to_a_station_in_plain_words():
+    from agent.sql.lookup import _stated_listing_filters
+
+    near = ListingSearch(filters=ListingFilters(purpose="rent", near_station=NearStation.METRO))
+    assert _stated_listing_filters(near) == ["purpose: rent", "within 1 km of a metro station"]
+    close = ListingSearch(filters=ListingFilters(near_station=NearStation.TRAM, station_within_km=0.5))
+    assert _stated_listing_filters(close) == ["within 0.5 km of a tram stop"]
+
+
+def test_golden_visa_searches_only_sales_at_the_qualifying_price():
+    filters = ListingFilters.model_validate({"purpose": "rent", "golden_visa": True})
+    assert filters.purpose is ListingPurpose.SALE
+    query = build_listing_query(ListingSearch(filters=filters), limit=10, offset=0)
+    assert query.params["purpose"] == "for_sale"
+    assert "COALESCE(p.price_max, p.price_min) >= %(golden_visa_min)s" in query.sql
+    assert query.params["golden_visa_min"] == GOLDEN_VISA_MIN_PRICE_AED
+
+
+def test_relaxing_the_price_never_drops_below_the_golden_visa_threshold():
+    runner = _CountingRunner(totals=[0, 4], ids=[1, 2])
+    filters = ListingFilters(golden_visa=True, price_max=1_500_000)
+    result = search_listings(ListingSearch(filters=filters, places=[MARINA]), runner, limit=10, offset=0)
+    assert result.ids == ["1", "2"]
+    _, page_params = runner.calls[-1]
+    assert "price_max" not in page_params
+    assert page_params["golden_visa_min"] == GOLDEN_VISA_MIN_PRICE_AED
+    assert page_params["purpose"] == "for_sale"
+
+
+def test_the_reply_is_told_the_golden_visa_condition_in_plain_words():
+    from agent.sql.lookup import _stated_listing_filters
+
+    search = ListingSearch(filters=ListingFilters(golden_visa=True))
+    assert _stated_listing_filters(search) == [
+        "purpose: sale",
+        "qualifies for the UAE Golden Visa: for sale at AED 2,000,000 or more",
+    ]
+
+
+class _MetroSearchModels(_ListingModels):
+    def route_query(self, **kwargs) -> QueryRoute:
+        route = super().route_query(**kwargs)
+        return route.model_copy(
+            update={"listing_filters": route.listing_filters.model_copy(update={"near_station": NearStation.METRO})}
+        )
+
+    def draft_reply(self, **kwargs):
+        from agent.schemas.reply import StructuredReply
+
+        self.answers.append(kwargs)
+        return StructuredReply(intro_text="Two homes near the metro.", show_map=True)
+
+
+def test_a_search_near_the_metro_pins_each_listing_and_its_station():
+    models = _MetroSearchModels()
+    runner = _CountingRunner(totals=[2], ids=[101, 102])
+    station_calls: list[tuple[list[int], list[str]]] = []
+
+    def stations(ids: list[int], kinds: list[str]) -> list[dict]:
+        station_calls.append((ids, kinds))
+        return [
+            {
+                "id": 101,
+                "lat": 25.0806,
+                "lng": 55.1398,
+                "station_kind": "metro",
+                "station_name": "DAMAC Properties Metro Station",
+                "station_line": "Red Metro line",
+                "station_lat": 25.0799,
+                "station_lng": 55.1475,
+                "station_km": "0.8",
+            }
+        ]
+
+    red = {"line": "Red Metro line", "path": [[25.0799, 55.1475], [25.0900, 55.1600]]}
+    graph = build_chat_graph(InMemorySaver())
+    events = list(
+        graph.stream(
+            {"messages": [HumanMessage(content="2 bed apartments for sale near the metro in marina")]},
+            config={"configurable": {"thread_id": "metro-search", "user_id": "user-1"}},
+            context=AgentContext(
+                user_id="user-1",
+                models=models,
+                sql_runner=runner,
+                listing_loader=lambda ids: [{"id": 101, "building_name": "Marina Gate"}, {"id": 102}],
+                nearest_station_loader=stations,
+                rail_line_loader=lambda: [red],
+                grounding=_index(),
+            ),
+            stream_mode="custom",
+        )
+    )
+
+    assert station_calls == [([101, 102], ["metro"])]
+    assert models.answers[0]["map_available"] is True
+    assert "within 1 km of a metro station" in models.answers[0]["filters"]
+    place_map = next(event["reply"]["map"] for event in events if event.get("event") == "reply")
+    assert [(pin["kind"], pin["label"]) for pin in place_map["pins"]] == [
+        ("listing", "Marina Gate"),
+        ("metro", "DAMAC Properties Metro Station"),
+    ]
+    assert place_map["pins"][0]["detail"] == "0.8 km to DAMAC Properties Metro Station"
+    assert place_map["pins"][0]["property_id"] == "101"
+    assert [line["line"] for line in place_map["lines"]] == ["red"]
+
+
+def test_a_search_with_no_station_filter_looks_up_no_stations():
+    models = _ListingModels()
+    runner = _CountingRunner(totals=[2], ids=[101, 102])
+    graph = build_chat_graph(InMemorySaver())
+
+    def stations(ids, kinds):
+        raise AssertionError("no station lookup without a station filter")
+
+    state = graph.invoke(
+        {"messages": [HumanMessage(content="2 bed properties for sale in marina")]},
+        config={"configurable": {"thread_id": "no-metro", "user_id": "user-1"}},
+        context=AgentContext(
+            user_id="user-1",
+            models=models,
+            sql_runner=runner,
+            listing_loader=lambda ids: [],
+            nearest_station_loader=stations,
+            grounding=_index(),
+        ),
+    )
+    assert state["map_pins"] == []

@@ -99,6 +99,10 @@ class StructuredReply(BaseModel):
     )
     cards: list[ReplyCard] = Field(default_factory=list)
     figures: FigureSpec | None = None
+    show_map: bool = Field(
+        default=False,
+        description="Pin the places the answer is about on a map. Only when map_available is true.",
+    )
     explainer: Explainer | None = None
     exclusions_note: str = ""
     data_source_note: str = ""

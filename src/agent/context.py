@@ -11,6 +11,7 @@ from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft, SqlPage
 from agent.sql.cards import ListingLoader
 from agent.sql.listing_details import ListingDetailLoader
+from agent.sql.transit import NearestStationLoader, RailLineLoader
 
 
 class AgentModels(Protocol):
@@ -109,4 +110,6 @@ class AgentContext:
     sql_runner: SqlRunner | None = None
     listing_loader: ListingLoader | None = None
     listing_detail_loader: ListingDetailLoader | None = None
+    nearest_station_loader: NearestStationLoader | None = None
+    rail_line_loader: RailLineLoader | None = None
     grounding: GroundingIndex | None = None

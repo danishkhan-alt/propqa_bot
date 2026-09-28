@@ -1,8 +1,13 @@
+import { lazy, Suspense } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
 import { QuickReplies, type FollowUpQuestion, type QuickReplyOption } from "./QuickReplies";
 import { ExplainerBlock, FiguresBlock, type ReplyExplainer, type ReplyFigures } from "./ReplyBlocks";
+import type { ReplyMap } from "./PlaceMap";
+
+// Leaflet only loads for a reply that has a map.
+const PlaceMap = lazy(() => import("./PlaceMap"));
 
 export interface ReplyCard {
   title: string;
@@ -17,7 +22,9 @@ export interface StructuredReply {
   intro_text?: string;
   data_source_note?: string;
   cards?: ReplyCard[];
-  /** Figures copied from the lookup rows; the server sends at most one of cards, figures, explainer. */
+  /** Places pinned from the data; the server sends at most one of cards, map, figures, explainer. */
+  map?: ReplyMap | null;
+  /** Figures copied from the lookup rows. */
   figures?: ReplyFigures | null;
   explainer?: ReplyExplainer | null;
   exclusions_note?: string;
@@ -41,7 +48,7 @@ interface StructuredAnswerProps {
   onQuickReply?: (question: FollowUpQuestion, option: QuickReplyOption) => void;
 }
 
-/** One assistant reply: the answer, one optional block (comparison, figures, or explainer), one question, next steps, source. */
+/** One assistant reply: the answer, one optional block (comparison, map, figures, or explainer), one question, next steps, source. */
 export function StructuredAnswer({
   reply,
   interactive,
@@ -90,6 +97,12 @@ export function StructuredAnswer({
           ))}
         </div>
       )}
+
+      {reply.map?.pins?.length ? (
+        <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl border border-[#E8ECF3] bg-[#F5F7FA]" aria-hidden />}>
+          <PlaceMap map={reply.map} />
+        </Suspense>
+      ) : null}
 
       {reply.figures && <FiguresBlock figures={reply.figures} />}
 
