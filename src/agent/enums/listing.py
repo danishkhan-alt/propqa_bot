@@ -39,3 +39,12 @@ class Completion(str, Enum):
     ANY = "any"
     READY = "ready"
     OFF_PLAN = "off_plan"
+
+
+class NearStation(str, Enum):
+    """Which rail stations a listing must be close to. "any" puts no limit on it."""
+
+    ANY = "any"
+    METRO = "metro"
+    TRAM = "tram"
+    METRO_OR_TRAM = "metro_or_tram"

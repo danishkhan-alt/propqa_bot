@@ -106,13 +106,21 @@ def test_a_focused_listing_carries_its_card_and_advert_details():
 def test_a_focused_listing_pins_itself_its_metro_and_what_is_nearby():
     pins = fetch_focused_listings([201], _cards, _details).map_pins
     assert pins == [
-        {"lat": 25.2012, "lng": 55.3471, "label": "Harbour Gate Tower 2", "detail": "", "kind": "listing"},
+        {
+            "lat": 25.2012,
+            "lng": 55.3471,
+            "label": "Harbour Gate Tower 2",
+            "detail": "",
+            "kind": "listing",
+            "property_id": "201",
+        },
         {
             "lat": 25.21937,
             "lng": 55.33869,
             "label": "Creek Metro Station",
             "detail": "Green Metro line · 1.5 km away",
             "kind": "metro",
+            "line": "green",
         },
         {"lat": 25.2003, "lng": 55.348, "label": "Dubai Creek Harbor Park", "detail": "0.1 km away", "kind": "nearby"},
     ]
@@ -176,7 +184,13 @@ class _FocusModels:
 
 def _graph_and_context(models: _FocusModels):
     graph = build_chat_graph(InMemorySaver())
-    context = AgentContext(user_id="user-1", models=models, listing_loader=_cards, listing_detail_loader=_details)
+    context = AgentContext(
+        user_id="user-1",
+        models=models,
+        listing_loader=_cards,
+        listing_detail_loader=_details,
+        rail_line_loader=lambda: [],
+    )
     return graph, context
 
 
@@ -209,7 +223,7 @@ def test_a_question_about_picked_listings_skips_routing_and_reads_the_advert():
     assert state["messages"][-1].content == "It is a **3-bed** in Harbour Gate Tower 2."
     assert state["query_route"] is None
     assert state["focused_listings"] == []
-    assert state["focused_map_pins"] == []
+    assert state["map_pins"] == []
     # The previous search is kept, so "cheaper" after this still refines it.
     assert state["last_need_db"].intent_summary == "2 beds in the creek"
 

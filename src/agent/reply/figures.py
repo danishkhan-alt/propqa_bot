@@ -131,6 +131,7 @@ def build_reply_blocks(
     rows: list[dict[str, Any]],
     columns: list[str],
     map_pins: list[dict[str, Any]] | None = None,
+    map_lines: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """At most one block under the text: comparison cards, then a map, then figures, then an explainer."""
     if reply.cards:
@@ -140,7 +141,7 @@ def build_reply_blocks(
             "figures": None,
             "explainer": None,
         }
-    place_map = build_place_map(map_pins) if reply.show_map else None
+    place_map = build_place_map(map_pins, map_lines) if reply.show_map else None
     figures = None if place_map is not None else build_figures(reply.figures, rows, columns)
     explainer = (
         None if place_map is not None or figures is not None else build_explainer(reply.explainer)

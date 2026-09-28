@@ -33,6 +33,8 @@ class ListingResult:
     query: ListingQuery
     notes: list[str]
     duration_ms: int
+    # The filters the ids were found with, after any loosening.
+    filters: ListingFilters = field(default_factory=ListingFilters)
 
 
 @dataclass(frozen=True)

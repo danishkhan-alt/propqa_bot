@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, MentionKind
+from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, MentionKind, NearStation
 
 
 class NameMention(BaseModel):
@@ -23,6 +23,11 @@ class NameMention(BaseModel):
         if not text:
             raise ValueError("text is empty")
         return text
+
+
+# A short walk to the platform, when the user asks for "near the metro" without a distance.
+DEFAULT_STATION_KM = 1.0
+MAX_STATION_KM = 5.0
 
 
 class ListingFilters(BaseModel):
@@ -45,6 +50,15 @@ class ListingFilters(BaseModel):
     furnishing: Furnishing = Furnishing.ANY
     completion: Completion = Completion.ANY
     sort: ListingSort = Field(default=ListingSort.NEWEST, description="newest when the user did not ask for an order.")
+    # Not nullable: the router's output schema is near its limit of nullable fields.
+    near_station: NearStation = Field(
+        default=NearStation.ANY,
+        description="metro or tram when they want homes near one, metro_or_tram for public transport. any otherwise.",
+    )
+    station_within_km: float = Field(
+        default=0,
+        description="How close to the station, in km, when they said it ('within 500 m' is 0.5). 0 when they did not.",
+    )
 
     @field_validator("bedrooms_min", "bedrooms_max", mode="before")
     @classmethod
@@ -57,6 +71,17 @@ class ListingFilters(BaseModel):
     def positive_amount(cls, value: Any) -> float | None:
         number = _number(value)
         return number if number is not None and number > 0 else None
+
+    @field_validator("station_within_km", mode="before")
+    @classmethod
+    def station_distance(cls, value: Any) -> float:
+        number = _number(value)
+        return min(number, MAX_STATION_KM) if number is not None and number > 0 else 0
+
+    @property
+    def station_km(self) -> float:
+        """The distance a station filter applies: what they said, else a short walk."""
+        return self.station_within_km or DEFAULT_STATION_KM
 
     @field_validator("property_types", mode="before")
     @classmethod

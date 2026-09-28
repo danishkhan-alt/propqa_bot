@@ -11,7 +11,13 @@ import pytest
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.reply.buyer_profile import merge_profile, pick_next_profile_question
 from agent.reply.figures import build_explainer, build_figures, build_reply_blocks, format_figure
-from agent.reply.place_map import MAX_MAP_PINS, build_place_map, find_coordinate_pair, split_place_rows
+from agent.reply.place_map import (
+    MAX_MAP_PINS,
+    build_place_map,
+    find_coordinate_pair,
+    rail_line_key,
+    split_place_rows,
+)
 from agent.schemas.profile import ProfileSignals
 from agent.schemas.reply import (
     Explainer,
@@ -491,7 +497,7 @@ def test_rows_without_coordinates_pass_through_untouched():
 def test_the_map_shows_each_place_once_and_caps_its_pins():
     pin = {"lat": 25.1, "lng": 55.2, "label": "A", "detail": "", "kind": "place"}
     many = [{**pin, "label": f"Stop {i}"} for i in range(MAX_MAP_PINS + 5)]
-    assert build_place_map([pin, dict(pin)]) == {"pins": [pin], "hidden_pins": 0}
+    assert build_place_map([pin, dict(pin)]) == {"pins": [pin], "hidden_pins": 0, "lines": []}
     shown = build_place_map(many)
     assert len(shown["pins"]) == MAX_MAP_PINS and shown["hidden_pins"] == 5
     assert build_place_map([]) is None
@@ -508,8 +514,32 @@ def test_a_map_the_reply_asks_for_replaces_figures():
     pins = [{"lat": 25.1, "lng": 55.2, "label": "A", "detail": "", "kind": "place"}]
     reply = StructuredReply(intro_text="x", show_map=True, figures=_spec("stats", [("n", "Count", "count")]))
     blocks = build_reply_blocks(reply, rows, ["n"], pins)
-    assert blocks["map"] == {"pins": pins, "hidden_pins": 0} and blocks["figures"] is None
+    assert blocks["map"] == {"pins": pins, "hidden_pins": 0, "lines": []} and blocks["figures"] is None
 
     unasked = reply.model_copy(update={"show_map": False})
     assert build_reply_blocks(unasked, rows, ["n"], pins)["map"] is None
     assert build_reply_blocks(reply, rows, ["n"], [])["figures"] is not None
+
+
+@pytest.mark.parametrize(
+    "name, key",
+    [("Red Metro line", "red"), ("Green Metro Line", "green"), ("Tram line", "tram"), ("Route 2020", ""), (None, "")],
+)
+def test_a_rail_line_is_keyed_by_its_color(name, key):
+    assert rail_line_key(name) == key
+
+
+def test_a_rail_line_is_drawn_only_when_a_pin_sits_on_it():
+    red = {"line": "Red Metro line", "path": [[25.0700, 55.1300], [25.0800, 55.1400]]}
+    tram = {"line": "Tram line", "path": [[25.1000, 55.1700], [25.1100, 55.1800]]}
+    on_red = {"lat": 25.0751, "lng": 55.1350, "label": "DMCC", "detail": "", "kind": "place"}
+    shown = build_place_map([on_red], [red, tram])
+    assert shown["lines"] == [{"line": "red", "name": "Red Metro line", "path": red["path"]}]
+
+    far = {**on_red, "lat": 25.2, "lng": 55.3}
+    assert build_place_map([far], [red, tram])["lines"] == []
+
+
+def test_two_listings_in_one_tower_are_two_pins():
+    unit = {"lat": 25.08, "lng": 55.14, "label": "Marina Gate", "detail": "", "kind": "listing", "property_id": "1"}
+    assert len(build_place_map([unit, {**unit, "property_id": "2"}, dict(unit)])["pins"]) == 2

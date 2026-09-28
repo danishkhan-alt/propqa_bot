@@ -12,7 +12,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from agent.enums.listing import MentionKind
+from agent.enums.listing import MentionKind, NearStation
 from agent.enums.routing import Intent
 from agent.schemas.grounding import Grounding, as_grounding
 from agent.schemas.listing import ListingFilters
@@ -40,6 +40,7 @@ from agent.sql.listing_search import search_listings
 from agent.sql.listing_sql_fragments import LISTINGS_TABLE
 from agent.sql.recipes import bind_recipe, get_recipe
 from agent.sql.trace import trace_sql_attempt
+from agent.sql.transit import STATION_KINDS, STATION_LABELS
 from agent.states.chat import ChatState
 from catalog import get_table_date_coverage
 from common.logger import get_logger
@@ -116,6 +117,8 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
         total=found.total,
         notes=[*grounding.user_facing_notes(), *found.notes],
         filters=_stated_listing_filters(search),
+        # The station kinds the ids were found near, after any loosening. Empty when none.
+        station_kinds=list(STATION_KINDS.get(found.filters.near_station, ())),
     )
     trace_sql_attempt(last, client)
     return {"sql_result": last, "sql_rows": rows, "listing_ids": found.ids}
@@ -315,8 +318,14 @@ def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> Lis
 
 def _stated_listing_filters(search: ListingSearch) -> list[str]:
     """The user's own listing filters, as `field: value`, for the reply to name."""
-    stated = search.filters.model_dump(mode="json", exclude_defaults=True)
+    stated = search.filters.model_dump(
+        mode="json", exclude_defaults=True, exclude={"near_station", "station_within_km"}
+    )
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
+    if search.filters.near_station is not NearStation.ANY:
+        conditions.append(
+            f"within {search.filters.station_km:g} km of {STATION_LABELS[search.filters.near_station]}"
+        )
     conditions.extend(f"place: {place.title}" for place in search.places)
     conditions.extend(f"place text: {text}" for text in search.unmatched_places)
     conditions.extend(f"developer: {name}" for name in search.developers)

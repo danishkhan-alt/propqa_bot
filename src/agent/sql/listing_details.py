@@ -10,9 +10,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from agent.reply.place_map import map_pin
-from agent.sql.cards import ListingLoader, fetch_listing_cards, prompt_listing_facts, to_json_number
+from agent.reply.place_map import map_pin, rail_line_key
+from agent.sql.cards import (
+    ListingLoader,
+    fetch_listing_cards,
+    listing_display_name,
+    prompt_listing_facts,
+    to_json_number,
+)
 from agent.sql.execute import run_against_warehouse
+from agent.sql.listing_sql_fragments import COORDINATE_PATTERN, LISTING_HAS_PIN_SQL, LISTING_PIN_SQL
 from common.logger import get_logger
 
 logger = get_logger("agent.sql")
@@ -21,8 +28,6 @@ logger = get_logger("agent.sql")
 MAX_FOCUSED_LISTINGS = 8
 MAX_DESCRIPTION_CHARS = 1500
 MAX_NEARBY_PLACES_PER_KIND = 3
-
-_COORDINATE = r"^\s*-?[0-9]+(\.[0-9]+)?\s*$"
 
 LISTING_DETAILS_SQL = f"""
 WITH wanted AS (
@@ -57,9 +62,8 @@ SELECT
 FROM wanted w
 JOIN public.properties p ON p.id = w.id AND p.deleted_at IS NULL
 LEFT JOIN LATERAL (
-    SELECT ST_SetSRID(ST_MakePoint(p.lng::float8, p.lat::float8), 4326) AS pin
-    WHERE p.lat ~ '{_COORDINATE}' AND p.lng ~ '{_COORDINATE}'
-      AND p.lat::float8 <> 0 AND p.lng::float8 <> 0
+    SELECT {LISTING_PIN_SQL} AS pin
+    WHERE {LISTING_HAS_PIN_SQL}
 ) here ON true
 LEFT JOIN LATERAL (
     SELECT array_agg(DISTINCT a.title_en) AS names
@@ -94,7 +98,7 @@ LEFT JOIN LATERAL (
                 ) / 1000)::numeric, 1) AS km
             FROM jsonb_array_elements(CASE WHEN jsonb_typeof(kind.value) = 'array' THEN kind.value END) place
             WHERE NULLIF(TRIM(place->>'name'), '') IS NOT NULL
-              AND place->>'latitude' ~ '{_COORDINATE}' AND place->>'longitude' ~ '{_COORDINATE}'
+              AND place->>'latitude' ~ '{COORDINATE_PATTERN}' AND place->>'longitude' ~ '{COORDINATE_PATTERN}'
             ORDER BY km NULLS LAST
             LIMIT %(nearby_per_kind)s
         ) near
@@ -229,22 +233,31 @@ def _listing_map_pins(card: dict[str, Any], row: dict[str, Any]) -> list[dict[st
     Nearby places keep no kind: the advert's grouping is noisy (a gym under schools), so a
     pin names only the place itself.
     """
-    name = card.get("building_name") or card.get("project_name") or card.get("title_en") or "This listing"
     pins = [
         map_pin(
             row.get("lat"),
             row.get("lng"),
-            label=str(name),
+            label=listing_display_name(card),
             detail=str(card.get("master_project_name") or ""),
             kind="listing",
+            property_id=str(card["id"]),
         )
     ]
     metro = _nearest_metro_fact(row)
     if metro is not None:
         detail = " · ".join(
-            part for part in (metro.get("line"), _distance_text(metro.get("km"))) if part
+            part for part in (metro.get("line"), distance_text(metro.get("km"))) if part
         )
-        pins.append(map_pin(row.get("metro_lat"), row.get("metro_lng"), label=metro["station"], detail=detail, kind="metro"))
+        pins.append(
+            map_pin(
+                row.get("metro_lat"),
+                row.get("metro_lng"),
+                label=metro["station"],
+                detail=detail,
+                kind="metro",
+                line=rail_line_key(metro.get("line")),
+            )
+        )
     places = row.get("nearby_places")
     for items in places.values() if isinstance(places, dict) else []:
         for item in items if isinstance(items, list) else []:
@@ -254,12 +267,12 @@ def _listing_map_pins(card: dict[str, Any], row: dict[str, Any]) -> list[dict[st
                         item.get("lat"),
                         item.get("lng"),
                         label=str(item["name"]),
-                        detail=_distance_text(to_json_number(item.get("km"))),
+                        detail=distance_text(to_json_number(item.get("km"))),
                         kind="nearby",
                     )
                 )
     return [pin for pin in pins if pin is not None]
 
 
-def _distance_text(km: Any) -> str:
+def distance_text(km: Any) -> str:
     return f"{km} km away" if km is not None else ""

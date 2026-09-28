@@ -47,6 +47,8 @@ listing_filters is set only when the user wants to see individual properties lis
 - price_min and price_max in AED. "Under 1.5M" is price_max 1500000.
 - size in square feet only when stated. furnishing and completion (ready or off_plan) are any unless stated.
 - sort: price_low for cheapest, price_high for most expensive, size_large for biggest. newest when they did not ask for an order.
+- near_station: metro when they want homes near the metro ("near a metro station", "walking distance to the metro"), tram for the tram, metro_or_tram for public transport or rail in general. any otherwise. "Near the metro" is a condition, not a name: leave it out of names. A named station ("near Business Bay metro") is a place in names instead.
+- station_within_km: the distance they gave, in km ("within 500 m" is 0.5, "10 minutes' walk" is 0.8). 0 when they gave none.
 - On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters.
 
 confidence is from 0 to 1.

@@ -13,10 +13,11 @@ from dataclasses import replace
 from functools import lru_cache
 from typing import Any
 
-from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort
+from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, NearStation
 from agent.grounding.name_matching import normalize_name
 from agent.schemas.listing_search import ListingQuery, ListingResult, ListingSearch, Relaxation
 from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION, ASKING_PRICE_SQL
+from agent.sql.transit import near_station_clause
 from catalog import load_domain
 
 _ORDER_BY = {
@@ -29,6 +30,7 @@ _ORDER_BY = {
 _STORED_PURPOSE = {ListingPurpose.SALE: "for_sale", ListingPurpose.RENT: "for_rent"}
 
 ListingRunner = Callable[[str, dict[str, Any]], Any]
+WIDER_STATION_KM = 2.0
 
 
 RELAXATIONS: tuple[Relaxation, ...] = (
@@ -61,6 +63,17 @@ RELAXATIONS: tuple[Relaxation, ...] = (
         note="No listing matched the completion status, so ready and off-plan are both included.",
         applies=lambda f: f.completion is not Completion.ANY,
         relax=lambda f: f.model_copy(update={"completion": Completion.ANY}),
+    ),
+    # Being near a station is the point of such a search, so it is widened before it is dropped.
+    Relaxation(
+        note=f"No listing was that close to a station, so this widens the walk to {WIDER_STATION_KM:g} km.",
+        applies=lambda f: f.near_station is not NearStation.ANY and f.station_km < WIDER_STATION_KM,
+        relax=lambda f: f.model_copy(update={"station_within_km": WIDER_STATION_KM}),
+    ),
+    Relaxation(
+        note="No listing was near a station, so these results ignore the distance to one.",
+        applies=lambda f: f.near_station is not NearStation.ANY,
+        relax=lambda f: f.model_copy(update={"near_station": NearStation.ANY, "station_within_km": 0}),
     ),
 )
 
@@ -108,6 +121,8 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
     if filters.completion is not Completion.ANY:
         clauses.append("p.completion_status = %(completion)s")
         params["completion"] = filters.completion.value
+    if filters.near_station is not NearStation.ANY:
+        clauses.append(near_station_clause(filters.near_station, filters.station_km, params))
     if search.developers:
         clauses.append("p.developer = ANY(%(developers)s)")
         params["developers"] = list(search.developers)
@@ -145,7 +160,9 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
         duration_ms += elapsed
         notes.append(relaxation.note)
     if not total:
-        return ListingResult(ids=[], total=0, query=query, notes=notes, duration_ms=duration_ms)
+        return ListingResult(
+            ids=[], total=0, query=query, notes=notes, duration_ms=duration_ms, filters=current.filters
+        )
     page = run(query.sql, query.params)
     ids = [str(row["property_id"]) for row in page.rows if row.get("property_id") is not None]
     return ListingResult(
@@ -154,6 +171,7 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
         query=query,
         notes=notes,
         duration_ms=duration_ms + int(getattr(page, "duration_ms", 0) or 0),
+        filters=current.filters,
     )
 
 

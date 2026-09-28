@@ -150,6 +150,11 @@ def fetch_listing_cards(ids: list[str], loader: ListingLoader) -> list[dict[str,
     return [by_id.get(item) or {"id": item} for item in ids]
 
 
+def listing_display_name(card: dict[str, Any]) -> str:
+    """How a listing is named on its own: its building, else its project, else its advert title."""
+    return str(card.get("building_name") or card.get("project_name") or card.get("title_en") or "This listing")
+
+
 def prompt_listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What the answer model may cite. No photos, links, or contact details."""
     facts: list[dict[str, Any]] = []

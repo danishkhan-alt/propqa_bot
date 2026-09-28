@@ -41,7 +41,7 @@ def load_focused_listings(state: ChatState, runtime: Runtime[AgentContext]) -> d
     # previous search again, so a later "cheaper" still refines that search.
     return {
         "focused_listings": focused.facts,
-        "focused_map_pins": focused.map_pins,
+        "map_pins": focused.map_pins,
         "query_route": None,
     }
 

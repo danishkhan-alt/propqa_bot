@@ -49,6 +49,39 @@ describe("PlaceMap", () => {
   });
 });
 
+describe("PlaceMap for a search near stations", () => {
+  const search: ReplyMap = {
+    pins: [
+      { lat: 25.08, lng: 55.14, label: "Marina Gate", detail: "0.8 km to DAMAC Properties Metro Station", kind: "listing", property_id: "101" },
+      { lat: 25.07, lng: 55.13, label: "Marina Gate", detail: "0.3 km to DMCC Metro Station", kind: "listing", property_id: "102" },
+      { lat: 25.0799, lng: 55.1475, label: "DAMAC Properties Metro Station", detail: "Red Metro line", kind: "metro", line: "red" },
+    ],
+    lines: [{ line: "tram", name: "Tram line", path: [[25.07, 55.13], [25.08, 55.14]] }],
+  };
+
+  it("numbers every listing and shows the id its card carries", () => {
+    render(<PlaceMap map={search} />);
+    const items = within(screen.getByRole("list", { name: "Places on the map" })).getAllByRole("button");
+    expect(items[0]).toHaveTextContent("1Marina Gate101");
+    expect(items[1]).toHaveTextContent("2Marina Gate102");
+    expect(items[2]).toHaveTextContent("3DAMAC Properties Metro Station");
+    expect(screen.getByText("2 listings on the map")).toBeInTheDocument();
+  });
+
+  it("names each station's line and each line drawn in the legend", () => {
+    render(<PlaceMap map={search} />);
+    const legend = within(screen.getByRole("list", { name: "Legend" }));
+    expect(legend.getByText("Listing")).toBeInTheDocument();
+    expect(legend.getByText("Red line")).toBeInTheDocument();
+    expect(legend.getByText("Tram")).toBeInTheDocument();
+  });
+
+  it("draws the rail lines under the pins", () => {
+    const { container } = render(<PlaceMap map={search} />);
+    expect(container.querySelectorAll(".leaflet-overlay-pane path")).toHaveLength(1);
+  });
+});
+
 describe("StructuredAnswer map", () => {
   it("loads the map only for a reply that has pins", async () => {
     const { rerender } = render(<StructuredAnswer reply={{ intro_text: "Two stations.", map }} interactive={false} />);

@@ -11,11 +11,17 @@ before the answer model reads them: raw coordinates are noise in a reply.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 MAX_MAP_PINS = 40
+# A line is drawn when a pin sits on it: a station, or a listing right by the track.
+LINE_NEAR_PIN_METERS = 150
+_EARTH_RADIUS_METERS = 6_371_000
+# Rail line names as the RTA tables write them, to the key the map colors them by.
+_RAIL_LINE_WORDS = (("red", "red"), ("green", "green"), ("tram", "tram"))
 # Anything outside the UAE is a bad record (a swapped or zeroed pair), not a place to show.
 _UAE_LATITUDE = (22.5, 26.5)
 _UAE_LONGITUDE = (51.0, 56.5)
@@ -126,26 +132,54 @@ def _is_text_column(column: str, rows: list[dict[str, Any]]) -> bool:
 
 
 def map_pin(
-    latitude: Any, longitude: Any, *, label: str, detail: str = "", kind: str
+    latitude: Any,
+    longitude: Any,
+    *,
+    label: str,
+    detail: str = "",
+    kind: str,
+    line: str = "",
+    property_id: str = "",
 ) -> dict[str, Any] | None:
-    """One pin, or None when the pair is missing or falls outside the UAE."""
+    """One pin, or None when the pair is missing or falls outside the UAE.
+
+    `line` is a station's rail line, as rail_line_key gives it. `property_id` ties a
+    listing pin to its photo card.
+    """
     lat, lng = _to_float(latitude), _to_float(longitude)
-    if lat is None or lng is None:
+    if lat is None or lng is None or not _in_uae(lat, lng):
         return None
-    if not (_UAE_LATITUDE[0] <= lat <= _UAE_LATITUDE[1] and _UAE_LONGITUDE[0] <= lng <= _UAE_LONGITUDE[1]):
-        return None
-    return {"lat": round(lat, 6), "lng": round(lng, 6), "label": label, "detail": detail, "kind": kind}
+    pin = {"lat": round(lat, 6), "lng": round(lng, 6), "label": label, "detail": detail, "kind": kind}
+    if line:
+        pin["line"] = line
+    if property_id:
+        pin["property_id"] = property_id
+    return pin
 
 
-def build_place_map(pins: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+def rail_line_key(name: Any) -> str:
+    """red, green, or tram for an RTA line name such as "Red Metro line"; empty otherwise."""
+    words = str(name or "").casefold().split()
+    return next((key for word, key in _RAIL_LINE_WORDS if word in words), "")
+
+
+def build_place_map(
+    pins: list[dict[str, Any]] | None, lines: list[dict[str, Any]] | None = None
+) -> dict[str, Any] | None:
     """The UI payload: each place once, in the order given, capped for a readable map.
 
     A place on several rows (an interchange station, one row per line) keeps every detail.
+    Listings are told apart by id: two units in one tower share a name and a pin.
+    Rail lines come along only when a pin shown sits on them.
     """
     unique: list[dict[str, Any]] = []
-    seen: dict[tuple[str, float, float], dict[str, Any]] = {}
+    seen: dict[tuple, dict[str, Any]] = {}
     for pin in pins or []:
-        key = (pin["label"].casefold(), round(pin["lat"], 4), round(pin["lng"], 4))
+        key = (
+            ("listing", pin["property_id"])
+            if pin.get("property_id")
+            else (pin["label"].casefold(), round(pin["lat"], 4), round(pin["lng"], 4))
+        )
         kept = seen.get(key)
         if kept is None:
             seen[key] = dict(pin)
@@ -154,7 +188,44 @@ def build_place_map(pins: list[dict[str, Any]] | None) -> dict[str, Any] | None:
             kept["detail"] = " · ".join(part for part in (kept["detail"], pin["detail"]) if part)
     if not unique:
         return None
-    return {"pins": unique[:MAX_MAP_PINS], "hidden_pins": max(len(unique) - MAX_MAP_PINS, 0)}
+    shown = unique[:MAX_MAP_PINS]
+    return {
+        "pins": shown,
+        "hidden_pins": max(len(unique) - MAX_MAP_PINS, 0),
+        "lines": [
+            {"line": rail_line_key(line["line"]), "name": line["line"], "path": line["path"]}
+            for line in lines or []
+            if any(_meters_to_path(pin, line["path"]) <= LINE_NEAR_PIN_METERS for pin in shown)
+        ],
+    }
+
+
+def _meters_to_path(pin: dict[str, Any], path: list[list[float]]) -> float:
+    """Shortest distance from the pin to a [lat, lng] polyline, flat-earth: fine at city scale."""
+    scale = math.cos(math.radians(pin["lat"]))
+
+    def xy(lat: float, lng: float) -> tuple[float, float]:
+        return (
+            math.radians(lng - pin["lng"]) * scale * _EARTH_RADIUS_METERS,
+            math.radians(lat - pin["lat"]) * _EARTH_RADIUS_METERS,
+        )
+
+    points = [xy(lat, lng) for lat, lng in path]
+    if len(points) == 1:
+        return math.hypot(*points[0])
+    return min(_distance_to_segment(start, end) for start, end in zip(points, points[1:]))
+
+
+def _distance_to_segment(start: tuple[float, float], end: tuple[float, float]) -> float:
+    """Distance from the origin to the segment start-end."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = dx * dx + dy * dy
+    t = 0.0 if length == 0 else max(0.0, min(1.0, -(start[0] * dx + start[1] * dy) / length))
+    return math.hypot(start[0] + t * dx, start[1] + t * dy)
+
+
+def _in_uae(lat: float, lng: float) -> bool:
+    return _UAE_LATITUDE[0] <= lat <= _UAE_LATITUDE[1] and _UAE_LONGITUDE[0] <= lng <= _UAE_LONGITUDE[1]
 
 
 def _to_float(value: Any) -> float | None:
