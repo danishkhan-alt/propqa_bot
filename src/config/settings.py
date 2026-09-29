@@ -9,6 +9,8 @@ from config.enums import AppEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# .env only names the environment; <APP_ENV>.env holds its settings. Neither
+# overrides a variable already set by the shell or by compose.
 load_dotenv(REPO_ROOT / ".env")
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 load_dotenv(REPO_ROOT / f"{APP_ENV}.env")
@@ -36,11 +38,9 @@ def _env_int(name: str, default: int) -> int:
 
 class Config:
     DEBUG = _env_bool("DEBUG", not ENVIRONMENT.is_deployed)
-    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1")
     BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
     APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
     APP_PORT = _env_int("APP_PORT", 8000)
-    SECRET_KEY = os.getenv("SECRET_KEY", "")
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Dubai")
 
     # Warehouse the text-to-SQL tool reads. Credentials must stay read-only.
@@ -49,7 +49,6 @@ class Config:
     AUDIT_DB_DATABASE = os.getenv("AUDIT_DB_DATABASE", "postgres")
     AUDIT_DB_USERNAME = os.getenv("AUDIT_DB_USERNAME", "")
     AUDIT_DB_PASSWORD = os.getenv("AUDIT_DB_PASSWORD", "")
-    AUDIT_DB_SCHEMA = os.getenv("AUDIT_DB_SCHEMA", "public")
     DB_SEARCH_PATH = os.getenv("DB_SEARCH_PATH", "public")
     AUDIT_DB_SSLMODE = os.getenv(
         "AUDIT_DB_SSLMODE",
@@ -88,9 +87,7 @@ class Config:
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    LLM_MAX_OUTPUT_TOKENS = _env_int(
-        "LLM_MAX_OUTPUT_TOKENS", _env_int("ANTHROPIC_MAX_OUTPUT_TOKENS", 4096)
-    )
+    LLM_MAX_OUTPUT_TOKENS = _env_int("LLM_MAX_OUTPUT_TOKENS", 4096)
     AI_MODEL = os.getenv(
         "AI_MODEL", "gpt-4.1" if LLM_PROVIDER == "openai" else "claude-sonnet-5"
     )
@@ -98,15 +95,11 @@ class Config:
         "ROUTER_MODEL",
         "gpt-5.4-mini" if LLM_PROVIDER == "openai" else "claude-haiku-4-5",
     )
-    # AI_MODEL reasons before it answers, and that reasoning counts against max_tokens.
-    # Effort sets how much it reasons per route: replies write from facts already
-    # fetched, SQL reasons. OpenAI routers reason too, so they get their own effort.
+
     AI_REPLY_EFFORT = os.getenv("AI_REPLY_EFFORT", "low")
     AI_SQL_EFFORT = os.getenv("AI_SQL_EFFORT", "medium")
     ROUTER_EFFORT = os.getenv("ROUTER_EFFORT", "low")
 
-    # Who picks the catalog domains: "jev" (TypeSafe, with the router model as fallback)
-    # or "llm" (the router model only). Jev is the default once its key is set.
     JEV_API_KEY = os.getenv("JEV_API_KEY", "")
     JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest")
     JEV_TIMEOUT_MS = _env_int("JEV_TIMEOUT_MS", 4000)
@@ -116,10 +109,8 @@ class Config:
 
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
-    LANGFUSE_BASE_URL = os.getenv(
-        "LANGFUSE_BASE_URL",
-        os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-    )
+    # The Langfuse client reads these from the environment itself.
+    LANGFUSE_BASE_URL = os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
 
     LOGS_DIR = os.getenv("LOGS_DIR", "logs")
     LOG_TO_FILE = _env_bool("LOG_TO_FILE", True)

@@ -1,4 +1,6 @@
 # Secrets reach the containers through compose, never the image.
+.env
+*.env
 
 .git
 .venv
