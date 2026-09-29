@@ -7,7 +7,8 @@
 x-app: &app
   build: .
   image: propqa-chatbot:latest
-  env_file: .env
+  # .env names the environment (APP_ENV); its settings live in <APP_ENV>.env.
+  env_file: ${APP_ENV:-production}.env
   environment: &app-env
     APP_ENV: ${APP_ENV:-production}
     CHAT_DB_HOST: postgres

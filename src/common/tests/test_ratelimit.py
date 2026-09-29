@@ -33,9 +33,13 @@ def test_two_identities_do_not_share_a_counter(memory_cache):
     limiter.enforce("registered:u1", RULE)
 
 
-def test_success_resets_failure_count(memory_cache):
+def test_recorded_failures_block_without_counting_the_check(memory_cache):
     limiter = RateLimiter(backend=memory_cache)
     limiter.record("ip:1.1.1.1", RULE)
     limiter.record("ip:1.1.1.1", RULE)
-    limiter.reset("ip:1.1.1.1", RULE)
     limiter.enforce_without_counting("ip:1.1.1.1", RULE)
+    limiter.enforce_without_counting("ip:1.1.1.1", RULE)
+
+    limiter.record("ip:1.1.1.1", RULE)
+    with pytest.raises(RateLimited):
+        limiter.enforce_without_counting("ip:1.1.1.1", RULE)

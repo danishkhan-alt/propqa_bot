@@ -54,3 +54,9 @@ def test_registered_user_wins_over_visitor_cookie():
     caller = resolve_caller(request)
     assert caller.is_registered
     assert caller.subject_id == "user-42"
+
+
+def test_oversized_visitor_header_is_replaced():
+    caller = resolve_caller(_request(headers=[(b"x-visitor-id", b"a" * 65)]))
+    assert caller.is_visitor
+    assert caller.subject_id != "a" * 65

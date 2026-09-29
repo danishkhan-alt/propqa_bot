@@ -105,8 +105,8 @@ def _remember_owner(session_id: str, owner: str) -> None:
 
 
 def _sessions_key(user_id: str) -> str:
-    return f"fe:sessions:{user_id}"
+    return f"chat:sidebar:{user_id}"
 
 
 def _owner_key(session_id: str) -> str:
-    return f"fe:session-owner:{session_id}"
+    return f"chat:session-owner:{session_id}"

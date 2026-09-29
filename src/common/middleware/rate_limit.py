@@ -8,7 +8,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from common.errors.rate_limited import RateLimited
 from common.http.response_builders import api_error_response
 from common.identity import Caller
-from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
+from common.ratelimit.declared import declared_rate_limits
 from common.ratelimit.keys import ip_rate_limit_key
 from common.ratelimit.limiter import limiter
 from common.ratelimit.rules import API_REGISTERED, API_VISITOR
@@ -59,8 +59,7 @@ def _enforce_default_rate_limit(request: Request) -> None:
 
 
 def _declares_own_limit(request: Request) -> bool:
-    endpoint = _find_endpoint(request)
-    return bool(endpoint is not None and getattr(endpoint, RATE_LIMITS_ATTRIBUTE, None))
+    return bool(declared_rate_limits(_find_endpoint(request)))
 
 
 def _find_endpoint(request: Request):

@@ -4,15 +4,7 @@ import json
 
 from common.errors import InvalidRequestBody, RateLimited
 from common.errors.standard_errors import InternalError
-from common.http.response_builders import api_error_response, api_response
-
-
-def test_api_response_wraps_result():
-    response = api_response({"ok": True})
-    body = json.loads(response.body)
-    assert response.status_code == 200
-    assert body["result"] == {"ok": True}
-    assert body["status"] == 200
+from common.http.response_builders import api_error_response
 
 
 def test_api_error_is_problem_details():

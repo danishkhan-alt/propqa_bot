@@ -10,8 +10,8 @@ class Caller:
     """The person on this request: a registered user or a visitor.
 
     ``subject_id`` is a user id when registered, and a durable visitor id
-    otherwise. Cache keys and rate-limit identities are built from both
-    fields so the two populations never share a bucket.
+    otherwise. Rate-limit identities are built from both fields so the two
+    populations never share a bucket.
     """
 
     kind: UserKind

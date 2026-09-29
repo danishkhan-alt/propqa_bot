@@ -42,7 +42,7 @@ class RateLimiter:
 
     def enforce_without_counting(self, identity: str, *rules: RateLimit) -> None:
         for rule in rules:
-            result = self.check_without_counting(rule, identity)
+            result = self._evaluate_without_counting(rule, identity)
             if not result.is_allowed:
                 raise RateLimited(result.retry_after)
 
@@ -50,16 +50,7 @@ class RateLimiter:
         for rule in rules:
             self._increment_and_evaluate(rule, identity)
 
-    def reset(self, identity: str, *rules: RateLimit) -> None:
-        if not self.is_enabled:
-            return
-        for rule in rules:
-            try:
-                self._cache.delete(self._counter_key(rule, identity))
-            except Exception:
-                logger.exception("Could not reset rate limit for %s", rule.scope)
-
-    def check_without_counting(self, rule: RateLimit, identity: str) -> RateLimitResult:
+    def _evaluate_without_counting(self, rule: RateLimit, identity: str) -> RateLimitResult:
         if not self.is_enabled:
             return RateLimitResult(True, rule.limit, rule.limit, 0)
         try:

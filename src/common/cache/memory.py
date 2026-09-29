@@ -40,18 +40,5 @@ class MemoryCache:
         if current is MISSING:
             raise KeyError(key)
         next_value = int(current) + 1
-        expires_at = self._store[key][1]
-        ttl = None if expires_at is None else max(1, int(expires_at - time.time()))
-        self.set(key, next_value, ttl)
+        self._store[key] = (next_value, self._store[key][1])
         return next_value
-
-    def get_many(self, keys: list[str]) -> dict[str, Any]:
-        found: dict[str, Any] = {}
-        for key in keys:
-            value = self.get(key, MISSING)
-            if value is not MISSING:
-                found[key] = value
-        return found
-
-    def clear(self) -> None:
-        self._store.clear()

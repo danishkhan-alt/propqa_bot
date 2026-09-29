@@ -8,8 +8,6 @@ TITLE_BY_CODE: dict[APIErrorCode, str] = {
     APIErrorCode.VALIDATION: "Validation failed",
     APIErrorCode.AUTH: "Access denied",
     APIErrorCode.USER: "Account error",
-    APIErrorCode.CHAT: "Chat error",
-    APIErrorCode.AI: "AI error",
     APIErrorCode.SYSTEM: "Internal error",
 }
 

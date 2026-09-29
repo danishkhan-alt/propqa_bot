@@ -17,10 +17,6 @@ class RateLimit:
     limit: int
     window_seconds: int
 
-    @property
-    def description(self) -> str:
-        return f"{self.limit} per {self.window_seconds}s"
-
 
 @dataclass(frozen=True, slots=True)
 class RateLimitResult:

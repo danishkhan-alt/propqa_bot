@@ -13,9 +13,10 @@ from common.enums.user_kind import UserKind
 from common.identity import Caller
 from common.request_context import subject_id_var, user_kind_var
 from common.utils.uuid_validation import is_valid_uuid
-from config import ActiveConfig
+from config import ENVIRONMENT, ActiveConfig
 
 VISITOR_ID_HEADER = "X-Visitor-ID"
+_VISITOR_ID_MAX = 64
 
 
 def resolve_caller(request: Request) -> Caller:
@@ -42,7 +43,9 @@ def _read_visitor_id(request: Request) -> str | None:
 
 def _is_usable_visitor_id(value: str) -> bool:
     cleaned = value.strip()
-    return bool(cleaned) and (is_valid_uuid(cleaned) or cleaned.isalnum())
+    if not cleaned or len(cleaned) > _VISITOR_ID_MAX:
+        return False
+    return is_valid_uuid(cleaned) or cleaned.isalnum()
 
 
 def _build_visitor_cookie_header(caller: Caller) -> str:
@@ -51,6 +54,7 @@ def _build_visitor_cookie_header(caller: Caller) -> str:
     morsel = cookie[ActiveConfig.VISITOR_COOKIE_NAME]
     morsel["path"] = "/"
     morsel["httponly"] = True
+    morsel["secure"] = ENVIRONMENT.is_deployed
     morsel["samesite"] = "lax"
     morsel["max-age"] = str(ActiveConfig.VISITOR_COOKIE_MAX_AGE)
     return morsel.OutputString()
