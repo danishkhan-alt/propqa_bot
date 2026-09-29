@@ -5,7 +5,12 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from common.errors import AppError, InvalidRequestBody, Unauthorized
-from common.errors.standard_errors import DatabaseFailure, Forbidden, InternalError, RouteNotFound
+from common.errors.standard_errors import (
+    DatabaseFailure,
+    Forbidden,
+    InternalError,
+    RouteNotFound,
+)
 from common.http.response_builders import api_error_response
 from common.logger import get_logger
 from config import ActiveConfig

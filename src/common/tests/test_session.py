@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from common.session import list_user_sessions, record_session_activity, remove_sidebar_session
+from common.session import (
+    list_user_sessions,
+    record_session_activity,
+    remove_sidebar_session,
+)
 from common.session.preferences import clear, load, merge
 
 

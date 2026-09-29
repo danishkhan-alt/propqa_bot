@@ -7,6 +7,4 @@ class APIErrorCode(str, Enum):
     VALIDATION = "VALIDATION"
     AUTH = "AUTH"
     USER = "USER"
-    CHAT = "CHAT"
-    AI = "AI"
     SYSTEM = "SYSTEM"

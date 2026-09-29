@@ -20,7 +20,4 @@ def get_request_id(request=None) -> str | None:
         request_id = getattr(getattr(request, "state", None), "request_id", None)
         if request_id:
             return request_id
-        request_id = getattr(request, "request_id", None)
-        if request_id:
-            return request_id
     return request_id_var.get()

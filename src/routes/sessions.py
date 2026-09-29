@@ -14,6 +14,7 @@ from agent.memory.session.backends import get_repository
 from auth.middleware import require_user_id
 from common.logger import get_logger
 from common.session import (
+    GUEST_USER_ID_PREFIX,
     list_user_sessions,
     preferences,
     remove_sidebar_session,
@@ -26,9 +27,6 @@ from routes.schemas.sessions import ForgetSessionsRequest, NewSessionRequest, Sa
 
 logger = get_logger("sessions")
 router = APIRouter()
-
-# Browser guests use this prefix. Account ids are bare uuids, so a claim can only take a guest chat.
-GUEST_USER_ID_PREFIX = "anon-"
 
 
 @router.post("/sessions/new")

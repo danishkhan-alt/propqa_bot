@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from common.request_context import get_request_id, request_id_var
+from common.request_context import request_id_var
 
 REQUEST_ID_HEADER = "X-Request-ID"
+# An inbound id lands in every log line and response, so only a plain token is trusted.
+_USABLE_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
 
 
 class RequestIdMiddleware:
     """Attach a unique request ID to every request for tracing.
 
     Honours an inbound ``X-Request-ID`` when a client or upstream proxy
-    already has one; otherwise mints a new id. Echoes it on the response
-    so clients can cite it in support tickets.
+    already has a usable one; otherwise mints a new id. Echoes it on the
+    response so a client error can be matched to the server logs.
 
     This is raw ASGI, not ``BaseHTTPMiddleware``, so a streaming body is
     forwarded one chunk at a time.
@@ -32,7 +35,7 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
             return
         request = Request(scope)
-        rid = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
+        rid = _inbound_request_id(request) or uuid.uuid4().hex
         request.state.request_id = rid
         token = request_id_var.set(rid)
 
@@ -48,4 +51,6 @@ class RequestIdMiddleware:
             request_id_var.reset(token)
 
 
-__all__ = ["REQUEST_ID_HEADER", "RequestIdMiddleware", "get_request_id"]
+def _inbound_request_id(request: Request) -> str | None:
+    value = request.headers.get(REQUEST_ID_HEADER, "").strip()
+    return value if _USABLE_REQUEST_ID.fullmatch(value) else None

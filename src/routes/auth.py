@@ -13,7 +13,7 @@ from auth.middleware import require_user_id
 from auth.models import AuthSession
 from auth.storage import UserRepository
 from common.enums.http_status import HttpStatus
-from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
+from common.ratelimit.declared import declare_rate_limits
 from common.ratelimit.keys import ip_rate_limit_key
 from common.ratelimit.limiter import limiter
 from common.ratelimit.rules import (
@@ -96,4 +96,4 @@ for _view, _rules in (
     (login, (*SIGN_IN_CALLER, *SIGN_IN_ACCOUNT)),
     (refresh, (TOKEN_REFRESH,)),
 ):
-    setattr(_view, RATE_LIMITS_ATTRIBUTE, _rules)
+    declare_rate_limits(_view, *_rules)

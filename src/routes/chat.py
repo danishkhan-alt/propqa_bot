@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from agent.graph.runner import stream_turn
 from common.identity import Caller
 from common.logger import get_logger
-from common.ratelimit.decorators import RATE_LIMITS_ATTRIBUTE
+from common.ratelimit.declared import declare_rate_limits
 from common.ratelimit.keys import caller_rate_limit_key
 from common.ratelimit.limiter import limiter
 from common.ratelimit.rules import CHAT_REGISTERED, CHAT_VISITOR
@@ -95,4 +95,4 @@ def _client_payload(event: dict) -> tuple[str, dict]:
     return name, payload
 
 
-setattr(chat, RATE_LIMITS_ATTRIBUTE, (CHAT_VISITOR, CHAT_REGISTERED))
+declare_rate_limits(chat, CHAT_VISITOR, CHAT_REGISTERED)

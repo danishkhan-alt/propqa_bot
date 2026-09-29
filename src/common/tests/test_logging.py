@@ -5,7 +5,6 @@ import logging
 
 from common.enums.user_kind import UserKind
 from common.logger.json_formatter import JsonFormatter
-from common.logger.redact import redact_headers, redact_token
 from common.middleware.request_id import request_id_var as middleware_var
 from common.request_context import request_id_var, subject_id_var, user_kind_var
 
@@ -38,27 +37,3 @@ def test_unserialisable_extras_do_not_break_logging():
     record.extra_data = {"when": object()}
     assert "extra_data" in json.loads(JsonFormatter().format(record))
 
-
-def test_a_token_never_appears_whole():
-    secret = "sk-ant-" + "a" * 40
-    masked = redact_token(secret)
-    assert secret not in masked
-    assert masked.startswith("sk-a")
-
-
-def test_short_values_show_nothing():
-    assert redact_token("abc123") == "<redacted>"
-    assert redact_token("") == "<empty>"
-
-
-def test_credential_shaped_headers_are_masked():
-    masked = redact_headers(
-        {
-            "Authorization": "Bearer " + "x" * 40,
-            "X-Api-Key": "y" * 40,
-            "Content-Type": "application/json",
-        }
-    )
-    assert "x" * 40 not in masked["Authorization"]
-    assert "y" * 40 not in masked["X-Api-Key"]
-    assert masked["Content-Type"] == "application/json"

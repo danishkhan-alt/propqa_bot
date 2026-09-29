@@ -15,8 +15,8 @@ SIGN_IN_ACCOUNT = (SIGN_IN_ACCOUNT_BURST, SIGN_IN_ACCOUNT_HOURLY)
 TOKEN_REFRESH = RateLimit("auth.token_refresh", 30, 300)
 REGISTER_ATTEMPTS = RateLimit("auth.register", 5, 3600)
 
-# Default ceilings. Visitors are cheaper to flood; registered users share an
-# office NAT so they get a higher per-person cap.
+# Default ceilings. Visitor ids cost nothing to mint, so visitors get the lower cap;
+# registered users are counted per account.
 API_VISITOR = RateLimit("api.visitor", 60, 60)
 API_REGISTERED = RateLimit("api.registered", 300, 60)
 

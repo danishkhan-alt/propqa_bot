@@ -73,7 +73,6 @@ class Config:
     CHAT_DB_POOL_MAX = _env_int("CHAT_DB_POOL_MAX", 10)
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    CACHE_TTL_SECONDS = _env_int("CACHE_TTL_SECONDS", 300)
     CACHE_KEY_PREFIX = os.getenv("CACHE_KEY_PREFIX", f"propqa:{ENVIRONMENT.value}")
 
     JWT_SIGNING_KEY = os.getenv("JWT_SIGNING_KEY", "")
