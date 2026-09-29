@@ -29,6 +29,9 @@ from agent.schemas.grounding_index import (
 )
 
 MAX_ALTERNATIVES = 3
+# Most stations and stops are named after the place they serve: "Business Bay Metro Station"
+# is in Business Bay. Longest first, so "metro station" is removed whole.
+TRANSIT_SUFFIXES = ("metro station", "bus station", "tram station", "bus stop", "tram stop", "station", "metro", "stop")
 # A place covers a place whose name extends its own ("Dubai Hills" and "Dubai Hills Estate",
 # "DUBAI HILLS - SIDRA 1") when the two are at most this far apart.
 COVER_RADIUS_KM = 1.5
@@ -82,11 +85,31 @@ class PlaceDirectory:
             return None
         hits = self._matcher.find(phrase)
         if not hits:
-            return None
+            return self._place_a_station_is_named_after(phrase)
+        if hits[0].tier is MatchTier.WORDS:
+            # "palm jumeriah" is spelled inside a tower's stored name, but it misspells the
+            # whole name of the island. The broader place it misspells is what was meant.
+            typos = self._matcher.find_typos(phrase)
+            if typos and min(self._breadth(hit) for hit in typos) < min(self._breadth(hit) for hit in hits):
+                hits = typos
         ranked = sorted(hits, key=self._rank)
         best = self._places[ranked[0].key]
         alternatives = tuple(self._places[hit.key].title for hit in ranked[1 : 1 + MAX_ALTERNATIVES])
         return PlaceMatch(place=best, tier=ranked[0].tier, alternatives=alternatives)
+
+    def _place_a_station_is_named_after(self, phrase: str) -> PlaceMatch | None:
+        """The place in a station's name, as an approximate reading: the station is in it."""
+        normalized = normalize_name(phrase)
+        for suffix in TRANSIT_SUFFIXES:
+            if normalized.endswith(f" {suffix}"):
+                match = self.find(normalized.removesuffix(f" {suffix}"))
+                if match is None:
+                    return None
+                return PlaceMatch(place=match.place, tier=MatchTier.FUZZY, alternatives=match.alternatives)
+        return None
+
+    def _breadth(self, hit: NameHit[str]) -> Breadth:
+        return self._places[hit.key].breadth
 
     def _rank(self, hit: NameHit[str]) -> tuple:
         place = self._places[hit.key]

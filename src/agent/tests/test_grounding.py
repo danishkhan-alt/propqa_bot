@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from agent.enums.grounding import Breadth, MatchTier
 from agent.enums.listing import MentionKind
 from agent.grounding import GroundingIndex, ground_names
-from agent.grounding.name_matching import NameMatcher, name_variants
+from agent.grounding.name_matching import NameMatcher, is_typo_of, name_variants
 from agent.grounding.places import build_place_directory
 from agent.grounding.stored_values import StoredValueIndex, learn_same_place
 from agent.schemas.grounding_index import (
@@ -319,3 +321,77 @@ def test_a_place_name_keeps_the_exact_match_over_names_containing_it():
         {},
     )
     assert [value.value for value in index.find(["Dubai Marina"], [table], {"place"})] == ["Dubai Marina"]
+
+
+@pytest.mark.parametrize(
+    ("typed", "stored"),
+    [
+        ("palm jumearih", "Palm Jumeirah"),
+        ("bussiness bay", "Business Bay"),
+        ("Ellignton Beach House", "Ellington Beach House"),
+        ("Six Sense Residence", "Six Senses Residences"),
+        ("Dammac Lagoon", "DAMAC Lagoons"),
+        ("AI Fahidi", "Al Fahidi"),
+    ],
+)
+def test_a_typo_keeps_every_word_and_misspells_a_few_letters(typed, stored):
+    assert is_typo_of(typed, stored)
+
+
+@pytest.mark.parametrize(
+    ("typed", "stored"),
+    [
+        ("Jumeirah First", "Jumeirah"),
+        ("business bay metro station", "Business Bay"),
+        ("Pathfinder Property Development", "ACES PROPERTY DEVELOPMENT L.L.C"),
+        ("DAWN Developers", "Iman Developers"),
+        ("JVR", "JVC"),
+    ],
+)
+def test_a_dropped_or_different_word_is_another_name_not_a_typo(typed, stored):
+    assert not is_typo_of(typed, stored)
+
+
+def test_a_misspelt_area_beats_a_tower_whose_name_spells_it_the_same_way():
+    v2 = [
+        _v2(2, None, "Dubai", Breadth.REGION),
+        _v2(70, 2, "Palm Jumeirah", Breadth.AREA, 25.11, 55.13),
+        _v2(71, 70, "MURABA RESIDENCES PALM JUMERIAH", Breadth.BUILDING, 25.12, 55.12),
+    ]
+    directory = build_place_directory(v2, [], ListingCountsByPlaceLink(), region="Dubai")
+    match = directory.find("palm jumeriah")
+    assert match.place.title == "Palm Jumeirah"
+    assert match.is_approximate
+
+
+def test_a_company_name_sharing_only_generic_words_is_not_matched():
+    table = "public.properties"
+    index = StoredValueIndex(
+        [
+            StoredValue(table, "developer", "ACES PROPERTY DEVELOPMENT L.L.C", "developer", 3),
+            StoredValue(table, "developer", "Iman Developers", "developer", 5),
+        ],
+        {},
+    )
+    assert index.find(["pathfinder property development"], [table], {"developer"}) == []
+    assert index.find(["DAWN Developers"], [table], {"developer"}) == []
+
+
+def test_the_matched_place_spelling_counts_only_where_a_table_spells_it_exactly():
+    index = StoredValueIndex(
+        [
+            StoredValue(DLD_SALES, "area_name_en", "Jumeirah First", "area", 900),
+            StoredValue(DLD_SALES, "master_project_en", "Jumeirah Village Circle", "master_project", 5_000),
+            StoredValue(DLD_SALES, "master_project_en", "Jumeirah Park", "master_project", 800),
+        ],
+        {},
+    )
+    found = index.find(["Jumeirah First"], [DLD_SALES], {"place"}, place_spellings=["jumeirah"])
+    assert [value.value for value in found] == ["Jumeirah First"]
+
+
+def test_a_station_named_after_a_place_is_read_as_that_place():
+    match = _directory().find("Downtown Dubai metro station")
+    assert match.place.title == "Downtown Dubai"
+    assert match.is_approximate
+    assert _directory().find("Mashreq metro station") is None

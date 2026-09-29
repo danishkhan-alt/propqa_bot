@@ -2,7 +2,12 @@
 
 A phrase matches a stored name in one of three tiers, strongest first:
 exact (same normalised text), words (every word of the phrase is a word of the name),
-and fuzzy (trigram similarity, for typos). A stronger tier always wins over a weaker one.
+and fuzzy (a typo). A stronger tier always wins over a weaker one.
+
+A typo keeps every word and misspells a few letters: "palm jumearih" is Palm Jumeirah.
+Dropping or swapping a word is a different name, however many letters it shares:
+"Jumeirah First" is not Jumeirah, and "Pathfinder Property Development" is not
+"Aces Property Development".
 """
 
 from __future__ import annotations
@@ -18,7 +23,12 @@ from agent.schemas.grounding_index import Key, NameHit
 _BRACKETED = re.compile(r"\(([^)]*)\)")
 _NON_WORD = re.compile(r"[^0-9a-z]+")
 
-MIN_TRIGRAM_SIMILARITY = 0.45
+# Trigram similarity only shortlists typo candidates; `is_typo_of` decides.
+MIN_TRIGRAM_SIMILARITY = 0.3
+# A word may differ by one edit per this many letters ("bussiness", "jumearih").
+LETTERS_PER_TYPO = 4
+# A word this short is taken as a typo only beside a word that matches exactly ("AI Fahidi").
+SHORT_WORD_LETTERS = 3
 
 
 
@@ -54,6 +64,38 @@ def trigram_similarity(left: str, right: str) -> float:
     left_grams, right_grams = trigrams(left), trigrams(right)
     union = left_grams | right_grams
     return len(left_grams & right_grams) / len(union) if union else 0.0
+
+
+def is_typo_of(phrase: str, name: str) -> bool:
+    """Every word of the phrase misspells the word of the name in the same place."""
+    typed, stored = normalize_name(phrase).split(), normalize_name(name).split()
+    if not typed or len(typed) != len(stored) or typed == stored:
+        return False
+    exact_word = any(left == right for left, right in zip(typed, stored))
+    for left, right in zip(typed, stored):
+        if left == right:
+            continue
+        longest = max(len(left), len(right))
+        allowed = longest // LETTERS_PER_TYPO
+        if longest <= SHORT_WORD_LETTERS and exact_word:
+            allowed = 1
+        if allowed == 0 or edit_distance(left, right) > allowed:
+            return False
+    return True
+
+
+def edit_distance(left: str, right: str) -> int:
+    """Levenshtein distance where swapping two neighbouring letters is one edit."""
+    rows = [list(range(len(right) + 1))]
+    for i, a in enumerate(left, 1):
+        row = [i]
+        for j, b in enumerate(right, 1):
+            cost = min(rows[-1][j] + 1, row[j - 1] + 1, rows[-1][j - 1] + (a != b))
+            if i > 1 and j > 1 and a == right[j - 2] and left[i - 2] == b:
+                cost = min(cost, rows[-2][j - 2] + 1)
+            row.append(cost)
+        rows.append(row)
+    return rows[-1][-1]
 
 
 class NameMatcher(Generic[Key]):
@@ -104,6 +146,16 @@ class NameMatcher(Generic[Key]):
             ]
         return self._best_hits_per_key(normalized, self._fuzzy_name_matches(normalized), MatchTier.FUZZY)
 
+    def find_exact(self, phrase: str) -> list[NameHit[Key]]:
+        """Only keys named exactly the phrase."""
+        normalized = normalize_name(phrase)
+        return self._best_hits_per_key(normalized, self._exact_name_matches(normalized), MatchTier.EXACT)
+
+    def find_typos(self, phrase: str) -> list[NameHit[Key]]:
+        """Only keys whose name the phrase misspells."""
+        normalized = normalize_name(phrase)
+        return self._best_hits_per_key(normalized, self._fuzzy_name_matches(normalized), MatchTier.FUZZY)
+
     def _exact_name_matches(self, normalized: str) -> list[str]:
         return [normalized] if normalized in self._keys_by_name else []
 
@@ -127,7 +179,9 @@ class NameMatcher(Generic[Key]):
         return [
             name
             for name, count in shared.items()
-            if count >= floor and trigram_similarity(normalized, name) >= MIN_TRIGRAM_SIMILARITY
+            if count >= floor
+            and trigram_similarity(normalized, name) >= MIN_TRIGRAM_SIMILARITY
+            and is_typo_of(normalized, name)
         ]
 
     def _best_hits_per_key(self, normalized: str, names: list[str], tier: MatchTier) -> list[NameHit[Key]]:
