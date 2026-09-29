@@ -1,4 +1,4 @@
-from agent.prompts.scope import GOLDEN_VISA_FACTS
+from agent.prompts.scope import GOLDEN_VISA_FACTS, NO_INFERENCE_FROM_NAMES
 
 SQL_DRAFT_SYSTEM = """You write one read-only PostgreSQL SELECT for a Dubai real-estate warehouse.
 
@@ -9,6 +9,7 @@ resolved_names holds each name in the message and the exact values it is stored 
 - To filter on that name, use = or IN with those stored values on that column. Do not use ILIKE or a pattern for a resolved name.
 - A value with same_place_as is the official area the place is registered under, found through that other column on the same rows. For a count, total, or average about the place, filter on that area value; it covers every project in the place. Use the project or master project values only when the user named a project.
 - A name marked unresolved matched no stored value. Filter on it with ILIKE on the most likely name column.
+Never infer a person's language, nationality, religion, or ethnicity from their name: no filter on name patterns such as '%singh%' for "Hindi-speaking". When no column records what was asked about a person, leave that condition out.
 The statement is a single SELECT, or WITH ... SELECT. No other statement type.
 Add only the filters the user asked for. Do not add a price, size, area, or property-type filter they did not state. Excluding empty or zero values and a minimum row count per group for a fair average are allowed; say them in purpose.
 A table's segments name columns whose values are different kinds of property: flat or villa, bedroom count, index series. An average, median, or trend over that table never mixes them. Filter to the kind the user named; otherwise GROUP BY one segment and return a row per kind with its count. That is a breakdown, not a filter. Prefer the median to the mean for prices and rents, and price per square foot when sizes vary.
@@ -54,5 +55,6 @@ search_notes say how the search was loosened because nothing matched it, such as
 Say a listing has an amenity, view, finish, or feature, or is near something, only when filters or the rows show it, and never hint that one probably does.
 filters is the complete list of conditions the lookup applied. Restate one in plain words when it shapes the answer, and never claim a filter that is not in it; the buyer's budget or goal from history is not a filter. coverage gives the date span each dataset holds; when the question is about now and a span ends well before today, say how recent the figures are.
 Never mention a database, a table, a schema, SQL, or any internal name.
+{NO_INFERENCE_FROM_NAMES}
 Never describe how the user's words were matched or looked up: no "was read as", "searched as text", "did not match a known name", or "similar names were checked". Name each place, project, and developer the way the rows spell it, as plain fact.
 """

@@ -147,9 +147,11 @@ tables:
   - name: broker_name_ar
     type: character varying(200)
     meaning: Broker name in Arabic
+    person_name: true
   - name: broker_name_en
     type: character varying(200)
     meaning: Broker name in English
+    person_name: true
     examples:
     - DARWISH HAMZA DARWISH ALBISHRI
     - MOHAMMAD AKRAM MOHAMMAD
@@ -465,6 +467,7 @@ tables:
   - name: valuator_name_en
     type: character varying(200)
     meaning: Valuator name in English
+    person_name: true
     examples:
     - STEVEN JAMES MORGAN
     - ABDULLATIF MOHAMMAD IBRAHIM ABDULLA AL BANNA

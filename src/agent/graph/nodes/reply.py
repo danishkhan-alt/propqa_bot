@@ -11,7 +11,7 @@ from agent.enums.routing import Route
 from agent.graph.nodes.runtime import models_for
 from agent.reply.buyer_profile import pick_next_profile_question
 from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
-from agent.reply.place_map import split_place_rows
+from agent.reply.place_map import place_pins
 from agent.sql.transit import get_rail_lines
 from agent.reply.streaming import publish_structured_reply, stream_memory_notes, stream_prose_reply
 from agent.schemas.profile import ProfileQuestion
@@ -39,7 +39,8 @@ MISSING_LISTINGS_REPLY = (
     "Remove them from the chat and pick another listing to ask about."
 )
 OUT_OF_SCOPE_REPLY = (
-    "I can only help with Dubai property: buying, renting, prices, areas, projects, and listings. "
+    "I can only help with Dubai property and living around it: buying and renting, prices, areas, "
+    "projects, agents, schools, and getting around. "
     'Try something like "average rent for a 2-bed in JVC" or "apartments for sale in Dubai Marina under AED 2M".'
 )
 FAILED_FOCUSED_LISTINGS_REPLY ="I couldn't put the details of those listings together just now. Could you ask me again?"
@@ -124,7 +125,7 @@ def _reply_from_lookup_results(
         else:
             rows = rows[:PROMPT_LISTING_LIMIT]
     else:
-        rows, columns, map_pins = split_place_rows(rows, columns)
+        map_pins = place_pins(rows, columns)
     note = describe_data_sources(result.get("domain_ids") or [])
     search_notes = [str(item) for item in (result.get("notes") or [])]
     filters = [str(item) for item in (result.get("filters") or [])]

@@ -6,6 +6,9 @@ every `column = 'text'` and `column IN ('text', ...)`:
 
 - The user's own spelling of a name that grounding matched to a stored value is swapped
   for that value in code: 'Al Mamzer' becomes 'Al Mamzar'. No model call.
+- A filter on a column of people's names (`person_name: true` in the catalog) keeps only
+  names the user typed. Any other pattern, such as '%singh%' for "a Hindi-speaking agent",
+  guesses a person's language or background from their name, so it is removed.
 - A value outside a column's measured value list is reported, with the values it does
   hold. The statement still runs: large tables are profiled from a sample, so a rare value
   can be real. The report only explains a result that came back empty, so the retry can
@@ -35,6 +38,8 @@ class CheckedFilters:
     sql: str
     # "table.column: 'typed' -> 'stored'", for the log.
     corrections: list[str] = field(default_factory=list)
+    # Person-name conditions removed because they used no name the user typed, for the log.
+    removed: list[str] = field(default_factory=list)
     # Values outside a column's measured list: the likely reason when nothing comes back.
     problems: list[str] = field(default_factory=list)
 
@@ -42,17 +47,20 @@ class CheckedFilters:
 @dataclass(frozen=True)
 class _TableFacts:
     columns: frozenset[str]
+    person_columns: frozenset[str]
     # Column to its complete stored value list, only for columns measured as a closed set.
     values: dict[str, tuple[str, ...]]
 
 
-def check_filter_values(sql: str, grounding: Grounding | None) -> CheckedFilters:
+def check_filter_values(sql: str, grounding: Grounding | None, typed_names: list[str] = ()) -> CheckedFilters:
+    """`typed_names` are the names the user wrote this turn, as the router found them."""
     try:
         statement = sqlglot.parse_one(sql, read="postgres")
     except sqlglot.errors.ParseError:
         return CheckedFilters(sql=sql)
     if statement is None:
         return CheckedFilters(sql=sql)
+    removed = _remove_guessed_person_filters(statement, typed_names)
     grounded = _grounded_values_by_column(grounding)
     corrections: list[str] = []
     problems: list[str] = []
@@ -74,9 +82,32 @@ def check_filter_values(sql: str, grounding: Grounding | None) -> CheckedFilters
             if stored is not None and stored != typed:
                 literal.replace(exp.Literal.string(stored))
                 corrections.append(f"{table}.{name}: '{typed}' -> '{stored}'")
-    if not corrections:
+    if not corrections and not removed:
         return CheckedFilters(sql=sql, problems=problems)
-    return CheckedFilters(sql=statement.sql(dialect="postgres"), corrections=corrections, problems=problems)
+    return CheckedFilters(
+        sql=statement.sql(dialect="postgres"), corrections=corrections, removed=removed, problems=problems
+    )
+
+
+def _remove_guessed_person_filters(statement: exp.Expression, typed_names: list[str]) -> list[str]:
+    """Replace each condition on a person-name column that names nobody the user typed with TRUE."""
+    typed = [set(normalize_name(name).split()) for name in typed_names]
+    removed: list[str] = []
+    for node in list(statement.find_all(exp.EQ, exp.In, exp.Like, exp.ILike)):
+        column = node.this
+        if not isinstance(column, exp.Column):
+            continue
+        table = _table_of(column)
+        facts = _catalog_facts().get(table) if table else None
+        if facts is None or column.name.lower() not in facts.person_columns:
+            continue
+        literals = [node.expression] if not isinstance(node, exp.In) else node.expressions
+        texts = [item.this for item in literals if isinstance(item, exp.Literal) and item.is_string]
+        if texts and all(any(set(normalize_name(text).split()) <= words for words in typed) for text in texts):
+            continue
+        removed.append(node.sql(dialect="postgres"))
+        node.replace(exp.true())
+    return removed
 
 
 def explain_missing_column(error: str, sql: str) -> str:
@@ -180,7 +211,7 @@ def _closed_set_spelling(typed: str, values: tuple[str, ...]) -> str | None:
     return folded[0] if len(folded) == 1 else None
 
 
-_NO_FACTS = _TableFacts(columns=frozenset(), values={})
+_NO_FACTS = _TableFacts(columns=frozenset(), person_columns=frozenset(), values={})
 
 
 @lru_cache(maxsize=1)
@@ -198,6 +229,11 @@ def _catalog_facts() -> dict[str, _TableFacts]:
             measured = profiles.get(table.get("qualified_name") or "") or profiles.get(qualified) or {}
             table_facts = _TableFacts(
                 columns=frozenset(str(column.get("name") or "").lower() for column in table.get("columns") or []),
+                person_columns=frozenset(
+                    str(column.get("name") or "").lower()
+                    for column in table.get("columns") or []
+                    if column.get("person_name")
+                ),
                 values={
                     str(column).lower(): tuple(str(value) for value in column_facts["values"])
                     for column, column_facts in measured.items()

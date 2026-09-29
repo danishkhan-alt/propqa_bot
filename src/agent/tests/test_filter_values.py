@@ -133,3 +133,25 @@ def test_a_missing_column_retry_is_told_the_real_columns():
 
     run_sql_lookup(_state(), models, runner)
     assert "community_name_en" in models.calls[1]["previous_error"]
+
+
+BROKERS = "chatbot_ai.real_estate_brokers"
+
+
+def test_a_person_name_pattern_the_user_never_typed_is_removed():
+    checked = check_filter_values(
+        f"SELECT broker_name_en, phone FROM {BROKERS} "
+        "WHERE (broker_name_en ILIKE '%hindi%' OR broker_name_en ILIKE '%singh%') AND phone IS NOT NULL",
+        None,
+        typed_names=["Sobha Hartland"],
+    )
+    assert "ILIKE" not in checked.sql
+    assert "phone IS NOT NULL" in checked.sql
+    assert len(checked.removed) == 2
+
+
+def test_a_broker_the_user_named_is_still_filtered_on():
+    sql = f"SELECT phone FROM {BROKERS} WHERE broker_name_en ILIKE '%Sofya Shamuzova%'"
+    checked = check_filter_values(sql, None, typed_names=["Sofya Shamuzova"])
+    assert checked.removed == []
+    assert "ILIKE '%Sofya Shamuzova%'" in checked.sql

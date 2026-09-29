@@ -155,6 +155,8 @@ def run_sql_lookup(
         if answered_by_recipe is not None:
             return answered_by_recipe
     resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
+    query = as_query_route(state.get("query_route"))
+    typed_names = [name.text for name in query.names] if query is not None else []
     rules = segment_rules(domain_ids)
     previous_error: str | None = None
     last: dict[str, Any] = _undrafted_sql_result(domain_ids)
@@ -199,9 +201,12 @@ def run_sql_lookup(
             trace_sql_attempt(last, client)
             previous_error = str(exc)
             continue
-        checked = check_filter_values(guarded, grounding)
-        if checked.corrections:
-            logger.info("sql.filter_values_corrected", extra={"extra_data": {"corrections": checked.corrections}})
+        checked = check_filter_values(guarded, grounding, typed_names)
+        if checked.corrections or checked.removed:
+            logger.info(
+                "sql.filter_values_corrected",
+                extra={"extra_data": {"corrections": checked.corrections, "removed": checked.removed}},
+            )
             guarded = checked.sql
         blends = blended_average_reasons(guarded, rules)
         if blends and attempt < MAX_ATTEMPTS:

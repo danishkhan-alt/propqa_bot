@@ -16,7 +16,7 @@ from agent.reply.place_map import (
     build_place_map,
     find_coordinate_pair,
     rail_line_key,
-    split_place_rows,
+    place_pins,
 )
 from agent.schemas.profile import ProfileSignals
 from agent.schemas.reply import (
@@ -463,7 +463,7 @@ def test_no_pair_when_the_columns_do_not_place_a_row(columns):
     assert find_coordinate_pair(columns) is None
 
 
-def test_place_rows_lose_their_coordinates_and_become_pins():
+def test_place_rows_become_pins_named_by_their_name_column():
     rows = [
         {
             "location_name_english": "Business Bay Metro Station",
@@ -481,17 +481,15 @@ def test_place_rows_lose_their_coordinates_and_become_pins():
         },
     ]
     columns = list(rows[0])
-    kept_rows, kept_columns, pins = split_place_rows(rows, columns)
-    assert kept_columns == ["location_name_english", "location_name_arabic", "line_name"]
-    assert all("station_location_latitude" not in row for row in kept_rows)
+    pins = place_pins(rows, columns)
     assert pins == [
         {"lat": 25.19143, "lng": 55.26053, "label": "Business Bay Metro Station", "detail": "Red Metro line", "kind": "place"}
     ]
 
 
-def test_rows_without_coordinates_pass_through_untouched():
+def test_rows_without_coordinates_make_no_pins():
     rows = [{"area_en": "JVC", "median_rent": 70000}]
-    assert split_place_rows(rows, ["area_en", "median_rent"]) == (rows, ["area_en", "median_rent"], [])
+    assert place_pins(rows, ["area_en", "median_rent"]) == []
 
 
 def test_the_map_shows_each_place_once_and_caps_its_pins():

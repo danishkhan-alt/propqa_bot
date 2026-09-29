@@ -75,14 +75,15 @@ def is_coordinate_column(column: str) -> bool:
     )
 
 
-def split_place_rows(
-    rows: list[dict[str, Any]], columns: list[str]
-) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
-    """Rows and columns without coordinates, and a pin for each row that had a valid pair."""
+def place_pins(rows: list[dict[str, Any]], columns: list[str]) -> list[dict[str, Any]]:
+    """A pin for each row with a valid coordinate pair, named by the row's own name column.
+
+    The rows keep their coordinates: the reply writes them only when the user asked for them.
+    """
     names = list(columns) or list(rows[0] if rows else [])
     pair = find_coordinate_pair(names)
     if pair is None:
-        return rows, columns, []
+        return []
     kept_columns = [column for column in names if not is_coordinate_column(column)]
     label_column = _label_column(kept_columns, rows)
     detail_column = _detail_column(kept_columns, rows, label_column)
@@ -98,11 +99,7 @@ def split_place_rows(
         )
         if pin is not None and label:
             pins.append(pin)
-    stripped = [
-        {key: value for key, value in row.items() if not is_coordinate_column(key)}
-        for row in rows
-    ]
-    return stripped, kept_columns if columns else [], pins
+    return pins
 
 
 def _label_column(columns: list[str], rows: list[dict[str, Any]]) -> str:
