@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
-import { ArrowUpRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowUpRight, Building2 } from "lucide-react";
+import { buildPropqaBuildingUrl, cn } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
 import { QuickReplies, type FollowUpQuestion, type QuickReplyOption } from "./QuickReplies";
 import { ExplainerBlock, FiguresBlock, type ReplyExplainer, type ReplyFigures } from "./ReplyBlocks";
@@ -17,6 +17,13 @@ export interface ReplyCard {
   price?: string | null;
 }
 
+/** A building with a guide page on propqa.ai, linked under the reply. */
+export interface BuildingPageLink {
+  name: string;
+  community?: string;
+  slug: string;
+}
+
 export interface StructuredReply {
   message_type?: string;
   intro_text?: string;
@@ -28,6 +35,8 @@ export interface StructuredReply {
   figures?: ReplyFigures | null;
   explainer?: ReplyExplainer | null;
   exclusions_note?: string;
+  /** Guide pages for the buildings the reply is about, chosen from the data by the server. */
+  building_pages?: BuildingPageLink[];
   question?: FollowUpQuestion | null;
   suggested_followups?: string[];
   session_profile?: Record<string, unknown>;
@@ -48,7 +57,7 @@ interface StructuredAnswerProps {
   onQuickReply?: (question: FollowUpQuestion, option: QuickReplyOption) => void;
 }
 
-/** One assistant reply: the answer, one optional block (comparison, map, figures, or explainer), one question, next steps, source. */
+/** One assistant reply: the answer, one optional block (comparison, map, figures, or explainer), building guide links, one question, next steps, source. */
 export function StructuredAnswer({
   reply,
   interactive,
@@ -59,6 +68,7 @@ export function StructuredAnswer({
   const cards = reply.cards ?? [];
   const followups = reply.suggested_followups ?? [];
   const question = reply.question ?? null;
+  const buildingPages = (reply.building_pages ?? []).filter((page) => page.slug);
 
   return (
     <div className="flex flex-col gap-3">
@@ -107,6 +117,32 @@ export function StructuredAnswer({
       {reply.figures && <FiguresBlock figures={reply.figures} />}
 
       {reply.explainer && <ExplainerBlock explainer={reply.explainer} />}
+
+      {buildingPages.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {buildingPages.map((page) => (
+            <a
+              key={page.slug}
+              href={buildPropqaBuildingUrl(page.slug)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${page.name} building guide on PropQA (opens in new tab)`}
+              className="group flex items-center gap-3 rounded-2xl border border-[#E8ECF3] bg-white px-4 py-3 shadow-[0px_0px_20px_3px_rgba(20,20,24,0.04)] transition-colors hover:border-[#D8DDE6] hover:bg-[#F5F7FA]"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#F5F7FA] text-[#141B34] group-hover:bg-[#E8ECF3]" aria-hidden>
+                <Building2 className="size-4" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-semibold leading-5 text-[#101527]">{page.name}</span>
+                <span className="truncate text-xs leading-4 text-[#747288]">
+                  {page.community ? `Building guide · ${page.community}` : "Building guide"}
+                </span>
+              </span>
+              <ArrowUpRight className="size-4 shrink-0 text-[#747288]" aria-hidden />
+            </a>
+          ))}
+        </div>
+      )}
 
       {reply.exclusions_note && (
         <p className="text-xs leading-5 text-[#747288]">{reply.exclusions_note}</p>

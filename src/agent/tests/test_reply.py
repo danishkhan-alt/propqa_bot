@@ -1,4 +1,4 @@
-"""Buyer profile, listing cards, and the streamed structured reply."""
+"""Buyer profile, listing cards, the streamed structured reply, and building page links."""
 
 from __future__ import annotations
 
@@ -8,7 +8,18 @@ import anthropic
 import httpx
 import pytest
 
+from agent.enums.grounding import Breadth
+from agent.enums.listing import MentionKind
 from agent.enums.routing import Intent, Route, TurnKind
+from agent.reply import streaming
+from agent.reply.building_pages import (
+    BUILDING_PAGES_TABLE,
+    MAX_BUILDING_PAGES,
+    BuildingPage,
+    BuildingPageDirectory,
+    building_pages_from_rows,
+    pick_building_pages,
+)
 from agent.reply.buyer_profile import merge_profile, pick_next_profile_question
 from agent.reply.figures import build_explainer, build_figures, build_reply_blocks, format_figure
 from agent.reply.place_map import (
@@ -18,6 +29,7 @@ from agent.reply.place_map import (
     rail_line_key,
     place_pins,
 )
+from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding, StoredMatch
 from agent.schemas.profile import ProfileSignals
 from agent.schemas.reply import (
     Explainer,
@@ -540,3 +552,122 @@ def test_a_rail_line_is_drawn_only_when_a_pin_sits_on_it():
 def test_two_listings_in_one_tower_are_two_pins():
     unit = {"lat": 25.08, "lng": 55.14, "label": "Marina Gate", "detail": "", "kind": "listing", "property_id": "1"}
     assert len(build_place_map([unit, {**unit, "property_id": "2"}, dict(unit)])["pins"]) == 2
+
+
+# Building pages
+
+
+def _building_directory():
+    return BuildingPageDirectory(
+        building_pages_from_rows(
+            [
+                {"building_name": "Trident Bayside", "community": "Dubai Marina", "slug_en": "trident-bayside", "location_id": 7263},
+                {"building_name": "Marina Suites", "community": "Dubai Marina", "slug_en": "marina-suites", "location_id": 9165},
+                {"building_name": "Aura", "community": "Arjan", "slug_en": "aura", "location_id": 3971},
+                {"building_name": "No Page Tower", "community": "Arjan", "slug_en": None, "location_id": 1},
+            ]
+        )
+    )
+
+
+def _named_place(text: str, breadth, v2_ids: list[int]):
+    return GroundedName(
+        text=text, kind=MentionKind.PLACE, place=GroundedPlace(title=text, breadth=breadth, v2_ids=v2_ids)
+    )
+
+
+def test_a_building_the_user_named_is_linked_to_its_page():
+    grounding = Grounding(names=[_named_place("trident bayside", Breadth.BUILDING, [7263])])
+    pages = pick_building_pages(_building_directory(), grounding, [{"median_price_aed_per_sqft": 1034.0}])
+    assert [page.to_ui_payload() for page in pages] == [
+        {"name": "Trident Bayside", "community": "Dubai Marina", "slug": "trident-bayside"}
+    ]
+
+
+def test_a_community_is_never_linked_to_every_building_in_it():
+    grounding = Grounding(names=[_named_place("dubai marina", Breadth.AREA, [7263, 9165, 42])])
+    assert pick_building_pages(_building_directory(), grounding, [{"avg_rent": 90000}]) == []
+
+
+def test_each_building_the_rows_compare_is_linked_once():
+    grounding = Grounding(
+        names=[
+            _named_place("trident bayside", Breadth.BUILDING, [7263]),
+            _named_place("marina suites", Breadth.BUILDING, [9165]),
+        ]
+    )
+    rows = [
+        {"building_name": "TRIDENT BAYSIDE", "net_yield_pct": 5.42},
+        {"building_name": "Marina Suites", "net_yield_pct": None},
+    ]
+    pages = pick_building_pages(_building_directory(), grounding, rows)
+    assert [page.slug for page in pages] == ["trident-bayside", "marina-suites"]
+
+
+def test_a_row_building_outside_the_place_asked_about_is_not_linked():
+    """ "Aura" in Arjan is a different project from a row named Aura in a Dubai Marina answer."""
+    grounding = Grounding(names=[_named_place("dubai marina", Breadth.AREA, [7263, 9165])])
+    rows = [{"building": "Marina Suites"}, {"building": "Aura"}, {"building": "No Page Tower"}]
+    pages = pick_building_pages(_building_directory(), grounding, rows)
+    assert [page.slug for page in pages] == ["marina-suites"]
+
+
+def test_rows_are_linked_when_no_place_was_named_and_the_list_is_capped():
+    directory = BuildingPageDirectory(
+        BuildingPage(name=f"Tower {index}", community="JVC", slug=f"tower-{index}", location_id=index)
+        for index in range(10)
+    )
+    rows = [{"building_name": f"Tower {index}", "rank": index} for index in range(10)]
+    pages = pick_building_pages(directory, None, rows)
+    assert [page.slug for page in pages] == [f"tower-{index}" for index in range(MAX_BUILDING_PAGES)]
+
+
+def test_a_building_found_by_its_stored_name_is_linked():
+    grounding = Grounding(
+        names=[
+            GroundedName(
+                text="Aura",
+                kind=MentionKind.PLACE,
+                stored=[StoredMatch(table=BUILDING_PAGES_TABLE, column="building_name", value="Aura", kind="building")],
+            )
+        ]
+    )
+    assert [page.slug for page in pick_building_pages(_building_directory(), grounding, [])] == ["aura"]
+
+
+def test_the_reply_carries_the_building_pages_and_the_model_sees_only_names(monkeypatch):
+    events: list[tuple[str, dict]] = []
+    monkeypatch.setattr(streaming, "publish_stream_event", lambda event, **fields: events.append((event, fields)))
+    seen: dict = {}
+
+    class Models:
+        def draft_reply(self, *, on_text, **kwargs):
+            seen.update(kwargs)
+            return StructuredReply(intro_text="Trident Bayside yields 5.4%.")
+
+    page = BuildingPage(name="Trident Bayside", community="Dubai Marina", slug="trident-bayside", location_id=7263)
+    text = streaming.publish_structured_reply(
+        Models(),
+        message="tell me about trident bayside",
+        messages=[],
+        session_profile={},
+        question=None,
+        config={},
+        building_pages=[page],
+    )
+    assert text == "Trident Bayside yields 5.4%."
+    assert seen["building_pages"] == ["Trident Bayside"]
+    reply = next(fields["reply"] for event, fields in events if event == "reply")
+    assert reply["building_pages"] == [{"name": "Trident Bayside", "community": "Dubai Marina", "slug": "trident-bayside"}]
+
+
+def test_a_building_whose_name_only_contains_the_place_is_not_linked():
+    """ "Dubai Marina" is the community, not the Dubai Marina Mall building its words also match."""
+    directory = BuildingPageDirectory(
+        [BuildingPage(name="Dubai Marina Mall", community="Dubai Marina", slug="dubai-marina-mall", location_id=5)]
+    )
+    marina = _named_place("Dubai Marina", Breadth.AREA, [5, 6])
+    marina.stored = [
+        StoredMatch(table=BUILDING_PAGES_TABLE, column="building_name", value="Dubai Marina Mall", kind="building")
+    ]
+    assert pick_building_pages(directory, Grounding(names=[marina]), []) == []

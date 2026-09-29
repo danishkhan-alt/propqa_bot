@@ -1,4 +1,4 @@
-"""The grounding index: places and stored names, read from the warehouse and kept in memory.
+"""The grounding index: places, stored names, and building pages, read from the warehouse and kept in memory.
 
 It is read-only and small (tens of thousands of names), so each process keeps its own copy.
 Loading runs in a background thread, started when the app starts, and a stale copy keeps
@@ -21,6 +21,11 @@ from agent.grounding.features import Feature, FeatureVocabulary, build_feature_v
 from agent.grounding.places import LEGACY_BREADTH, V2_BREADTH, PlaceDirectory, build_place_directory
 from agent.grounding.region_rows import RegionScope, ids_outside_region
 from agent.grounding.stored_values import StoredValueIndex, learn_same_place
+from agent.reply.building_pages import (
+    BUILDING_PAGES_TABLE,
+    BuildingPageDirectory,
+    building_pages_from_rows,
+)
 from agent.schemas.grounding_index import (
     ListingCountsByPlaceLink,
     LocationNode,
@@ -49,6 +54,7 @@ class GroundingIndex:
     features: FeatureVocabulary = field(default_factory=FeatureVocabulary)
     # Table to (id column, ids of rows outside the region), for tables that mix emirates.
     outside_region: dict[str, tuple[str, frozenset[int]]] = field(default_factory=dict)
+    building_pages: BuildingPageDirectory = field(default_factory=BuildingPageDirectory)
 
 
 def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingIndex:
@@ -90,6 +96,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
     stored = StoredValueIndex(values, same_place, aliases)
     features = build_feature_vocabulary(_fetch_features(read), load_feature_aliases())
     outside_region = _rows_outside_region(read, v2_nodes, region)
+    building_pages = _fetch_building_pages(read)
     logger.info(
         "grounding.loaded",
         extra={
@@ -99,6 +106,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
                 "same_place": len(same_place),
                 "features": len(features.features),
                 "outside_region": {table: len(ids) for table, (_, ids) in outside_region.items()},
+                "building_pages": len(building_pages),
             }
         },
     )
@@ -108,6 +116,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
         loaded_at=time.monotonic(),
         features=features,
         outside_region=outside_region,
+        building_pages=building_pages,
     )
 
 
@@ -130,6 +139,10 @@ class GroundingCache:
         if index is None or time.monotonic() - index.loaded_at > self._max_age:
             self.load_in_background()
         return index
+
+    def loaded(self) -> GroundingIndex | None:
+        """The index already in memory, stale or not. Never starts a load."""
+        return self._index
 
     def wait_for_first_load(self, timeout_seconds: float) -> GroundingIndex | None:
         """The index, waiting up to `timeout_seconds` for the first load to finish. Starts one
@@ -226,6 +239,19 @@ def _fetch_features(read: ReferenceReader) -> list[Feature]:
         for row in rows
         if row.get("id") is not None and str(row.get("title_en") or "").strip()
     ]
+
+
+def _fetch_building_pages(read: ReferenceReader) -> BuildingPageDirectory:
+    """The buildings with a page on propqa.ai. Without them a reply simply links none."""
+    try:
+        rows = read(
+            f"SELECT building_name, community, slug_en, location_id FROM {BUILDING_PAGES_TABLE} "
+            "WHERE slug_en IS NOT NULL AND building_name IS NOT NULL"
+        )
+    except Exception as exc:
+        logger.warning("grounding.building_pages_failed", extra={"extra_data": {"error": str(exc)[:200]}})
+        return BuildingPageDirectory()
+    return BuildingPageDirectory(building_pages_from_rows(rows))
 
 
 def _fetch_v2_nodes(read: ReferenceReader) -> list[LocationNode]:

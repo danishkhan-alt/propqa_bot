@@ -347,6 +347,7 @@ class LangChainAgentModels:
         session_profile: dict | None = None,
         follow_up_question: str | None = None,
         map_available: bool = False,
+        building_pages: list[str] | None = None,
         on_text: Callable[[str], None] | None = None,
         config: RunnableConfig | None = None,
     ) -> StructuredReply:
@@ -370,6 +371,7 @@ class LangChainAgentModels:
             "coverage": coverage or [],
             "follow_up_question": follow_up_question,
             "map_available": map_available,
+            "building_pages": building_pages or [],
         }
         messages = [
             build_cached_system_message(STRUCTURED_REPLY_SYSTEM),

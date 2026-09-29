@@ -9,11 +9,14 @@ from langgraph.runtime import Runtime
 from agent.context import AgentContext
 from agent.enums.routing import Route
 from agent.graph.nodes.runtime import models_for
+from agent.grounding import get_grounding_cache
+from agent.reply.building_pages import BuildingPage, pick_building_pages
 from agent.reply.buyer_profile import pick_next_profile_question
 from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
 from agent.reply.place_map import place_pins
 from agent.sql.transit import get_rail_lines
 from agent.reply.streaming import publish_structured_reply, stream_memory_notes, stream_prose_reply
+from agent.schemas.grounding import as_grounding
 from agent.schemas.profile import ProfileQuestion
 from agent.schemas.routes import (
     QueryRoute,
@@ -131,6 +134,8 @@ def _reply_from_lookup_results(
     filters = [str(item) for item in (result.get("filters") or [])]
     coverage = list(result.get("coverage") or [])
     listing_count = int(result.get("total") or len(listing_ids))
+    # A listing turn's rows are units, not buildings: only a building the user named is linked.
+    building_pages = _building_pages_for(state, runtime, [] if listing_ids else rows)
     question = None
     structured = None
     if status in ("rows", "empty"):
@@ -158,6 +163,7 @@ def _reply_from_lookup_results(
             config=config,
             map_pins=map_pins,
             map_lines=_rail_lines_for(runtime, map_pins),
+            building_pages=building_pages,
         )
     if structured is not None:
         text = structured
@@ -207,6 +213,7 @@ def _reply_from_lookup_results(
                 "columns": result.get("columns"),
                 "listing_facts": len(listings),
                 "map_pins": len(map_pins),
+                "building_pages": [page.slug for page in building_pages],
                 "question": (
                     question.id if question and structured is not None else None
                 ),
@@ -276,6 +283,18 @@ def _reply_without_data(
     )
     text = _stream_memory_notes(text, state)
     return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
+
+
+def _building_pages_for(
+    state: ChatState, runtime: Runtime[AgentContext], rows: list[dict]
+) -> list[BuildingPage]:
+    """The propqa.ai building pages to link under this reply. Never waits for the index to load."""
+    index = runtime.context.grounding if runtime.context is not None else None
+    if index is None:
+        index = get_grounding_cache().loaded()
+    if index is None:
+        return []
+    return pick_building_pages(index.building_pages, as_grounding(state.get("grounding")), rows)
 
 
 def _rail_lines_for(runtime: Runtime[AgentContext], pins: list | None) -> list[dict]:

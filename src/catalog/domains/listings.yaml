@@ -2,7 +2,8 @@ id: listings
 name: Properties, units, and buildings
 schema: chatbot_ai
 description: Live asking-price listings in public.properties, plus DLD-registered plots, freehold units,
-  and buildings. Use public.properties for beds, price, sale or rent, and what is on the market.
+  and buildings. Use public.properties for beds, price, sale or rent, and what is on the market. Use
+  public.revamp_buildings for a named building's profile and figures, or to compare buildings.
 synonyms:
 - listings
 - units
@@ -1457,6 +1458,160 @@ tables:
     type: character varying(191)
     meaning: Building number
   qualified_name: public.buildings
+- name: revamp_buildings
+  description: One profile per residential building on PropQA, with its market figures. Use for a named
+    building's price per sqft, rent, yield, service charge, units, floors, developer, and recent deals,
+    and to compare or rank buildings.
+  primary_key:
+  - building_id
+  columns:
+  - name: building_id
+    type: bigint
+    meaning: Building identifier
+  - name: building_name
+    type: text
+    meaning: Building name
+    examples:
+    - Trident Bayside
+    - Marina Suites
+  - name: building_type
+    type: text
+    meaning: Kind of building
+    examples:
+    - Building
+    - Residential
+    - Mixed-use
+  - name: community
+    type: text
+    meaning: Community the building is in
+    examples:
+    - Dubai Marina
+    - Jumeirah Village Circle (JVC)
+  - name: sub_community
+    type: text
+    meaning: DLD area the building is in
+    examples:
+    - Marsa Dubai
+  - name: project_name_en
+    type: text
+    meaning: DLD project name
+  - name: master_project_name_en
+    type: text
+    meaning: DLD master project name
+  - name: address
+    type: text
+    meaning: Street address
+  - name: location_id
+    type: bigint
+    meaning: The building's node in public.locations_v2
+  - name: latitude
+    type: double precision
+    meaning: Latitude
+  - name: longitude
+    type: double precision
+    meaning: Longitude
+  - name: developer_name
+    type: text
+    meaning: Developer name
+  - name: developer_founded_year
+    type: integer
+    meaning: Year the developer was founded
+  - name: project_status
+    type: text
+    meaning: DLD project status. FINISHED is built, ACTIVE is under construction, NOT_STARTED has not begun.
+    examples:
+    - FINISHED
+    - ACTIVE
+    - NOT_STARTED
+  - name: completion_date
+    type: date
+    meaning: Completion or expected handover date
+  - name: completion_year
+    type: integer
+    meaning: Completion or expected handover year
+  - name: dld_registration_date
+    type: date
+    meaning: Date the project was registered with DLD
+  - name: total_floors
+    type: integer
+    meaning: Number of floors
+  - name: total_units
+    type: integer
+    meaning: Number of units in the building
+  - name: units_for_sale
+    type: integer
+    meaning: Units listed for sale now
+  - name: units_for_rent
+    type: integer
+    meaning: Units listed for rent now
+  - name: median_price_aed_per_sqft
+    type: double precision
+    meaning: Median sale price per sqft in AED
+  - name: median_sale_price_aed_12_months
+    type: bigint
+    meaning: Median sale price in AED over the last 12 months
+  - name: median_sale_price_aed_all_time
+    type: bigint
+    meaning: Median sale price in AED over every recorded sale
+  - name: median_sale_area_sqft_12_months
+    type: bigint
+    meaning: Median size in sqft of units sold in the last 12 months
+  - name: median_sale_area_sqft_all_time
+    type: bigint
+    meaning: Median size in sqft of every unit sold
+  - name: median_rent_aed_per_year
+    type: bigint
+    meaning: Median yearly rent in AED
+  - name: net_yield_pct
+    type: double precision
+    meaning: Net rental yield in percent, after service charges
+  - name: service_charge_aed_per_sqft
+    type: double precision
+    meaning: Latest yearly service charge in AED per sqft
+  - name: sales_transactions
+    type: bigint
+    meaning: Number of registered sales in the building
+  - name: tenancies_signed
+    type: bigint
+    meaning: Number of registered rent contracts in the building
+  - name: amenities_list
+    type: jsonb
+    meaning: Shared amenities, an array of objects with title_en
+  - name: shared_facilities
+    type: text
+    meaning: Advert text about the building's facilities and floor plans
+  - name: building_description
+    type: text
+    meaning: Short description of the building
+  - name: units_breakdown
+    type: jsonb
+    meaning: One object per unit_type (such as "1 Bedroom") with units, share_pct, median_sale_price_aed,
+      median_rent_aed, median_size_sqft, gross_yield_pct, annual_service_charge_aed, and service_charge_aed_per_sqft
+  - name: yearly_rent_trends
+    type: jsonb
+    meaning: Object whose unit_trends array holds one object per year and unit_type with new_yoy_pct and contract counts
+  - name: service_charge_history
+    type: jsonb
+    meaning: One object per budget_year with service_charge_aed_per_sqft
+  - name: recent_sale_transactions
+    type: jsonb
+    meaning: Latest sales, each with date, unit_type, size_sqft, sale_price_aed, and contract_type
+  - name: recent_rent_transactions
+    type: jsonb
+    meaning: Latest rent contracts, each with date, unit_type, size_sqft, annual_rent_aed, and contract_type (New or Renewal)
+  - name: metro_travel_times
+    type: jsonb
+    meaning: Nearest metro stations with travel times
+  - name: schools_travel_times
+    type: jsonb
+    meaning: Nearest schools with travel times
+  - name: hospitals_travel_times
+    type: jsonb
+    meaning: Nearest hospitals with travel times
+  - name: groceries_travel_times
+    type: jsonb
+    meaning: Nearest grocery stores with travel times
+  qualified_name: public.revamp_buildings
 - name: dda_plots
   description: Dubai Development Authority site-plan plots. Area, height, coverage, land use, and coordinates.
   primary_key:
@@ -1551,6 +1706,9 @@ named_values:
 - table: public.properties
   column: developer
   kind: developer
+- table: public.revamp_buildings
+  column: building_name
+  kind: building
 - table: chatbot_ai.building_property_records
   column: area_name_en
   kind: area

@@ -47,6 +47,7 @@ def _grounded_place(match: PlaceMatch) -> GroundedPlace:
     place = match.place
     return GroundedPlace(
         title=place.title,
+        breadth=place.breadth,
         is_approximate=match.is_approximate,
         alternatives=list(match.alternatives),
         v2_ids=sorted(place.v2_ids),

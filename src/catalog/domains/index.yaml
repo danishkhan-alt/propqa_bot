@@ -6,7 +6,8 @@ domains:
   file: listings.yaml
   name: Properties, units, and buildings
   description: Live asking-price listings in public.properties, plus DLD plots, freehold units, and buildings.
-    Use this for beds, price, and what is for sale or rent.
+    Use this for beds, price, and what is for sale or rent, and for a named building's profile (price per
+    sqft, rent, yield, service charge, units) or a comparison of buildings.
   not_for: Sold prices, sale volumes, and registered rents (transactions). Community average prices, rents,
     and yields (market).
   synonyms:
@@ -22,7 +23,7 @@ domains:
   - for sale
   - for rent
   - asking price
-  table_count: 18
+  table_count: 19
 - id: transactions
   file: transactions.yaml
   name: Sales, rents, and valuations
