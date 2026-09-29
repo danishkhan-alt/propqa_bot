@@ -95,7 +95,7 @@ def main() -> None:
         max_bytes=ActiveConfig.LOG_MAX_BYTES,
         backup_count=ActiveConfig.LOG_BACKUP_COUNT,
     )
-    # Name grounding loads in the background; turns run without it until it is ready.
+    # Name grounding loads in the background; a turn that arrives first waits for it, up to a limit.
     get_grounding_cache().load_in_background()
     uvicorn.run(
         create_app(),

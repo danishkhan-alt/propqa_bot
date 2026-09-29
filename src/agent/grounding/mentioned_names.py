@@ -31,10 +31,10 @@ def _ground_mention(mention: NameMention, index: GroundingIndex, tables: set[str
     match = index.places.find(mention.text) if mention.kind is MentionKind.PLACE else None
     # The place's own spellings are tried with the user's wording: "downtown" becomes
     # "Downtown Dubai", which is how the other sources spell it.
-    spellings = [mention.text]
-    if match is not None:
-        spellings = [*sorted(match.place.names | match.place.covered_names), mention.text]
-    stored = index.stored.find(spellings, tables, _NAME_GROUPS_BY_MENTION_KIND[mention.kind])
+    place_spellings = sorted(match.place.names | match.place.covered_names) if match is not None else []
+    stored = index.stored.find(
+        [mention.text], tables, _NAME_GROUPS_BY_MENTION_KIND[mention.kind], place_spellings=place_spellings
+    )
     return GroundedName(
         text=mention.text,
         kind=mention.kind,

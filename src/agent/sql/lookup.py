@@ -26,6 +26,7 @@ from agent.services.transcript import (
     latest_user_text,
 )
 from agent.sql.execute import SqlFailed
+from agent.sql.filter_values import check_filter_values, explain_missing_column
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
@@ -115,7 +116,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
     last.update(
         params=found.query.params,
         total=found.total,
-        notes=[*grounding.user_facing_notes(), *found.notes],
+        notes=found.notes,
         filters=_stated_listing_filters(search),
         # The station kinds the ids were found near, after any loosening. Empty when none.
         station_kinds=list(STATION_KINDS.get(found.filters.near_station, ())),
@@ -150,10 +151,12 @@ def run_sql_lookup(
         bound = bind_recipe(chosen, grounding) if (chosen := get_recipe(domain.recipe_id)) else None
         if chosen is not None and bound is None:
             logger.info("sql.recipe_unbound", extra={"extra_data": {"recipe": chosen.id}})
-        answered_by_recipe = _answer_with_recipe(bound, runner, grounding, cap, client) if bound else None
+        answered_by_recipe = _answer_with_recipe(bound, runner, cap, client) if bound else None
         if answered_by_recipe is not None:
             return answered_by_recipe
     resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
+    query = as_query_route(state.get("query_route"))
+    typed_names = [name.text for name in query.names] if query is not None else []
     rules = segment_rules(domain_ids)
     previous_error: str | None = None
     last: dict[str, Any] = _undrafted_sql_result(domain_ids)
@@ -198,6 +201,13 @@ def run_sql_lookup(
             trace_sql_attempt(last, client)
             previous_error = str(exc)
             continue
+        checked = check_filter_values(guarded, grounding, typed_names)
+        if checked.corrections or checked.removed:
+            logger.info(
+                "sql.filter_values_corrected",
+                extra={"extra_data": {"corrections": checked.corrections, "removed": checked.removed}},
+            )
+            guarded = checked.sql
         blends = blended_average_reasons(guarded, rules)
         if blends and attempt < MAX_ATTEMPTS:
             last = _build_sql_result(
@@ -220,10 +230,10 @@ def run_sql_lookup(
                 purpose=draft.purpose,
                 sql=guarded,
                 status="failed",
-                error=str(exc),
+                error=explain_missing_column(str(exc), guarded),
             )
             trace_sql_attempt(last, client)
-            previous_error = str(exc)
+            previous_error = last["error"]
             continue
         if not isinstance(page, SqlPage):
             page = SqlPage(
@@ -247,14 +257,14 @@ def run_sql_lookup(
         )
         last["filters"] = applied_conditions(guarded)
         last["coverage"] = get_table_date_coverage(referenced_tables(guarded))
-        last["notes"] = [*(grounding.user_facing_notes() if grounding is not None else []), *([BLENDED_AVERAGE_NOTE] if blends else [])]
+        last["notes"] = [BLENDED_AVERAGE_NOTE] if blends else []
         trace_sql_attempt(last, client)
         if page.rows:
             answered = last
         retry_reason = NO_ROWS_RETRY_REASON if not page.rows else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(page.rows) else None
         if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
-        previous_error = retry_reason
+        previous_error = " ".join([retry_reason, *checked.problems])
 
     if last["status"] == "failed" and answered is not None:
         last = answered
@@ -266,9 +276,7 @@ def run_sql_lookup(
     }
 
 
-def _answer_with_recipe(
-    bound: BoundRecipe, runner, grounding: Grounding | None, cap: int, client
-) -> dict | None:
+def _answer_with_recipe(bound: BoundRecipe, runner, cap: int, client) -> dict | None:
     """The update for a recipe that returned rows, or None so the turn drafts SQL instead."""
     domain_ids = list(bound.recipe.domains)
     try:
@@ -295,7 +303,7 @@ def _answer_with_recipe(
         recipe=bound.recipe.id,
         filters=bound.filters(),
         coverage=get_table_date_coverage(referenced_tables(guarded)),
-        notes=grounding.user_facing_notes() if grounding is not None else [],
+        notes=[],
     )
     logger.info(
         "sql.recipe",
@@ -307,19 +315,24 @@ def _answer_with_recipe(
 
 def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
     places = [name for name in grounding.names if name.kind is MentionKind.PLACE]
-    filters = query.listing_filters if query is not None else None
+    filters = (query.listing_filters if query is not None else None) or ListingFilters()
     return ListingSearch(
-        filters=filters or ListingFilters(),
+        filters=filters,
         places=[name.place for name in places if name.place is not None],
         developers=grounding.stored_values_in(LISTINGS_TABLE, "developer"),
         unmatched_places=[name.text for name in places if name.place is None],
+        features=[feature for feature in grounding.features if feature.is_resolved],
+        any_feature=filters.any_requirement,
+        unchecked_requirements=[feature.text for feature in grounding.features if not feature.is_resolved],
     )
 
 
 def _stated_listing_filters(search: ListingSearch) -> list[str]:
     """The user's own listing filters, as `field: value`, for the reply to name."""
     stated = search.filters.model_dump(
-        mode="json", exclude_defaults=True, exclude={"near_station", "station_within_km", "golden_visa"}
+        mode="json",
+        exclude_defaults=True,
+        exclude={"near_station", "station_within_km", "golden_visa", "requirements", "any_requirement"},
     )
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
     if search.filters.golden_visa:
@@ -331,8 +344,12 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
             f"within {search.filters.station_km:g} km of {STATION_LABELS[search.filters.near_station]}"
         )
     conditions.extend(f"place: {place.title}" for place in search.places)
-    conditions.extend(f"place text: {text}" for text in search.unmatched_places)
+    conditions.extend(f"place: {text}" for text in search.unmatched_places)
     conditions.extend(f"developer: {name}" for name in search.developers)
+    if search.features:
+        label = "has any of" if search.any_feature and len(search.features) > 1 else "has"
+        wanted = [" or ".join(feature.titles) for feature in search.features]
+        conditions.append(f"{label}: " + "; ".join(wanted))
     return conditions
 
 

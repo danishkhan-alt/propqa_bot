@@ -61,28 +61,36 @@ class StoredValueIndex:
         spellings: list[str],
         tables: Iterable[str],
         groups: set[str] | None = None,
+        *,
+        place_spellings: Iterable[str] = (),
     ) -> list[StoredValue]:
         """Stored values for a name, per table and name group. `groups` None searches every group.
 
-        `spellings` are tried together and the strongest match tier wins.
+        `spellings` are what the user typed, matched at every tier. `place_spellings` are the
+        names of the place it was matched to, and count only where a table spells them exactly:
+        "Jumeirah" read from "Jumeirah First" must not pull in every "Jumeirah ..." community.
+        All are tried together and the strongest match tier wins.
         """
         wanted = set(tables)
+        known = list(place_spellings)
         found: list[StoredValue] = []
         for (table, group), matcher in sorted(self._matchers.items()):
             if table in wanted and (groups is None or group in groups):
                 containing = group in GROUPS_MATCHING_CONTAINING_NAMES
-                found.extend(self._find_in_matcher(matcher, spellings, containing=containing))
+                found.extend(self._find_in_matcher(matcher, spellings, known, containing=containing))
         return found
 
     def _find_in_matcher(
         self,
         matcher: NameMatcher[ValueKey],
         spellings: list[str],
+        place_spellings: list[str],
         *,
         containing: bool,
     ) -> list[StoredValue]:
         find = matcher.find_containing if containing else matcher.find
         hits = [hit for spelling in spellings for hit in find(spelling)]
+        hits += [hit for spelling in place_spellings for hit in matcher.find_exact(spelling)]
         if not hits:
             return []
         # A table may store more than one spelling of a name, so every hit at the strongest tier

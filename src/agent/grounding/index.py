@@ -1,9 +1,9 @@
 """The grounding index: places and stored names, read from the warehouse and kept in memory.
 
 It is read-only and small (tens of thousands of names), so each process keeps its own copy.
-No request waits for it: loading runs in a background thread, started when the app starts,
-and a stale copy keeps serving while the next one loads. Until the first copy is ready,
-turns run without grounding, as they did before it existed.
+Loading runs in a background thread, started when the app starts, and a stale copy keeps
+serving while the next one loads. A turn that arrives before the first copy is ready waits
+for it, up to a limit, since without it no name the user typed can be matched.
 """
 
 from __future__ import annotations
@@ -12,11 +12,12 @@ import threading
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from psycopg import sql
 
-from agent.enums.grounding import Breadth
+from agent.enums.grounding import Breadth, FeatureKind
+from agent.grounding.features import Feature, FeatureVocabulary, build_feature_vocabulary
 from agent.grounding.places import LEGACY_BREADTH, V2_BREADTH, PlaceDirectory, build_place_directory
 from agent.grounding.stored_values import StoredValueIndex, learn_same_place
 from agent.schemas.grounding_index import (
@@ -27,7 +28,7 @@ from agent.schemas.grounding_index import (
 )
 from agent.sql.execute import fetch_reference_rows
 from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION
-from catalog import load_name_aliases, load_named_value_declarations
+from catalog import load_feature_aliases, load_name_aliases, load_named_value_declarations
 from common.logger import get_logger
 from config import ActiveConfig
 
@@ -44,6 +45,7 @@ class GroundingIndex:
     places: PlaceDirectory
     stored: StoredValueIndex
     loaded_at: float
+    features: FeatureVocabulary = field(default_factory=FeatureVocabulary)
 
 
 def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingIndex:
@@ -82,6 +84,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
                 },
             )
     stored = StoredValueIndex(values, same_place, aliases)
+    features = build_feature_vocabulary(_fetch_features(read), load_feature_aliases())
     logger.info(
         "grounding.loaded",
         extra={
@@ -89,10 +92,11 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
                 "places": len(places),
                 "stored_values": len(stored),
                 "same_place": len(same_place),
+                "features": len(features.features),
             }
         },
     )
-    return GroundingIndex(places=places, stored=stored, loaded_at=time.monotonic())
+    return GroundingIndex(places=places, stored=stored, loaded_at=time.monotonic(), features=features)
 
 
 class GroundingCache:
@@ -106,12 +110,22 @@ class GroundingCache:
         self._index: GroundingIndex | None = None
         self._lock = threading.Lock()
         self._loading = False
+        self._first_attempt_done = threading.Event()
 
     def get(self) -> GroundingIndex | None:
         """The current index, or None while the first load is still running. Never blocks."""
         index = self._index
         if index is None or time.monotonic() - index.loaded_at > self._max_age:
             self.load_in_background()
+        return index
+
+    def wait_for_first_load(self, timeout_seconds: float) -> GroundingIndex | None:
+        """The index, waiting up to `timeout_seconds` for the first load to finish. Starts one
+        if none is running. Returns None when the first load failed or is still running."""
+        index = self.get()
+        if index is None:
+            self._first_attempt_done.wait(timeout_seconds)
+            index = self._index
         return index
 
     def load_in_background(self) -> None:
@@ -133,6 +147,7 @@ class GroundingCache:
         finally:
             with self._lock:
                 self._loading = False
+            self._first_attempt_done.set()
         return self._index
 
 
@@ -152,6 +167,22 @@ def get_grounding_cache() -> GroundingCache:
                 max_age_seconds=ActiveConfig.GROUNDING_REFRESH_SECONDS,
             )
         return _cache
+
+
+def _fetch_features(read: ReferenceReader) -> list[Feature]:
+    """Amenity and view titles that at least one listing carries."""
+    rows = read(
+        "SELECT 'amenity' AS kind, a.id, a.title_en FROM public.amenities a "
+        "WHERE EXISTS (SELECT 1 FROM public.amenity_property ap WHERE ap.amenity_id = a.id) "
+        "UNION ALL "
+        "SELECT 'view' AS kind, v.id, v.title_en FROM public.views v "
+        "WHERE EXISTS (SELECT 1 FROM public.property_view pv WHERE pv.view_id = v.id)"
+    )
+    return [
+        Feature(kind=FeatureKind(row["kind"]), id=int(row["id"]), title=str(row["title_en"]).strip())
+        for row in rows
+        if row.get("id") is not None and str(row.get("title_en") or "").strip()
+    ]
 
 
 def _fetch_v2_nodes(read: ReferenceReader) -> list[LocationNode]:

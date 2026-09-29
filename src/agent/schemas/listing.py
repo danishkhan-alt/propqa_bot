@@ -66,6 +66,18 @@ class ListingFilters(BaseModel):
         default=False,
         description="True when they want properties that qualify for the UAE Golden Visa. False otherwise.",
     )
+    requirements: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Every other thing the property must have or be that no field above holds, one short noun phrase "
+            "each in the user's words: amenities, views, features, finishes, permits, what is nearby. Such as "
+            "'private gym', 'elevator', 'sea view', 'maid's room', 'near a mall', 'high ceilings'."
+        ),
+    )
+    any_requirement: bool = Field(
+        default=False,
+        description="True when any one of the requirements will do ('gym or pool'). False when all are wanted.",
+    )
 
     @model_validator(mode="after")
     def golden_visa_is_a_purchase(self) -> "ListingFilters":
@@ -97,7 +109,7 @@ class ListingFilters(BaseModel):
         """The distance a station filter applies: what they said, else a short walk."""
         return self.station_within_km or DEFAULT_STATION_KM
 
-    @field_validator("property_types", mode="before")
+    @field_validator("property_types", "requirements", mode="before")
     @classmethod
     def clean_types(cls, value: Any) -> list[str]:
         if value is None:

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent.schemas.grounding import GroundedPlace
+from agent.schemas.grounding import GroundedFeature, GroundedPlace
 from agent.schemas.listing import ListingFilters
 
 
@@ -17,6 +17,12 @@ class ListingSearch:
     developers: list[str] = field(default_factory=list)
     # Place names nothing matched. Searched as address text so they are not silently dropped.
     unmatched_places: list[str] = field(default_factory=list)
+    # Requirements that name stored amenities or views. A listing needs one of each group's
+    # features, and every group, or any group when `any_feature`.
+    features: list[GroundedFeature] = field(default_factory=list)
+    any_feature: bool = False
+    # Requirements no stored amenity or view names. The search cannot check them.
+    unchecked_requirements: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

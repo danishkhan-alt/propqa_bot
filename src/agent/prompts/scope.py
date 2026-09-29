@@ -2,12 +2,43 @@
 
 from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED
 
+# A name says nothing reliable about the person, and guessing from it is profiling.
+NO_INFERENCE_FROM_NAMES = (
+    "Never infer or suggest a person's language, nationality, religion, or ethnicity from their name, "
+    "not even as a possibility; when the data does not record it, say so plainly."
+)
+
+# What the product answers. The router and every model that writes to the user share it, so a
+# question the router let through is never refused later for being "not about property".
+IN_SCOPE_SUBJECTS = (
+    "Dubai property and living in Dubai around it: buying, selling, and renting; listings, prices, "
+    "rents, sales, and yields; projects, developers, agents, and brokers, including being put in "
+    "touch with one; areas and communities and what living there is like; schools, parks, and "
+    "amenities; getting around, such as the metro, buses, Salik tolls, and parking; and the UAE-wide "
+    "rules that come with property, such as the Golden Visa through property, residence for owners, "
+    "mortgages, and fees"
+)
+
 SCOPE_RULE = (
-    "Scope: you only help with Dubai property. That includes the UAE-wide rules that come with "
-    "buying, owning, financing, or renting it, such as the Golden Visa through property, residence "
-    "for owners, mortgage rules, and fees. If the message asks for anything else, such as code, "
-    "general maths, or trivia, do not answer it, even in part; say in one sentence that you only "
-    "help with Dubai property and offer one thing you can look into."
+    f"Scope: you help with {IN_SCOPE_SUBJECTS}. Decline only a request for something unrelated, such "
+    "as code, general maths, or trivia: do not answer it, even in part; say in one sentence what you "
+    "help with and offer one thing you can look into.\n"
+    "Asked for a file, such as an Excel sheet, give the data in the reply and say in a few words that "
+    "you cannot attach files. Never promise an action you do not take, such as connecting them to an "
+    "agent, booking a viewing, or sending something later: give them what the data holds, such as an "
+    "agent's contact details, so they can act on it. "
+    + NO_INFERENCE_FROM_NAMES
+)
+
+# For a turn the router let through: it already judged the question in scope.
+ANSWERED_IN_SCOPE_RULE = (
+    f"Scope: you help with {IN_SCOPE_SUBJECTS}. This question was already judged in scope. Answer it; "
+    "never decline it or say you only help with property.\n"
+    "Asked for a file, such as an Excel sheet, give the data in the reply and say in a few words that "
+    "you cannot attach files. Never promise an action you do not take, such as connecting them to an "
+    "agent, booking a viewing, or sending something later: give them what the data holds, such as an "
+    "agent's contact details, so they can act on it. "
+    + NO_INFERENCE_FROM_NAMES
 )
 
 GOLDEN_VISA_FACTS = (
