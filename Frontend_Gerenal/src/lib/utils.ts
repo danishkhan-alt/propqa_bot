@@ -35,6 +35,11 @@ export function truncate(text: string, maxLength = 80): string {
 /** Production site for PropQA property and search deep links. */
 export const PROPQA_SITE_BASE = "https://propqa.ai";
 
+/** Building guide page on propqa.ai, e.g. https://propqa.ai/buildings/dubai/trident-bayside. */
+export function buildPropqaBuildingUrl(slug: string): string {
+  return `${PROPQA_SITE_BASE}/buildings/dubai/${encodeURIComponent(slug.trim().replace(/^\/+|\/+$/g, ""))}`;
+}
+
 /** PropQA WhatsApp Business number (inquiries routed via PropQA, not direct to agents). */
 export const PROPQA_WHATSAPP_NUMBER = "971557767201";
 

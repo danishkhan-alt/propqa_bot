@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from agent.enums.grounding import Breadth
 from agent.enums.listing import MentionKind
 from agent.schemas.routes import unwrap_checkpoint_payload
 
@@ -12,6 +13,7 @@ class GroundedPlace(BaseModel):
     """The place a name was taken to mean, with every way a listing can point at it."""
 
     title: str
+    breadth: Breadth = Breadth.AREA
     is_approximate: bool = False
     alternatives: list[str] = Field(default_factory=list)
     v2_ids: list[int] = Field(default_factory=list)

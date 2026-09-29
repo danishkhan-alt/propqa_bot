@@ -10,6 +10,7 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.context import AgentModels
 from agent.memory.read.prompt_text import append_memory_notes
+from agent.reply.building_pages import BuildingPage
 from agent.reply.figures import build_reply_blocks
 from agent.schemas.profile import ProfileQuestion
 from agent.schemas.reply import StructuredReply
@@ -61,12 +62,14 @@ def publish_structured_reply(
     config: RunnableConfig,
     map_pins: list[dict] | None = None,
     map_lines: list[dict] | None = None,
+    building_pages: list[BuildingPage] | None = None,
     **fields,
 ) -> str | None:
     """Stream a structured reply when the model supports it. Otherwise the caller streams prose.
 
     `map_pins` are the places this turn's data can pin; the model only says whether to show them.
     `map_lines` are rail lines the map may draw under them.
+    `building_pages` are linked under the reply; the model is told only the buildings' names.
     """
     draft = getattr(models, method_name, None)
     if not callable(draft):
@@ -74,6 +77,8 @@ def publish_structured_reply(
     if question is not None:
         fields["follow_up_question"] = question.prompt
     fields["map_available"] = bool(map_pins)
+    if building_pages:
+        fields["building_pages"] = [page.name for page in building_pages]
     try:
         parsed = draft(
             message=message,
@@ -97,6 +102,7 @@ def publish_structured_reply(
     payload.update(
         build_reply_blocks(reply, figure_rows, list(fields.get("columns") or []), map_pins, map_lines)
     )
+    payload["building_pages"] = [page.to_ui_payload() for page in building_pages or []]
     payload["question"] = question.to_ui_payload() if question is not None else None
     if question is not None:
         # The question already has its own tap options; a chip repeating it is noise.

@@ -25,6 +25,22 @@ describe("StructuredAnswer", () => {
     expect(screen.getByText("Source: live asking prices")).toBeInTheDocument();
   });
 
+  it("links each building to its guide page on propqa.ai", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          intro_text: "Trident Bayside trades at AED 1,034 per sqft.",
+          building_pages: [{ name: "Trident Bayside", community: "Dubai Marina", slug: "trident-bayside" }],
+        }}
+        interactive
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Trident Bayside building guide/ });
+    expect(link).toHaveAttribute("href", "https://propqa.ai/buildings/dubai/trident-bayside");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(screen.getByText("Building guide · Dubai Marina")).toBeInTheDocument();
+  });
+
   it("answers the question with one tap", async () => {
     const onQuickReply = vi.fn();
     const user = userEvent.setup();
