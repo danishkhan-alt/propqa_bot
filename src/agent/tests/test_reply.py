@@ -144,7 +144,6 @@ def test_facts_are_numbers_and_leave_out_media():
     facts = prompt_listing_facts(fetch_listing_cards(["7"], lambda ids: [_row()]))
     assert facts == [
         {
-            "property_id": "7",
             "title": "Harbour View",
             "size_sqft": 812.5,
             "purpose": "for_sale",

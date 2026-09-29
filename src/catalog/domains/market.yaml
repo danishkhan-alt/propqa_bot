@@ -24,6 +24,10 @@ pitfalls:
 - Ignore leftover column_* fields; they are extract artifacts.
 - For rental yield or ROI by community, use the yield columns of mv_community_dld_market_metrics or
   mv_community_landing_page_stats. They match rent and price on the same basis; do not divide one average by another.
+- Every yield here is gross. No table holds a net yield (after service charges and costs); for a net yield,
+  return the gross figure and say in purpose that it is gross.
+- The community metrics are one row per community for all property types together; they do not split by
+  apartment, villa, or bedroom count.
 - Qualify public tables as public.<table>.
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16
@@ -959,7 +963,7 @@ tables:
     meaning: Average property price growth percent
   - name: estimated_annual_rental_return_pct
     type: numeric
-    meaning: Estimated annual rental yield percent
+    meaning: Gross rental yield percent (median annual rent over median sale price, before service charges and other costs)
   - name: estimated_monthly_payment_aed
     type: bigint
     meaning: Estimated monthly payment in AED
@@ -997,7 +1001,7 @@ tables:
     meaning: Master developer
   - name: gross_rental_yield_pct
     type: numeric
-    meaning: Gross rental yield percent
+    meaning: Gross rental yield percent (annual rent over sale price, before service charges and other costs)
   - name: handover
     type: text
     meaning: Handover label

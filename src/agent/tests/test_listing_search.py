@@ -203,7 +203,7 @@ def test_a_property_search_turn_never_asks_the_model_for_sql():
     assert params["place_v2_ids"] == [10, 11]
     assert params["purpose"] == "for_sale"
     assert params["bedrooms_min"] == 2
-    assert models.answers and models.answers[0]["listing_ids"] == ["101", "102"]
+    assert models.answers and models.answers[0]["listing_count"] == 2
     assert state["grounding"] is None
     assert state["last_need_db"].result_meta["listing_filters"] == {
         "purpose": "sale",

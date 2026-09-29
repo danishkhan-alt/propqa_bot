@@ -82,7 +82,6 @@ def test_a_focused_listing_carries_its_card_and_advert_details():
     facts = fetch_focused_listings([201], _cards, _details).facts
     assert facts == [
         {
-            "property_id": "201",
             "title": "3 B/R, Harbour Gate Tower 2",
             "bedrooms": 3,
             "size_sqft": 1641,
@@ -132,7 +131,8 @@ def test_a_listing_without_a_pin_has_nothing_to_map():
 
 def test_listings_keep_the_order_picked_and_a_gone_listing_is_dropped():
     facts = fetch_focused_listings([368, 999, 201], _cards, _details).facts
-    assert [fact["property_id"] for fact in facts] == ["368", "201"]
+    assert [fact["title"] for fact in facts] == ["2 B/R, Green Community West", "3 B/R, Harbour Gate Tower 2"]
+    assert all("property_id" not in fact for fact in facts)
     assert facts[0]["rent_aed"] == {"amount": 95000, "period": "yearly"}
     assert "amenities" not in facts[0]
 

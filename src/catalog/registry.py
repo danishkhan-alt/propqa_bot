@@ -16,6 +16,8 @@ RECIPES_PATH = CATALOG_DIR / "recipes.yaml"
 
 # Keys the grounding code reads. The SQL model never sees them.
 _GROUNDING_KEYS = ("named_values",)
+# Table keys only code reads.
+_CODE_ONLY_TABLE_KEYS = ("region_scope",)
 # A column this full or fuller is shown without a fill rate.
 _HIDE_FILL_RATE_AT_OR_ABOVE = 0.95
 
@@ -49,6 +51,10 @@ def load_column_profiles(domain_id: str) -> dict:
 def render_domain_prompt(domain: dict) -> str:
     """YAML fragment the SQL agent can be given as schema context, with measured column facts."""
     visible = {key: value for key, value in domain.items() if key not in _GROUNDING_KEYS}
+    visible["tables"] = [
+        {key: value for key, value in table.items() if key not in _CODE_ONLY_TABLE_KEYS}
+        for table in visible.get("tables") or []
+    ]
     profiles = load_column_profiles(str(domain.get("id") or ""))
     if profiles:
         visible["tables"] = [_merge_column_profile_into_table(table, profiles) for table in visible.get("tables") or []]
@@ -94,6 +100,20 @@ def load_named_value_declarations() -> list[dict]:
     for domain in list_domains():
         declared.extend(load_domain(domain["id"]).get("named_values") or [])
     return declared
+
+
+def load_region_scopes() -> list[dict]:
+    """Tables that mix emirates, each with the columns that say where a row is."""
+    scopes: list[dict] = []
+    for listed in list_domains():
+        domain = load_domain(listed["id"])
+        schema = str(domain.get("schema") or "").strip()
+        for table in domain.get("tables") or []:
+            scope = table.get("region_scope")
+            if scope:
+                qualified = table.get("qualified_name") or f"{schema}.{table['name']}"
+                scopes.append({"table": str(qualified).lower(), **scope})
+    return scopes
 
 
 def load_recipes() -> list[dict]:

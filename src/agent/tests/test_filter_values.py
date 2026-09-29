@@ -155,3 +155,37 @@ def test_a_broker_the_user_named_is_still_filtered_on():
     checked = check_filter_values(sql, None, typed_names=["Sofya Shamuzova"])
     assert checked.removed == []
     assert "ILIKE '%Sofya Shamuzova%'" in checked.sql
+
+
+def test_a_window_counted_from_today_past_the_data_is_explained():
+    checked = check_filter_values(
+        f"SELECT MAX(actual_worth) FROM {SALES} WHERE instance_date >= CURRENT_DATE - INTERVAL '7 DAYS'", None
+    )
+    assert any("instance_date holds data only up to" in problem for problem in checked.problems)
+
+
+def test_a_window_anchored_on_the_data_is_left_alone():
+    checked = check_filter_values(
+        f"SELECT MAX(actual_worth) FROM {SALES} WHERE instance_date >= "
+        f"(SELECT MAX(instance_date) FROM {SALES}) - INTERVAL '7 DAYS'",
+        None,
+    )
+    assert checked.problems == []
+
+
+def test_a_question_the_data_cannot_answer_is_not_drafted_as_a_stand_in():
+    class _Missing:
+        calls = 0
+
+        def draft_sql(self, **kwargs) -> SqlDraft:
+            self.calls += 1
+            return SqlDraft(sql="", purpose="ridership", missing="passenger numbers per metro station")
+
+    def runner(sql: str) -> SqlPage:
+        raise AssertionError("nothing should run")
+
+    models = _Missing()
+    update = run_sql_lookup(_state(), models, runner)
+    assert models.calls == 1
+    assert update["sql_result"]["status"] == "unavailable"
+    assert update["sql_result"]["error"] == "passenger numbers per metro station"

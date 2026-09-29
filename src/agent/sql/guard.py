@@ -198,6 +198,12 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     unknown = sorted(name for name in referenced if name not in allowed_tables)
     if unknown:
         raise SqlRejected("Query uses tables outside the loaded catalog")
+    constant = _condition_on_no_column(statement)
+    if constant is not None:
+        raise SqlRejected(
+            f"The condition {constant} tests only fixed values, not a column, so it filters nothing. Test a "
+            "column that holds what was asked; if no column holds it, leave sql empty and set missing."
+        )
     if _has_unbracketed_or(statement):
         raise SqlRejected(
             "A WHERE mixes AND and OR without parentheses. AND binds first, so the other conditions "
@@ -205,6 +211,18 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
         )
     capped = _cap_rows(statement, row_cap)
     return capped.sql(dialect="postgres")
+
+
+_COMPARISONS = (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.Like, exp.ILike, exp.In, exp.Is)
+
+
+def _condition_on_no_column(statement: exp.Expression) -> str | None:
+    """A WHERE or HAVING comparison with no column or subquery in it, such as LOWER('Villa') LIKE '%villa%'."""
+    for clause in [*statement.find_all(exp.Where), *statement.find_all(exp.Having)]:
+        for node in clause.find_all(*_COMPARISONS):
+            if node.find(exp.Column) is None and node.find(exp.Select) is None:
+                return node.sql(dialect="postgres")
+    return None
 
 
 def _has_unbracketed_or(statement: exp.Expression) -> bool:

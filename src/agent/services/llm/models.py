@@ -176,6 +176,7 @@ class LangChainAgentModels:
         *,
         message: str,
         history: str,
+        missing: str = "",
         config: RunnableConfig | None = None,
     ):
         yield from stream_text_deltas(
@@ -184,7 +185,7 @@ class LangChainAgentModels:
                 SystemMessage(content=UNAVAILABLE_ANSWER_SYSTEM),
                 HumanMessage(
                     content=json.dumps(
-                        {"history": history, "message": message}, ensure_ascii=False
+                        {"history": history, "message": message, "missing": missing}, ensure_ascii=False
                     )
                 ),
             ],
@@ -196,10 +197,11 @@ class LangChainAgentModels:
         *,
         message: str,
         history: str,
+        missing: str = "",
         config: RunnableConfig | None = None,
     ) -> str:
         return "".join(
-            self.stream_answer_unavailable(message=message, history=history, config=config)
+            self.stream_answer_unavailable(message=message, history=history, missing=missing, config=config)
         ).strip()
 
     def draft_sql(
@@ -252,7 +254,7 @@ class LangChainAgentModels:
         purpose: str,
         assumptions: dict | None,
         memory_block: str = "",
-        listing_ids: list[str] | None = None,
+        listing_count: int = 0,
         data_note: str = "",
         search_notes: list[str] | None = None,
         filters: list[str] | None = None,
@@ -269,7 +271,7 @@ class LangChainAgentModels:
             "row_count": row_count,
             "truncated": truncated,
             "memory_block": memory_block,
-            "listing_ids": listing_ids,
+            "listing_count": listing_count,
             "data_note": data_note,
             "search_notes": search_notes or [],
             "filters": filters or [],
@@ -296,7 +298,7 @@ class LangChainAgentModels:
         purpose: str,
         assumptions: dict | None,
         memory_block: str = "",
-        listing_ids: list[str] | None = None,
+        listing_count: int = 0,
         data_note: str = "",
         search_notes: list[str] | None = None,
         filters: list[str] | None = None,
@@ -314,7 +316,7 @@ class LangChainAgentModels:
                 purpose=purpose,
                 assumptions=assumptions,
                 memory_block=memory_block,
-                listing_ids=listing_ids,
+                listing_count=listing_count,
                 data_note=data_note,
                 search_notes=search_notes,
                 filters=filters,

@@ -99,7 +99,7 @@ class _Listings:
     def draft_sql(self, **kwargs) -> SqlDraft:
         self.listing_ids_only = kwargs.get("listing_ids_only")
         return SqlDraft(
-            sql="SELECT property_id FROM building_property_records",
+            sql="SELECT id AS property_id FROM public.properties WHERE status = 'active'",
             purpose="apartments to show",
         )
 
@@ -535,7 +535,7 @@ def test_a_question_about_a_picked_listing_answers_from_its_advert():
     assert events[1][1]["reply"]["message_type"] == "factual_answer"
     assert events[1][1]["reply"]["data_source_note"] == "the listing's advert and nearby places"
     assert events[2][1]["route"] is None
-    assert [listing["property_id"] for listing in models.listings] == ["15802"]
+    assert len(models.listings) == 1
     assert models.listings[0]["amenities"] == ["Shared Pool"]
 
 

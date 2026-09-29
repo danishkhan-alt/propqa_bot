@@ -156,11 +156,11 @@ def listing_display_name(card: dict[str, Any]) -> str:
 
 
 def prompt_listing_facts(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What the answer model may cite. No photos, links, or contact details."""
+    """What the answer model may cite. No photos, links, contact details, or ids: the cards show
+    each listing, and a reply that reads ids out is noise to the user."""
     facts: list[dict[str, Any]] = []
     for card in cards[:PROMPT_LISTING_LIMIT]:
         fact = {
-            "property_id": card.get("id"),
             "title": card.get("title_en"),
             "type": card.get("type"),
             "bedrooms": card.get("rooms"),

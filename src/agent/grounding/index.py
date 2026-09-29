@@ -19,6 +19,7 @@ from psycopg import sql
 from agent.enums.grounding import Breadth, FeatureKind
 from agent.grounding.features import Feature, FeatureVocabulary, build_feature_vocabulary
 from agent.grounding.places import LEGACY_BREADTH, V2_BREADTH, PlaceDirectory, build_place_directory
+from agent.grounding.region_rows import RegionScope, ids_outside_region
 from agent.grounding.stored_values import StoredValueIndex, learn_same_place
 from agent.schemas.grounding_index import (
     ListingCountsByPlaceLink,
@@ -28,7 +29,7 @@ from agent.schemas.grounding_index import (
 )
 from agent.sql.execute import fetch_reference_rows
 from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION
-from catalog import load_feature_aliases, load_name_aliases, load_named_value_declarations
+from catalog import load_feature_aliases, load_name_aliases, load_named_value_declarations, load_region_scopes
 from common.logger import get_logger
 from config import ActiveConfig
 
@@ -46,13 +47,16 @@ class GroundingIndex:
     stored: StoredValueIndex
     loaded_at: float
     features: FeatureVocabulary = field(default_factory=FeatureVocabulary)
+    # Table to (id column, ids of rows outside the region), for tables that mix emirates.
+    outside_region: dict[str, tuple[str, frozenset[int]]] = field(default_factory=dict)
 
 
 def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingIndex:
 
     aliases = load_name_aliases()
+    v2_nodes = _fetch_v2_nodes(read)
     places = build_place_directory(
-        _fetch_v2_nodes(read),
+        v2_nodes,
         _fetch_legacy_nodes(read),
         _listing_links(read),
         region=region,
@@ -85,6 +89,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
             )
     stored = StoredValueIndex(values, same_place, aliases)
     features = build_feature_vocabulary(_fetch_features(read), load_feature_aliases())
+    outside_region = _rows_outside_region(read, v2_nodes, region)
     logger.info(
         "grounding.loaded",
         extra={
@@ -93,10 +98,17 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
                 "stored_values": len(stored),
                 "same_place": len(same_place),
                 "features": len(features.features),
+                "outside_region": {table: len(ids) for table, (_, ids) in outside_region.items()},
             }
         },
     )
-    return GroundingIndex(places=places, stored=stored, loaded_at=time.monotonic(), features=features)
+    return GroundingIndex(
+        places=places,
+        stored=stored,
+        loaded_at=time.monotonic(),
+        features=features,
+        outside_region=outside_region,
+    )
 
 
 class GroundingCache:
@@ -167,6 +179,37 @@ def get_grounding_cache() -> GroundingCache:
                 max_age_seconds=ActiveConfig.GROUNDING_REFRESH_SECONDS,
             )
         return _cache
+
+
+def _rows_outside_region(
+    read: ReferenceReader, v2_nodes: list[LocationNode], region: str
+) -> dict[str, tuple[str, frozenset[int]]]:
+    outside: dict[str, tuple[str, frozenset[int]]] = {}
+    for declared in load_region_scopes():
+        scope = RegionScope(
+            table=declared["table"],
+            id_column=declared["id"],
+            location_column=declared["location"],
+            place_column=declared["place_name"],
+        )
+        try:
+            rows = read(
+                sql.SQL("SELECT {id}, {location}, {place} FROM {table}")
+                .format(
+                    id=sql.Identifier(scope.id_column),
+                    location=sql.Identifier(scope.location_column),
+                    place=sql.Identifier(scope.place_column),
+                    table=_table_identifier(scope.table),
+                )
+                .as_string()
+            )
+        except Exception as exc:
+            logger.warning(
+                "grounding.region_scope_failed", extra={"extra_data": {"table": scope.table, "error": str(exc)[:200]}}
+            )
+            continue
+        outside[scope.table] = (scope.id_column, ids_outside_region(rows, scope, v2_nodes, region))
+    return outside
 
 
 def _fetch_features(read: ReferenceReader) -> list[Feature]:
