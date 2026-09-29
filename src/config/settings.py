@@ -63,12 +63,16 @@ class Config:
 
     # Chatbot database on this machine's Postgres. The socket uses peer auth, so
     # the role matches the OS user and there is no password. Not the warehouse.
-    CHAT_DB_HOST = os.getenv("CHAT_DB_HOST","localhost")
+    CHAT_DB_HOST = os.getenv("CHAT_DB_HOST", "localhost")
     CHAT_DB_PORT = _env_int("CHAT_DB_PORT", 5432)
     CHAT_DB_NAME = os.getenv("CHAT_DB_NAME", "propqa_chatbot")
-    CHAT_DB_USER = os.getenv("CHAT_DB_USER", "" if ENVIRONMENT.is_deployed else os.getenv("USER", ""))
+    CHAT_DB_USER = os.getenv(
+        "CHAT_DB_USER", "" if ENVIRONMENT.is_deployed else os.getenv("USER", "")
+    )
     CHAT_DB_PASSWORD = os.getenv("CHAT_DB_PASSWORD", "")
-    CHAT_DB_SSLMODE = os.getenv("CHAT_DB_SSLMODE", "require" if ENVIRONMENT.is_deployed else "disable")
+    CHAT_DB_SSLMODE = os.getenv(
+        "CHAT_DB_SSLMODE", "require" if ENVIRONMENT.is_deployed else "disable"
+    )
     CHAT_DB_POOL_MIN = _env_int("CHAT_DB_POOL_MIN", 1)
     CHAT_DB_POOL_MAX = _env_int("CHAT_DB_POOL_MAX", 10)
 
@@ -91,7 +95,8 @@ class Config:
         "AI_MODEL", "gpt-4.1" if LLM_PROVIDER == "openai" else "claude-sonnet-5"
     )
     ROUTER_MODEL = os.getenv(
-        "ROUTER_MODEL", "gpt-5.4-mini" if LLM_PROVIDER == "openai" else "claude-haiku-4-5"
+        "ROUTER_MODEL",
+        "gpt-5.4-mini" if LLM_PROVIDER == "openai" else "claude-haiku-4-5",
     )
     # AI_MODEL reasons before it answers, and that reasoning counts against max_tokens.
     # Effort sets how much it reasons per route: replies write from facts already
@@ -105,7 +110,9 @@ class Config:
     JEV_API_KEY = os.getenv("JEV_API_KEY", "")
     JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest")
     JEV_TIMEOUT_MS = _env_int("JEV_TIMEOUT_MS", 4000)
-    DOMAIN_ROUTER = os.getenv("DOMAIN_ROUTER", "jev" if JEV_API_KEY else "llm").strip().lower()
+    DOMAIN_ROUTER = (
+        os.getenv("DOMAIN_ROUTER", "jev" if JEV_API_KEY else "llm").strip().lower()
+    )
 
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")

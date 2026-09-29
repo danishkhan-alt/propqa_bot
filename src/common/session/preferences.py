@@ -26,4 +26,4 @@ def clear(user_id: str) -> None:
 
 
 def _key(user_id: str) -> str:
-    return f"fe:prefs:{user_id}"
+    return f"chat:preferences:{user_id}"
