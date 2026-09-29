@@ -11,6 +11,7 @@ DOMAINS_DIR = CATALOG_DIR / "domains"
 PROFILES_DIR = CATALOG_DIR / "profiles"
 INDEX_PATH = DOMAINS_DIR / "index.yaml"
 NAME_ALIASES_PATH = CATALOG_DIR / "name_aliases.yaml"
+FEATURE_ALIASES_PATH = CATALOG_DIR / "feature_aliases.yaml"
 RECIPES_PATH = CATALOG_DIR / "recipes.yaml"
 
 # Keys the grounding code reads. The SQL model never sees them.
@@ -103,9 +104,17 @@ def load_recipes() -> list[dict]:
 
 
 def load_name_aliases() -> dict[str, list[str]]:
-    if not NAME_ALIASES_PATH.exists():
+    return _load_aliases(NAME_ALIASES_PATH)
+
+
+def load_feature_aliases() -> dict[str, list[str]]:
+    return _load_aliases(FEATURE_ALIASES_PATH)
+
+
+def _load_aliases(path: Path) -> dict[str, list[str]]:
+    if not path.exists():
         return {}
-    payload = _read_yaml(NAME_ALIASES_PATH)
+    payload = _read_yaml(path)
     return {str(wording): [str(name) for name in names or []] for wording, names in payload.items()}
 
 

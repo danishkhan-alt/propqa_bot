@@ -11,8 +11,8 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
-from agent.grounding import get_grounding_cache, ground_names
-from agent.schemas.grounding import GroundedName, Grounding
+from agent.grounding import get_grounding_cache, ground_features, ground_names
+from agent.schemas.grounding import GroundedFeature, GroundedName, Grounding
 from agent.schemas.routes import as_domain_route, as_query_route
 from agent.services.llm.models import get_default_models
 from agent.services.stream_events import publish_stream_event
@@ -34,28 +34,37 @@ FIRST_LOAD_WAIT_SECONDS = 30.0
 
 
 def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
-    """Match each name the router found to places and stored values in the loaded tables."""
+    """Match each name the router found to places and stored values in the loaded tables, and
+    each listing requirement to the amenities and views listings are tagged with."""
     query = as_query_route(state.get("query_route"))
     domain = as_domain_route(state.get("domain_route"))
-    if query is None or domain is None or not query.names:
+    listing_search = uses_listing_search(state)
+    requirements = list(query.listing_filters.requirements) if listing_search and query is not None else []
+    if query is None or domain is None or not (query.names or requirements):
         return {"grounding": None}
     index = runtime.context.grounding if runtime.context is not None else None
     if index is None:
         index = get_grounding_cache().wait_for_first_load(FIRST_LOAD_WAIT_SECONDS)
     if index is None:
-        # Never drop a name: unmatched names are still searched as text.
+        # Never drop a name: unmatched names are still searched as text, and unmatched
+        # requirements are reported as not checked.
         logger.info(
             "grounding.not_ready",
-            extra={"extra_data": {"names": [name.text for name in query.names]}},
+            extra={"extra_data": {"names": [name.text for name in query.names], "requirements": requirements}},
         )
         unmatched = [
             GroundedName(text=name.text, kind=name.kind) for name in query.names
         ]
-        return {"grounding": Grounding(names=unmatched)}
+        return {
+            "grounding": Grounding(
+                names=unmatched, features=[GroundedFeature(text=text) for text in requirements]
+            )
+        }
     tables = tables_in_domains([*domain.domain_ids, *domain.join_ids])
-    if uses_listing_search(state):
+    if listing_search:
         tables.add(LISTINGS_TABLE)
     grounding = ground_names(query.names, index, tables)
+    grounding.features = ground_features(requirements, index.features)
     logger.info(
         "grounding.names",
         extra={
@@ -69,6 +78,7 @@ def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) ->
                     for name in grounding.names
                 ],
                 "unresolved": grounding.unresolved_names(),
+                "features": {feature.text: feature.titles for feature in grounding.features},
             }
         },
     )

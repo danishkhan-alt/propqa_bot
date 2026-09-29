@@ -1,6 +1,6 @@
-"""How well a name matched, and how much ground a place covers."""
+"""How well a name matched, how much ground a place covers, and what kind of feature a listing has."""
 
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 
 class MatchTier(IntEnum):
@@ -18,3 +18,10 @@ class Breadth(IntEnum):
     AREA = 1
     PROJECT = 2
     BUILDING = 3
+
+
+class FeatureKind(StrEnum):
+    """Where a listing feature is stored: public.amenities or public.views."""
+
+    AMENITY = "amenity"
+    VIEW = "view"

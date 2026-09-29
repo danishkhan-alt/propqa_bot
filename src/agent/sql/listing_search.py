@@ -4,6 +4,10 @@ A place matches a listing in any of the ways a listing can point at it: its v2 l
 of its three legacy location ids, or a part of its address, because many listings carry only
 the address. When nothing matches, filters are loosened in a fixed order and every step is
 reported, so the reply can say what was relaxed.
+
+A requirement is filtered on only when it names amenities or views listings are tagged
+with. Any other requirement ("high ceilings") is reported as not checked, so the reply
+never presents results as having it.
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ _STORED_PURPOSE = {ListingPurpose.SALE: "for_sale", ListingPurpose.RENT: "for_re
 
 ListingRunner = Callable[[str, dict[str, Any]], Any]
 WIDER_STATION_KM = 2.0
+UNCHECKED_REQUIREMENT_NOTE = "The search could not check {requirement}, so these results may not have it."
+DROPPED_FEATURES_NOTE = "None of the otherwise matching listings has {features}, so these results ignore that."
 
 
 RELAXATIONS: tuple[Relaxation, ...] = (
@@ -131,6 +137,9 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
     if search.developers:
         clauses.append("p.developer = ANY(%(developers)s)")
         params["developers"] = list(search.developers)
+    feature_clause = _feature_clause(search, params)
+    if feature_clause:
+        clauses.append(feature_clause)
     place_clause = _place_clause(search, params)
     if place_clause:
         clauses.append(place_clause)
@@ -150,7 +159,7 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
 
 def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, offset: int) -> ListingResult:
     """Count, loosen in order while nothing matches, then fetch one page of ids."""
-    notes: list[str] = []
+    notes = [UNCHECKED_REQUIREMENT_NOTE.format(requirement=text) for text in search.unchecked_requirements]
     current = search
     query = build_listing_query(current, limit=limit, offset=offset)
     total, duration_ms = _count_matching_listings(query, run)
@@ -164,6 +173,14 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
         total, elapsed = _count_matching_listings(query, run)
         duration_ms += elapsed
         notes.append(relaxation.note)
+    # The features the user asked for go last: they are often the point of the search.
+    if not total and current.features:
+        joiner = " or " if current.any_feature else " and "
+        notes.append(DROPPED_FEATURES_NOTE.format(features=joiner.join(f.text for f in current.features)))
+        current = replace(current, features=[])
+        query = build_listing_query(current, limit=limit, offset=offset)
+        total, elapsed = _count_matching_listings(query, run)
+        duration_ms += elapsed
     if not total:
         return ListingResult(
             ids=[], total=0, query=query, notes=notes, duration_ms=duration_ms, filters=current.filters
@@ -227,6 +244,30 @@ def _place_clause(search: ListingSearch, params: dict[str, Any]) -> str:
         links.append("p.address_en ILIKE ANY(%(place_address_patterns)s)")
         params["place_address_patterns"] = [f"%{_escape_like_pattern(text)}%" for text in search.unmatched_places]
     return f"({' OR '.join(links)})" if links else ""
+
+
+def _feature_clause(search: ListingSearch, params: dict[str, Any]) -> str:
+    """A listing has one of each requirement's amenities or views; all requirements, or any."""
+    groups: list[str] = []
+    for index, feature in enumerate(search.features):
+        links: list[str] = []
+        if feature.amenity_ids:
+            links.append(
+                "EXISTS (SELECT 1 FROM public.amenity_property ap "
+                f"WHERE ap.property_id = p.id AND ap.amenity_id = ANY(%(feature_{index}_amenity_ids)s))"
+            )
+            params[f"feature_{index}_amenity_ids"] = list(feature.amenity_ids)
+        if feature.view_ids:
+            links.append(
+                "EXISTS (SELECT 1 FROM public.property_view pv "
+                f"WHERE pv.property_id = p.id AND pv.view_id = ANY(%(feature_{index}_view_ids)s))"
+            )
+            params[f"feature_{index}_view_ids"] = list(feature.view_ids)
+        if links:
+            groups.append(f"({' OR '.join(links)})")
+    if not groups:
+        return ""
+    return f"({(' OR ' if search.any_feature else ' AND ').join(groups)})"
 
 
 def _escape_like_pattern(text: str) -> str:

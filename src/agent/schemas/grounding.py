@@ -40,10 +40,24 @@ class GroundedName(BaseModel):
         return self.place is not None or bool(self.stored)
 
 
+class GroundedFeature(BaseModel):
+    """A listing requirement in the user's words, and the amenities and views it names."""
+
+    text: str
+    amenity_ids: list[int] = Field(default_factory=list)
+    view_ids: list[int] = Field(default_factory=list)
+    titles: list[str] = Field(default_factory=list)
+
+    @property
+    def is_resolved(self) -> bool:
+        return bool(self.amenity_ids or self.view_ids)
+
+
 class Grounding(BaseModel):
-    """What each name in the message was matched to. Cleared before the checkpoint."""
+    """What each name and listing requirement in the message was matched to. Cleared before the checkpoint."""
 
     names: list[GroundedName] = Field(default_factory=list)
+    features: list[GroundedFeature] = Field(default_factory=list)
 
     def unresolved_names(self) -> list[str]:
         return [name.text for name in self.names if not name.is_resolved]

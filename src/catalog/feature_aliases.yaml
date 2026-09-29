@@ -1,0 +1,21 @@
+# Wording people use for a listing amenity or view that no stored title contains.
+# Each key is extra wording; its list holds the public.amenities or public.views titles it means.
+# Most wording needs nothing here: "gym", "maid's room", "near a mall", and close typos are
+# matched in code. Add an entry only for a synonym the titles never use.
+swimming pool:
+- Shared Pool
+- Private Pool
+sea view:
+- Ocean View
+- Waterfront View
+beach view:
+- Ocean View
+- Waterfront View
+water view:
+- Waterfront View
+- Ocean View
+- Marina View
+- Lagoon View
+- Lake View
+- Canal View
+- Creek View

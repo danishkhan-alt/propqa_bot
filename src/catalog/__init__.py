@@ -3,6 +3,7 @@ from catalog.registry import (
     list_domains,
     load_domain,
     load_domains,
+    load_feature_aliases,
     load_name_aliases,
     load_named_value_declarations,
     load_recipes,
@@ -18,6 +19,7 @@ __all__ = [
     "load_domains",
     "render_domains_prompt",
     "load_recipes",
+    "load_feature_aliases",
     "load_name_aliases",
     "load_named_value_declarations",
 ]

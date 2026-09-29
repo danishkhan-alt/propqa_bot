@@ -305,19 +305,24 @@ def _answer_with_recipe(bound: BoundRecipe, runner, cap: int, client) -> dict | 
 
 def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
     places = [name for name in grounding.names if name.kind is MentionKind.PLACE]
-    filters = query.listing_filters if query is not None else None
+    filters = (query.listing_filters if query is not None else None) or ListingFilters()
     return ListingSearch(
-        filters=filters or ListingFilters(),
+        filters=filters,
         places=[name.place for name in places if name.place is not None],
         developers=grounding.stored_values_in(LISTINGS_TABLE, "developer"),
         unmatched_places=[name.text for name in places if name.place is None],
+        features=[feature for feature in grounding.features if feature.is_resolved],
+        any_feature=filters.any_requirement,
+        unchecked_requirements=[feature.text for feature in grounding.features if not feature.is_resolved],
     )
 
 
 def _stated_listing_filters(search: ListingSearch) -> list[str]:
     """The user's own listing filters, as `field: value`, for the reply to name."""
     stated = search.filters.model_dump(
-        mode="json", exclude_defaults=True, exclude={"near_station", "station_within_km", "golden_visa"}
+        mode="json",
+        exclude_defaults=True,
+        exclude={"near_station", "station_within_km", "golden_visa", "requirements", "any_requirement"},
     )
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
     if search.filters.golden_visa:
@@ -331,6 +336,10 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
     conditions.extend(f"place: {place.title}" for place in search.places)
     conditions.extend(f"place: {text}" for text in search.unmatched_places)
     conditions.extend(f"developer: {name}" for name in search.developers)
+    if search.features:
+        label = "has any of" if search.any_feature and len(search.features) > 1 else "has"
+        wanted = [" or ".join(feature.titles) for feature in search.features]
+        conditions.append(f"{label}: " + "; ".join(wanted))
     return conditions
 
 
