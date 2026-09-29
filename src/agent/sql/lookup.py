@@ -115,7 +115,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
     last.update(
         params=found.query.params,
         total=found.total,
-        notes=[*grounding.user_facing_notes(), *found.notes],
+        notes=found.notes,
         filters=_stated_listing_filters(search),
         # The station kinds the ids were found near, after any loosening. Empty when none.
         station_kinds=list(STATION_KINDS.get(found.filters.near_station, ())),
@@ -150,7 +150,7 @@ def run_sql_lookup(
         bound = bind_recipe(chosen, grounding) if (chosen := get_recipe(domain.recipe_id)) else None
         if chosen is not None and bound is None:
             logger.info("sql.recipe_unbound", extra={"extra_data": {"recipe": chosen.id}})
-        answered_by_recipe = _answer_with_recipe(bound, runner, grounding, cap, client) if bound else None
+        answered_by_recipe = _answer_with_recipe(bound, runner, cap, client) if bound else None
         if answered_by_recipe is not None:
             return answered_by_recipe
     resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
@@ -247,7 +247,7 @@ def run_sql_lookup(
         )
         last["filters"] = applied_conditions(guarded)
         last["coverage"] = get_table_date_coverage(referenced_tables(guarded))
-        last["notes"] = [*(grounding.user_facing_notes() if grounding is not None else []), *([BLENDED_AVERAGE_NOTE] if blends else [])]
+        last["notes"] = [BLENDED_AVERAGE_NOTE] if blends else []
         trace_sql_attempt(last, client)
         if page.rows:
             answered = last
@@ -266,9 +266,7 @@ def run_sql_lookup(
     }
 
 
-def _answer_with_recipe(
-    bound: BoundRecipe, runner, grounding: Grounding | None, cap: int, client
-) -> dict | None:
+def _answer_with_recipe(bound: BoundRecipe, runner, cap: int, client) -> dict | None:
     """The update for a recipe that returned rows, or None so the turn drafts SQL instead."""
     domain_ids = list(bound.recipe.domains)
     try:
@@ -295,7 +293,7 @@ def _answer_with_recipe(
         recipe=bound.recipe.id,
         filters=bound.filters(),
         coverage=get_table_date_coverage(referenced_tables(guarded)),
-        notes=grounding.user_facing_notes() if grounding is not None else [],
+        notes=[],
     )
     logger.info(
         "sql.recipe",
@@ -331,7 +329,7 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
             f"within {search.filters.station_km:g} km of {STATION_LABELS[search.filters.near_station]}"
         )
     conditions.extend(f"place: {place.title}" for place in search.places)
-    conditions.extend(f"place text: {text}" for text in search.unmatched_places)
+    conditions.extend(f"place: {text}" for text in search.unmatched_places)
     conditions.extend(f"developer: {name}" for name in search.developers)
     return conditions
 

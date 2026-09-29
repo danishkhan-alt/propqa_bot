@@ -28,6 +28,10 @@ from common.logger import get_logger
 
 logger = get_logger("agent.grounding")
 
+# How long a turn waits for the first grounding index after the app starts. A later
+# refresh never blocks: the previous copy keeps serving.
+FIRST_LOAD_WAIT_SECONDS = 30.0
+
 
 def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) -> dict:
     """Match each name the router found to places and stored values in the loaded tables."""
@@ -37,9 +41,9 @@ def resolve_mentioned_names(state: ChatState, runtime: Runtime[AgentContext]) ->
         return {"grounding": None}
     index = runtime.context.grounding if runtime.context is not None else None
     if index is None:
-        index = get_grounding_cache().get()
+        index = get_grounding_cache().wait_for_first_load(FIRST_LOAD_WAIT_SECONDS)
     if index is None:
-        # Never drop a name: unmatched names are still searched as text, and the reply says so.
+        # Never drop a name: unmatched names are still searched as text.
         logger.info(
             "grounding.not_ready",
             extra={"extra_data": {"names": [name.text for name in query.names]}},

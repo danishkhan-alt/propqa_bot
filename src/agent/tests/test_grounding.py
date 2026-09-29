@@ -215,7 +215,37 @@ def test_an_unknown_name_is_reported_not_dropped():
     grounding = ground_names([NameMention(text="Atlantis Zzyzx")], index, [DLD_SALES])
     assert grounding.unresolved_names() == ["Atlantis Zzyzx"]
     assert grounding.for_sql_prompt() == [{"name": "Atlantis Zzyzx", "unresolved": True}]
-    assert "searched as text" in grounding.user_facing_notes()[0]
+
+
+def test_a_turn_before_the_first_load_waits_for_the_index():
+    import threading
+
+    from agent.grounding.index import GroundingCache
+
+    release = threading.Event()
+    loaded = GroundingIndex(places=_directory(), stored=_stored_index(), loaded_at=time.monotonic())
+
+    def slow_loader():
+        release.wait(5)
+        return loaded
+
+    cache = GroundingCache(slow_loader, max_age_seconds=3600)
+    cache.load_in_background()
+    threading.Timer(0.05, release.set).start()
+    assert cache.wait_for_first_load(5) is loaded
+
+
+def test_a_failed_first_load_does_not_hold_later_turns():
+    from agent.grounding.index import GroundingCache
+
+    def failing_loader():
+        raise RuntimeError("warehouse down")
+
+    cache = GroundingCache(failing_loader, max_age_seconds=3600)
+    cache.load_now()
+    started = time.monotonic()
+    assert cache.wait_for_first_load(5) is None
+    assert time.monotonic() - started < 1
 
 
 def test_a_legacy_node_at_the_same_spot_as_a_v2_node_joins_the_v2_place_it_sits_in():

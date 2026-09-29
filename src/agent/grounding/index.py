@@ -1,9 +1,9 @@
 """The grounding index: places and stored names, read from the warehouse and kept in memory.
 
 It is read-only and small (tens of thousands of names), so each process keeps its own copy.
-No request waits for it: loading runs in a background thread, started when the app starts,
-and a stale copy keeps serving while the next one loads. Until the first copy is ready,
-turns run without grounding, as they did before it existed.
+Loading runs in a background thread, started when the app starts, and a stale copy keeps
+serving while the next one loads. A turn that arrives before the first copy is ready waits
+for it, up to a limit, since without it no name the user typed can be matched.
 """
 
 from __future__ import annotations
@@ -106,12 +106,22 @@ class GroundingCache:
         self._index: GroundingIndex | None = None
         self._lock = threading.Lock()
         self._loading = False
+        self._first_attempt_done = threading.Event()
 
     def get(self) -> GroundingIndex | None:
         """The current index, or None while the first load is still running. Never blocks."""
         index = self._index
         if index is None or time.monotonic() - index.loaded_at > self._max_age:
             self.load_in_background()
+        return index
+
+    def wait_for_first_load(self, timeout_seconds: float) -> GroundingIndex | None:
+        """The index, waiting up to `timeout_seconds` for the first load to finish. Starts one
+        if none is running. Returns None when the first load failed or is still running."""
+        index = self.get()
+        if index is None:
+            self._first_attempt_done.wait(timeout_seconds)
+            index = self._index
         return index
 
     def load_in_background(self) -> None:
@@ -133,6 +143,7 @@ class GroundingCache:
         finally:
             with self._lock:
                 self._loading = False
+            self._first_attempt_done.set()
         return self._index
 
 

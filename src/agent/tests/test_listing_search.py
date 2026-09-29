@@ -367,6 +367,13 @@ def test_the_reply_is_told_the_golden_visa_condition_in_plain_words():
     ]
 
 
+def test_an_unmatched_place_is_stated_as_a_place_not_as_how_it_was_searched():
+    from agent.sql.lookup import _stated_listing_filters
+
+    search = ListingSearch(filters=ListingFilters(), unmatched_places=["Pam Jumara"])
+    assert _stated_listing_filters(search) == ["place: Pam Jumara"]
+
+
 class _MetroSearchModels(_ListingModels):
     def route_query(self, **kwargs) -> QueryRoute:
         route = super().route_query(**kwargs)

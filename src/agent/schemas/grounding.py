@@ -48,16 +48,6 @@ class Grounding(BaseModel):
     def unresolved_names(self) -> list[str]:
         return [name.text for name in self.names if not name.is_resolved]
 
-    def user_facing_notes(self) -> list[str]:
-        """What the reply should tell the user about how their names were read."""
-        notes: list[str] = []
-        for name in self.names:
-            if name.place is not None and name.place.is_approximate:
-                notes.append(f"'{name.text}' was read as {name.place.title}.")
-            elif not name.is_resolved:
-                notes.append(f"'{name.text}' did not match a known place or name, so it was searched as text.")
-        return notes
-
     def stored_values_in(self, table: str, kind: str) -> list[str]:
         """Stored values of one kind in one table, e.g. developers in public.properties."""
         return [
