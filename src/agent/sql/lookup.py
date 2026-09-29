@@ -26,6 +26,7 @@ from agent.services.transcript import (
     latest_user_text,
 )
 from agent.sql.execute import SqlFailed
+from agent.sql.filter_values import check_filter_values, explain_missing_column
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
@@ -198,6 +199,10 @@ def run_sql_lookup(
             trace_sql_attempt(last, client)
             previous_error = str(exc)
             continue
+        checked = check_filter_values(guarded, grounding)
+        if checked.corrections:
+            logger.info("sql.filter_values_corrected", extra={"extra_data": {"corrections": checked.corrections}})
+            guarded = checked.sql
         blends = blended_average_reasons(guarded, rules)
         if blends and attempt < MAX_ATTEMPTS:
             last = _build_sql_result(
@@ -220,10 +225,10 @@ def run_sql_lookup(
                 purpose=draft.purpose,
                 sql=guarded,
                 status="failed",
-                error=str(exc),
+                error=explain_missing_column(str(exc), guarded),
             )
             trace_sql_attempt(last, client)
-            previous_error = str(exc)
+            previous_error = last["error"]
             continue
         if not isinstance(page, SqlPage):
             page = SqlPage(
@@ -254,7 +259,7 @@ def run_sql_lookup(
         retry_reason = NO_ROWS_RETRY_REASON if not page.rows else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(page.rows) else None
         if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
-        previous_error = retry_reason
+        previous_error = " ".join([retry_reason, *checked.problems])
 
     if last["status"] == "failed" and answered is not None:
         last = answered

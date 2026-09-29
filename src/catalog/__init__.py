@@ -1,6 +1,7 @@
 from catalog.registry import (
     get_table_date_coverage,
     list_domains,
+    load_column_profiles,
     load_domain,
     load_domains,
     load_feature_aliases,
@@ -15,6 +16,7 @@ __all__ = [
     "get_table_date_coverage",
     "render_domain_prompt",
     "list_domains",
+    "load_column_profiles",
     "load_domain",
     "load_domains",
     "render_domains_prompt",
