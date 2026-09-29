@@ -339,36 +339,19 @@ class _FakeLangfuse:
         return _FakeObservation(record)
 
 
-def test_a_listing_list_keeps_only_property_ids():
+def test_only_ids_read_from_live_listings_become_cards():
     state = _state("Show me apartments")
-    state["query_route"] = QueryRoute(
-        route=Route.NEED_DB,
-        turn_kind=TurnKind.NEW,
-        intent=Intent.LIST,
-        confidence=1,
-        rationale="Show apartments.",
-    )
-    state["domain_route"] = DomainRoute(
-        domain_ids=["listings"],
-        join_ids=["locations"],
-        confidence=1,
-        rationale="Inventory.",
-    )
-    rows = [
-        {"property_id": Decimal("15802.0"), "project_name_en": "Marina Gate"},
-        {"property_id": 19806, "project_name_en": "Creek Tower"},
-        {"building_id": 589050, "community_name_english": "Al Murar"},
-    ]
-    assert listing_card_ids_from_rows(state, rows) == ["15802", "19806", "589050"]
+    rows = [{"property_id": Decimal("15802.0")}, {"property_id": 19806}]
+    listings = "SELECT id AS property_id FROM public.properties WHERE status = 'active'"
+    assert listing_card_ids_from_rows(state, rows, listings) == ["15802", "19806"]
 
-    state["query_route"] = QueryRoute(
-        route=Route.NEED_DB,
-        turn_kind=TurnKind.NEW,
-        intent=Intent.AGGREGATE,
-        confidence=1,
-        rationale="Average price.",
-    )
-    assert listing_card_ids_from_rows(state, rows) == []
+    # A DLD register or community id is not a listing: loaded as a card, it would show an
+    # unrelated property that happens to share the number.
+    for other in (
+        "SELECT property_id FROM chatbot_ai.building_property_records",
+        "SELECT id AS property_id FROM chatbot_ai.area_insights_communities",
+    ):
+        assert listing_card_ids_from_rows(state, rows, other) == []
 
 
 def test_trace_survives_a_langfuse_outage():
@@ -570,3 +553,17 @@ def test_an_or_that_escapes_the_other_filters_is_sent_back():
         100,
     )
     assert "OR" in kept
+
+
+def test_a_condition_on_fixed_values_is_rejected():
+    import pytest
+
+    from agent.sql.guard import SqlRejected, prepare_select
+
+    with pytest.raises(SqlRejected, match="tests only fixed values"):
+        prepare_select(
+            "SELECT AVG(gross_rental_yield_pct) FROM public.mv_community_landing_page_stats "
+            "WHERE LOWER('Apartment') LIKE '%apartment%'",
+            {"public.mv_community_landing_page_stats"},
+            100,
+        )

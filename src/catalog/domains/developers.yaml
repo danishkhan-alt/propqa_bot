@@ -1015,6 +1015,11 @@ tables:
   qualified_name: public.developers
 - name: offplan_projects_new
   description: Current off-plan projects with price, handover, unit types, and amenity lists.
+  # Mixes emirates. Rows outside Dubai are left out of every lookup; see agent.grounding.region_rows.
+  region_scope:
+    id: id
+    location: locations_v2_id
+    place_name: project_city
   primary_key:
   - id
   columns:

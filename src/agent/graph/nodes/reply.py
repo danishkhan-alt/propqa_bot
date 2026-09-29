@@ -174,7 +174,7 @@ def _reply_from_lookup_results(
             purpose=str(result.get("purpose") or ""),
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
-            listing_ids=listing_ids or None,
+            listing_count=listing_count if listing_ids else 0,
             data_note=note,
             search_notes=search_notes,
             filters=filters,
@@ -184,6 +184,15 @@ def _reply_from_lookup_results(
     elif status == "empty":
         text = EMPTY_LOOKUP_REPLY
         publish_stream_event("text", delta=text)
+    elif status == "unavailable":
+        text = stream_prose_reply(
+            models_for(runtime),
+            "answer_unavailable",
+            message=message,
+            history=format_recent_history(messages, limit=ANSWER_HISTORY_MESSAGE_LIMIT),
+            missing=str(result.get("error") or ""),
+            config=config,
+        )
     else:
         text = FAILED_LOOKUP_REPLY
         publish_stream_event("text", delta=text)

@@ -9,8 +9,15 @@ from pydantic import BaseModel, Field
 class SqlDraft(BaseModel):
     """One read-only statement proposed for the loaded catalog."""
 
-    sql: str = Field(description="A single PostgreSQL SELECT. No markdown.")
+    sql: str = Field(description="A single PostgreSQL SELECT. No markdown. Empty when missing is set.")
     purpose: str = Field(description="One line: why this statement answers the user.")
+    missing: str = Field(
+        default="",
+        description=(
+            "Empty when sql answers the question. When no catalog table holds what was asked, "
+            "one line naming what the data lacks, such as 'passenger numbers per metro station'."
+        ),
+    )
 
 
 @dataclass(frozen=True)

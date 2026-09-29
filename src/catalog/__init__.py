@@ -8,6 +8,7 @@ from catalog.registry import (
     load_name_aliases,
     load_named_value_declarations,
     load_recipes,
+    load_region_scopes,
     render_domain_prompt,
     render_domains_prompt,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "load_domains",
     "render_domains_prompt",
     "load_recipes",
+    "load_region_scopes",
     "load_feature_aliases",
     "load_name_aliases",
     "load_named_value_declarations",

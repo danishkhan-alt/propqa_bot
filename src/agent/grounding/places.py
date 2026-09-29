@@ -132,7 +132,7 @@ def build_place_directory(
 
     `inside_outline` maps a v2 area with a drawn outline to the legacy nodes whose point lies in it.
     """
-    v2 = _nodes_in_region({node.id: node for node in v2_nodes}, region)
+    v2 = nodes_in_region({node.id: node for node in v2_nodes}, region)
     legacy = {node.id: node for node in legacy_nodes}
     places: dict[str, Place] = {}
     for tree, is_v2 in ((v2, True), (legacy, False)):
@@ -274,7 +274,7 @@ def _subtree_ids_by_node(tree: Mapping[int, LocationNode]) -> dict[int, set[int]
     return result
 
 
-def _nodes_in_region(tree: dict[int, LocationNode], region: str) -> dict[int, LocationNode]:
+def nodes_in_region(tree: dict[int, LocationNode], region: str) -> dict[int, LocationNode]:
     wanted = normalize_name(region)
     if not wanted:
         return tree

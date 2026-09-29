@@ -25,6 +25,10 @@ turn_kind, compared with last_need_db:
 - refine: same subject, with a change to filters, sort, projection, or a reference like "the second one".
 - pivot: same place or property, different subject (for example schools near that building).
 
+A follow-up must move the conversation forward. Never route a lookup identical to the last one (same names, same listing_filters) unless the user asks to see it again: it returns the same result again.
+- A message that only tells you about them, such as a goal, budget, or timeline ("my goal is capital appreciation"), sets profile. When it still needs data, look up what serves that goal for the place and property they were looking at, not the same search: capital appreciation is how prices there have moved (intent trend, listing_filters null); rental income is rent and yield there.
+- When last_need_db.result_meta.row_count is 0, that search found nothing, and repeating it finds nothing again. When they ask to go on from there ("suggest properties based on your suggestion", "show me what you recommended"), apply what the last assistant reply in history suggested: its wider budget, other property types, or other areas become this search's filters and names.
+
 purpose, limit, and order are yours to set from this message and from last_need_db. There is no fixed default.
 - purpose: sale, rent, or whatever the user stated. On a follow-up, keep the previous purpose unless this message changes it. Null when neither this message nor the previous lookup says. "Show me properties in Marina" and "apartments in JLT" state no purpose, so purpose is null and both sale and rent listings are shown.
 - limit: the row count they asked for, such as "top 25". On a refine, keep the previous count unless this message changes it. Leave null when they did not ask for a count. Do not fill in a page size; list results are paged separately.
@@ -55,7 +59,7 @@ listing_filters is set only when the user wants to see individual properties lis
 - station_within_km: the distance they gave, in km ("within 500 m" is 0.5, "10 minutes' walk" is 0.8). 0 when they gave none.
 - requirements: every other thing the property must have or be, one short noun phrase each in the user's words, without filler: "private gym", "elevator", "sea view", "maid's room", "near a mall", "high ceilings", "Trakheesi permit". Not a place, type, price, size, bedroom count, furnishing, completion, or station distance: those have their own fields. Empty when there is none. any_requirement is true when any one of them will do ("gym or pool"), false when all are wanted.
 - golden_visa: true when they want properties that qualify for the Golden Visa ("What properties qualify for the UAE Golden Visa?", "Golden Visa homes in Marina"). The route is need_db with intent list and listing_filters set. The product limits the search to properties for sale at the qualifying price, so set purpose and price_min only as the user said them. false otherwise.
-- On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters.
+- On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters. Going on from a search that found nothing follows the rules above instead.
 
 confidence is from 0 to 1.
 rationale is one sentence.

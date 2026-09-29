@@ -10,7 +10,6 @@ from agent.sql.guard import live_listing_id_column
 from agent.states.chat import ChatState
 
 _LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK})
-_ID_COLUMNS = ("property_id", "building_id")
 
 
 def is_listing_list_request(state: ChatState) -> bool:
@@ -27,16 +26,13 @@ def is_listing_list_request(state: ChatState) -> bool:
 def listing_card_ids_from_rows(state: ChatState, rows: list[dict], sql: str = "") -> list[str]:
     """Ids to render as listing cards, in row order.
 
-    Set on a listing list, and on any lookup whose rows are live listings themselves, so a
-    property is always shown as its card rather than as a row of figures.
+    Only a column the statement reads from public.properties.id counts: a card is loaded from
+    that table, so a DLD unit, building, or community id would show an unrelated listing.
     """
-    if is_listing_list_request(state):
-        columns = _ID_COLUMNS
-    else:
-        column = live_listing_id_column(sql)
-        if column is None:
-            return []
-        columns = (column,)
+    column = live_listing_id_column(sql)
+    if column is None:
+        return []
+    columns = (column,)
     ids: list[str] = []
     seen: set[str] = set()
     for row in rows:

@@ -26,7 +26,8 @@ from agent.services.transcript import (
     latest_user_text,
 )
 from agent.sql.execute import SqlFailed
-from agent.sql.filter_values import check_filter_values, explain_missing_column
+from agent.grounding import get_grounding_cache
+from agent.sql.filter_values import check_filter_values, exclude_rows_outside_region, explain_missing_column
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
@@ -52,7 +53,9 @@ logger = get_logger("agent.sql")
 
 MAX_ATTEMPTS = 2
 EMPTY_LOOKUP_REPLY = "Nothing matched those filters. I can widen the area or the dates if you want."
-FAILED_LOOKUP_REPLY = "I couldn't complete that lookup. Try a more specific area or time range."
+FAILED_LOOKUP_REPLY = (
+    "I couldn't work that out from the data this time. You can ask again, or ask for one part of it at a time."
+)
 NO_ROWS_RETRY_REASON = "The query returned no rows."
 ALL_ZERO_ROW_RETRY_REASON = (
     "The query returned one row whose values are all zero or empty. A name filter probably matched "
@@ -187,6 +190,18 @@ def run_sql_lookup(
                 }
             },
         )
+        if draft.missing.strip() and not draft.sql.strip():
+            # The catalog does not hold it. A retry would only draft a stand-in.
+            last = _build_sql_result(
+                domain_ids=domain_ids,
+                attempt=attempt,
+                purpose=draft.purpose,
+                sql="",
+                status="unavailable",
+                error=draft.missing.strip(),
+            )
+            trace_sql_attempt(last, client)
+            break
         try:
             guarded = prepare_select(draft.sql, allowed, cap)
         except SqlRejected as exc:
@@ -222,7 +237,7 @@ def run_sql_lookup(
             previous_error = last["error"]
             continue
         try:
-            page = runner(guarded)
+            page = runner(exclude_rows_outside_region(guarded, _rows_outside_region()))
         except SqlFailed as exc:
             last = _build_sql_result(
                 domain_ids=domain_ids,
@@ -351,6 +366,11 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
         wanted = [" or ".join(feature.titles) for feature in search.features]
         conditions.append(f"{label}: " + "; ".join(wanted))
     return conditions
+
+
+def _rows_outside_region() -> dict[str, tuple[str, frozenset[int]]]:
+    index = get_grounding_cache().get()
+    return index.outside_region if index is not None else {}
 
 
 def _is_single_all_zero_row(rows: list[dict]) -> bool:

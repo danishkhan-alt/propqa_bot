@@ -27,6 +27,10 @@ joins:
   - nearest_metro_en
 pitfalls:
 - Prefer *_gis / station tables for locations. Ridership and fleet tables are excluded.
+- The nearest station or stop to a place is found by distance. Take the place's latitude and longitude
+  (public.locations or public.locations_v2 for an area or building) and order stations by
+  ST_DistanceSphere to it. A station's name says nothing about where the place is; never find the nearest
+  one by matching the place name against station names.
 - Parking zone names and community numbers may not match DLD area names exactly.
 tables:
 - name: metro_stations

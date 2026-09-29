@@ -53,6 +53,7 @@ class AgentModels(Protocol):
         *,
         message: str,
         history: str,
+        missing: str = "",
         config: RunnableConfig | None = None,
     ) -> str: ...
 
@@ -83,7 +84,7 @@ class AgentModels(Protocol):
         purpose: str,
         assumptions: dict | None,
         memory_block: str = "",
-        listing_ids: list[str] | None = None,
+        listing_count: int = 0,
         data_note: str = "",
         search_notes: list[str] | None = None,
         filters: list[str] | None = None,
