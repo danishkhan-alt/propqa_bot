@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler as default_http_exception
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
+from starlette.responses import PlainTextResponse
 
 from common.errors import AppError, InvalidRequestBody, Unauthorized
 from common.errors.standard_errors import (
@@ -39,13 +41,15 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         if not _is_api_request(request):
-            raise exc
+            # Re-raising escapes to ServerErrorMiddleware, which has no response
+            # yet, so Uvicorn reports the miss as 500.
+            return await default_http_exception(request, exc)
         return api_error_response(_app_error_for_status(exc.status_code, exc.detail), request)
 
     @app.exception_handler(Exception)
     async def unhandled_handler(request: Request, exc: Exception):
         if not _is_api_request(request):
-            raise exc
+            return PlainTextResponse("Internal Server Error", status_code=500)
         error = _to_app_error(exc)
         if error.status >= 500:
             logger.exception("Unhandled API exception")

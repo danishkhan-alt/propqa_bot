@@ -1,0 +1,101 @@
+flowchart TB
+  Main["main.tsx mounts App plus Sonner Toaster"]
+  Main --> Path{"window.location.pathname"}
+
+  Path -->|"/"| ChatPage["Chat shell guests allowed"]
+  Path -->|"/dashboard and guest"| Bounce["pushState to / and open AuthGate"]
+  Path -->|"/dashboard and signed in"| Dash["UserDashboard AdminDashboard.tsx"]
+
+  Bounce --> ChatPage
+
+  subgraph dashTabs [Dashboard tabs]
+    Overview["Overview"]
+    History["Session History"]
+    Saved["Saved Searches"]
+    MyPrefs["My Preferences"]
+  end
+
+  Dash --> Overview
+  Dash --> History
+  Dash --> Saved
+  Dash --> MyPrefs
+
+  subgraph chatShell ["Chat shell App.tsx"]
+    Header["Header"]
+    Rail["LeftIconRail sessions new chat forget theme"]
+    List["MessageList"]
+    Hitl["HitlPrompt when pendingHitl"]
+    Strip["SessionStrip"]
+    Composer["Composer"]
+    Props["PropertiesSidebar when cards exist"]
+    Recs["RecommendationPanel auth and personalization on"]
+    Memory["MemoryPanel wired memoryOpen stays false"]
+    Gate["AuthGate login register guest"]
+    Prefs["PrefsPanel"]
+  end
+
+  ChatPage --> Header
+  ChatPage --> Rail
+  ChatPage --> List
+  ChatPage --> Hitl
+  ChatPage --> Strip
+  ChatPage --> Composer
+  ChatPage --> Props
+  ChatPage --> Recs
+  ChatPage --> Memory
+  ChatPage --> Gate
+  ChatPage --> Prefs
+
+  subgraph state [State]
+    UseChat["useChat holds messages sessionId streaming"]
+    AuthStore["authStore user token guest"]
+    ChatStore["chatStore steps hitl leads transport"]
+    PrefsStore["prefsStore buyer prefs localStorage"]
+    ProfileStore["sessionProfileStore chips per session"]
+    FocusStore["propertyFocusStore opens properties panel"]
+  end
+
+  ChatPage --> UseChat
+  UseChat --> AuthStore
+  UseChat --> ChatStore
+  UseChat --> PrefsStore
+  UseChat --> ProfileStore
+  Props --> FocusStore
+
+  subgraph mountedClients [Clients with a mounted API route]
+    AuthApi["authStore /api/auth login register refresh logout me"]
+    ClaimApi["POST /api/sessions/:id/claim"]
+    SessionApi["sessionApi list turns new forget quota context compact"]
+    PrefApi["preferencesApi GET POST DELETE /api/preferences"]
+    SseApi["sseClient POST /api/chat"]
+    HealthApi["health.ts GET /api/health pickTransport"]
+    ContactApi["usePropertyContact GET /api/leads/property-contact"]
+  end
+
+  subgraph unmatchedClients [Clients whose paths this API does not mount]
+    WsApi["wsClient /ws/chat"]
+    ResumeApi["POST /api/chat/resume"]
+    CancelApi["POST /api/chat/:runId/cancel"]
+    VoiceApi["POST /api/realtime/voice-session"]
+    FlowsApi["GET /api/flows"]
+    LeadExtra["POST /api/leads/submit agents agents/dismiss cta-click"]
+    AnalyticsApi["/api/analytics /api/feedback /api/admin eval and prompts"]
+  end
+
+  UseChat --> HealthApi
+  HealthApi -->|"ws_mounted false so SSE"| SseApi
+  UseChat --> SessionApi
+  UseChat --> PrefApi
+  UseChat --> WsApi
+  UseChat --> ResumeApi
+  UseChat --> CancelApi
+  UseChat --> LeadExtra
+  AuthStore --> AuthApi
+  AuthStore --> ClaimApi
+  Composer --> VoiceApi
+  ChatStore --> FlowsApi
+  ContactApi --> Props
+  Dash --> SessionApi
+  Dash --> AnalyticsApi
+  Dash --> PrefApi
+  List --> AnalyticsApi

@@ -1,0 +1,75 @@
+flowchart TB
+  Request["HTTP request"] --> Cors["CORSMiddleware localhost 5173"]
+  Cors --> RequestId["RequestIdMiddleware X-Request-ID"]
+  RequestId --> AuthMw["AuthMiddleware optional Bearer JWT"]
+  AuthMw --> Caller["CallerMiddleware registered or visitor"]
+  Caller --> Rate["RateLimitMiddleware fails open if cache down"]
+  Rate --> Handler["Route handler"]
+  Handler --> Errors["register_exception_handlers Problem Details on /api"]
+
+  Handler --> HealthRoot["GET /health"]
+  Handler --> HealthApi["GET /api/health flags ws_mounted false hitl sse ltm true"]
+
+  subgraph authRoutes ["Auth routes/auth.py prefix /api/auth"]
+    Register["POST /api/auth/register"]
+    Login["POST /api/auth/login"]
+    Refresh["POST /api/auth/refresh"]
+    Logout["POST /api/auth/logout"]
+    Me["GET /api/auth/me Bearer required"]
+  end
+
+  subgraph chatRoutes ["Chat routes/chat.py"]
+    Chat["POST /api/chat SSE text listings error done"]
+  end
+
+  subgraph sessionRoutes ["Sessions and preferences routes/sessions.py"]
+    NewSess["POST /api/sessions/new"]
+    ListSess["GET /api/sessions"]
+    Turns["GET /api/sessions/:session_id/turns"]
+    ForgetMany["POST /api/sessions/forget_many"]
+    ForgetOne["POST /api/sessions/:session_id/forget"]
+    ForgetAll["POST /api/sessions/:session_id/forget_all"]
+    Claim["POST /api/sessions/:session_id/claim Bearer required"]
+    Quota["GET /api/sessions/:session_id/quota"]
+    Context["GET /api/sessions/:session_id/context"]
+    Compact["POST /api/sessions/:session_id/context/compact"]
+    PrefGet["GET /api/preferences"]
+    PrefPost["POST /api/preferences"]
+    PrefDel["DELETE /api/preferences"]
+  end
+
+  subgraph leadRoutes ["Leads routes/leads.py"]
+    Contact["GET /api/leads/property-contact"]
+  end
+
+  subgraph memoryRoutes ["Memory agent/memory/routes/user_memory.py"]
+    MemGet["GET /api/users/:user_id/memory"]
+    MemDel["DELETE /api/users/:user_id/memory"]
+  end
+
+  Handler --> authRoutes
+  Handler --> chatRoutes
+  Handler --> sessionRoutes
+  Handler --> leadRoutes
+  Handler --> memoryRoutes
+
+  Chat --> StreamTurn["stream_turn LangGraph"]
+
+  subgraph unmatched [Frontend calls with no mounted route]
+    Ws["GET upgrade /ws/chat"]
+    Resume["POST /api/chat/resume"]
+    Cancel["POST /api/chat/:runId/cancel"]
+    Voice["POST /api/realtime/voice-session"]
+    Flows["GET /api/flows"]
+    LeadSubmit["POST /api/leads/submit"]
+    LeadAgents["POST /api/leads/agents"]
+    LeadDismiss["POST /api/leads/agents/dismiss"]
+    Cta["POST /api/leads/cta-click"]
+    Funnels["GET /api/analytics/funnels"]
+    Engage["GET /api/analytics/engagement"]
+    Thumbs["POST /api/feedback/thumbs"]
+    Correction["POST /api/feedback/correction"]
+    Stats["GET /api/feedback/stats"]
+    EvalRuns["GET /api/admin/eval-runs"]
+    Prompts["GET /api/admin/prompt-versions"]
+  end

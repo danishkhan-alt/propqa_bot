@@ -1,0 +1,53 @@
+flowchart TD
+  Start([START]) --> load_session_context
+
+  load_session_context -->|"focused_property_ids"| load_focused_listings
+  load_session_context -->|"no focused listings"| recall_long_term_memories
+
+  load_focused_listings --> write_reply
+  recall_long_term_memories --> check_forget_request
+
+  check_forget_request -->|"pending forget"| ask_before_forgetting_memory
+  check_forget_request -->|"continue in parallel"| choose_query_route
+  check_forget_request -->|"continue in parallel"| update_search_frame
+
+  ask_before_forgetting_memory --> EndHitl([END HITL interrupt])
+  update_search_frame --> EndFrame([END frame branch])
+
+  choose_query_route -->|"NEED_DB"| choose_data_domains
+  choose_query_route -->|"direct answer or out of scope"| write_reply
+
+  choose_data_domains -->|"domain_ids set"| personalize_search_frame
+  choose_data_domains -->|"no domains"| write_reply
+
+  personalize_search_frame --> load_domain_catalog
+  load_domain_catalog --> resolve_mentioned_names
+  resolve_mentioned_names --> run_warehouse_lookup
+  run_warehouse_lookup --> write_reply
+
+  write_reply --> queue_memory_extraction
+  queue_memory_extraction --> record_search_and_clear_turn_state
+  record_search_and_clear_turn_state --> EndTurn([END])
+
+  subgraph compileTime [Compiled with]
+    Checkpointer["RedisCheckpointSaver thread id is session id"]
+    LtmStore["Postgres long-term store pgvector"]
+  end
+
+  subgraph catalogDomains [Catalog domains loaded on the lookup path]
+    Listings["listings"]
+    Transactions["transactions"]
+    Locations["locations"]
+    Developers["developers"]
+    Schools["schools"]
+    Rta["rta"]
+    Amenities["amenities"]
+    Agencies["agencies"]
+    Regulations["regulations"]
+    Market["market"]
+  end
+
+  load_domain_catalog --> catalogDomains
+  queue_memory_extraction --> Memq["Redis stream memq"]
+  run_warehouse_lookup --> Warehouse["Warehouse SQL read-only"]
+  resolve_mentioned_names --> Grounding["In-process grounding index"]

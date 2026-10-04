@@ -1,0 +1,66 @@
+flowchart TB
+  subgraph apiAndWorkers [Writers and readers]
+    Api["FastAPI chat turn"]
+    GroundingWorker["Grounding warm-up thread"]
+    MemoryWorker["Memory extraction worker"]
+  end
+
+  subgraph chatPostgres [Postgres chat DB]
+    Users["chatbot_users"]
+    Refresh["chatbot_refresh_tokens"]
+    Ltm["Long-term memory pgvector"]
+  end
+
+  subgraph warehousePg [Postgres warehouse read-only]
+    Sql["SQL lookup and recipes"]
+    Cards["Listing cards and detail rows"]
+    Contacts["Listing contact rows"]
+    GroundingSource["Name index source rows"]
+  end
+
+  subgraph redisStore [Redis]
+    Checkpoints["LangGraph checkpoints 24h TTL"]
+    Working["Working memory key wm thread"]
+    Profile["Profile cache key profile user"]
+    Sidebar["Sidebar session list"]
+    Prefs["UI preferences key chat preferences user"]
+    RateLimits["Rate limit counters"]
+    Memq["Stream memq consumer group memory-worker"]
+  end
+
+  subgraph processMem [In-process]
+    GroundingIndex["GroundingIndex refreshed from warehouse"]
+  end
+
+  subgraph catalogYaml ["src/catalog YAML"]
+    Domains["domains index plus ten domain packs"]
+    Profiles["profiles column fill rates"]
+    Recipes["recipes.yaml fixed SQL"]
+    Aliases["name_aliases.yaml and feature_aliases.yaml"]
+  end
+
+  Api --> Users
+  Api --> Refresh
+  Api --> Ltm
+  Api --> Sql
+  Api --> Cards
+  Api --> Contacts
+  Api --> Checkpoints
+  Api --> Working
+  Api --> Profile
+  Api --> Sidebar
+  Api --> Prefs
+  Api --> RateLimits
+  Api --> Memq
+  Api --> GroundingIndex
+  Api --> Domains
+  Api --> Recipes
+  Api --> Aliases
+
+  GroundingWorker --> GroundingSource
+  GroundingWorker --> GroundingIndex
+  GroundingIndex --> Domains
+
+  MemoryWorker --> Memq
+  MemoryWorker --> Ltm
+  Profiles -.->|"profiler output for SQL prompts"| Domains

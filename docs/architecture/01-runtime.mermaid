@@ -1,0 +1,53 @@
+flowchart TB
+  Browser["Browser"]
+
+  subgraph devServe [Dev serve]
+    Vite["Vite React SPA port 5173"]
+    ViteApi["proxy /api to 127.0.0.1:8000"]
+    ViteWs["proxy /ws/chat to 127.0.0.1:8000"]
+  end
+
+  subgraph prodServe [Docker nginx port 80]
+    NginxSpa["SPA fallback try_files index.html"]
+    NginxApi["location /api/ buffering off"]
+    NginxWs["location /ws/ WebSocket upgrade"]
+  end
+
+  subgraph apiProc [API image]
+    Uvicorn["uvicorn create_app src/app.py"]
+    GroundingThread["get_grounding_cache load_in_background"]
+    MemoryWorker["python -m agent.memory.worker"]
+  end
+
+  subgraph dataStores [Data stores]
+    ChatDb["Postgres chat DB auth and long-term memory"]
+    Warehouse["Postgres warehouse read-only SQL"]
+    Redis["Redis checkpoints cache rate limits memq"]
+  end
+
+  subgraph external [External services]
+    Llm["LLM Anthropic or OpenAI via LLM_PROVIDER"]
+    Langfuse["Langfuse optional LANGFUSE keys"]
+    Jev["TypeSafe JEV optional api.typesafe.ai/v1/systemone"]
+  end
+
+  Browser --> Vite
+  Browser --> NginxSpa
+  Vite --> ViteApi
+  Vite --> ViteWs
+  ViteApi --> Uvicorn
+  ViteWs -.->|"frontend proxy only ws_mounted false"| Uvicorn
+  NginxSpa --> Browser
+  NginxApi --> Uvicorn
+  NginxWs -.->|"proxied path API does not mount"| Uvicorn
+
+  Uvicorn --> GroundingThread
+  Uvicorn --> ChatDb
+  Uvicorn --> Warehouse
+  Uvicorn --> Redis
+  Uvicorn --> Llm
+  Uvicorn --> Langfuse
+  Uvicorn --> Jev
+  GroundingThread --> Warehouse
+  MemoryWorker --> Redis
+  MemoryWorker --> ChatDb
