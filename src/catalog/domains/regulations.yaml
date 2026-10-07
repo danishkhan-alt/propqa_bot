@@ -20,6 +20,8 @@ joins:
 pitfalls:
 - service_cost is the published OA budget figure, not a DLD transfer fee.
 - DLD buyer/seller transfer percentages are not stored as a simple fee table here.
+- 'Not in this pack: who builds a project or its handover (developers); owners association contacts and
+  brokers (agencies); registered sales and rents (transactions); asking-price listings (listings).'
 tables:
 - name: owners_association_service_charges
   description: DLD owners association service charges

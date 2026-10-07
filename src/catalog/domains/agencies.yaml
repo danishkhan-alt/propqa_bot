@@ -19,6 +19,8 @@ joins:
 pitfalls:
 - real_estate_offices is the company; real_estate_brokers are people licensed under an office.
 - Do not treat these as property listings.
+- 'Not in this pack: who builds a project or its handover (developers); service charges (regulations);
+  sale or rent listings (listings); registered sales and rents (transactions).'
 tables:
 - name: real_estate_offices
   description: Real estate offices and their activities from Dubai Land Department

@@ -25,6 +25,8 @@ pitfalls:
 - KHDA ratings and fee tables use different school-name spellings; join on educationcenterid when possible.
 - private_schools has historical DSIB ratings by year; khda_school_search has the latest overall rating.
 - ps_schools distances are relative to a Property Share community, not a lat/long radius query.
+- 'Not in this pack: properties for sale or rent near a school (listings, filtered by place); parks, hospitals
+  and malls (amenities); commute and metro (rta); what an area is like overall (locations).'
 tables:
 - name: khda_dubai_private_schools
   description: Private schools operating in Dubai (KHDA)

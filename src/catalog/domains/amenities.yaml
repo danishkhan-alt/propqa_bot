@@ -27,6 +27,8 @@ pitfalls:
 - Nearby parks, malls, and clinics per community are in public.community_info (locations), not in these tables.
 - sheryan_health_facilities is DHA licensed facilities, not a distance-to-listing index.
 - Qualify public tables as public.<table>.
+- 'Not in this pack: listings that have a pool, gym or other amenity (listings: public.amenities and amenity_property);
+  schools (schools); metro, bus and parking (rta); what an area is like overall (locations).'
 tables:
 - name: dubai_parks_and_beaches_coordinates
   description: Dubai parks and beaches X and Y coordinates
