@@ -381,8 +381,8 @@ chatbot_ai.metro_lines_gis:
   service_area:
     filled: 0.8
     values:
-    - Rashidiya to JAFZA/Limitless
     - Al Qusais to Al Jaddaf
+    - Rashidiya to JAFZA/Limitless
   last_edited_date:
     filled: 1.0
     values:
@@ -392,17 +392,17 @@ chatbot_ai.metro_lines_gis:
     filled: 1.0
     values:
     - kml_4
-    - kml_5
-    - kml_3
     - kml_1
+    - kml_3
     - kml_2
+    - kml_5
   point_count:
     filled: 1.0
     values:
     - '0'
+    - '2462'
     - '93'
     - '2'
-    - '2462'
   line_segment_count:
     filled: 1.0
     values:
@@ -411,27 +411,27 @@ chatbot_ai.metro_lines_gis:
   start_lon:
     filled: 0.6
     values:
+    - '55.1304975839697'
     - '55.1305773032178'
     - '55.4014870864357'
-    - '55.1304975839697'
   start_lat:
     filled: 0.6
     values:
     - '25.061681681735'
-    - '25.2545235197405'
     - '25.0615894296132'
+    - '25.2545235197405'
   end_lon:
     filled: 0.6
     values:
-    - '55.4017922425871'
-    - '55.088756470109'
     - '55.1437326928517'
+    - '55.088756470109'
+    - '55.4017922425871'
   end_lat:
     filled: 0.6
     values:
-    - '24.9608140299164'
     - '24.9730547922427'
     - '25.2543444953691'
+    - '24.9608140299164'
   coordinates:
     filled: 0.6
 chatbot_ai.tram_stations:
@@ -442,30 +442,30 @@ chatbot_ai.tram_stations:
   location_name_english:
     filled: 1.0
     values:
-    - Jumeirah Beach Residence 2
-    - Mina Seyahi
-    - Media City
-    - Dubai Marina Mall
     - Al Sufouh
     - Palm Jumeirah
-    - Knowledge Village
+    - Mina Seyahi
+    - Media City
     - Marina Towers
+    - Jumeirah Beach Residence 1
     - Jumeirah Lakes Towers
     - Dubai Marina
-    - Jumeirah Beach Residence 1
+    - Dubai Marina Mall
+    - Jumeirah Beach Residence 2
+    - Knowledge Village
   location_name_arabic:
     filled: 1.0
     values:
     - الصفوح
-    - قرية المعرفة
-    - نخلة جميرا
     - أبراج بحيرات جميرا
     - مدينة دبي للإعلام
-    - أبراج المارينا
-    - الميناء السياحي
-    - أبراج شاطئ جميرا 1
     - أبراج شاطئ جميرا 2
     - دبي مارينا مول
+    - الميناء السياحي
+    - أبراج المارينا
+    - قرية المعرفة
+    - أبراج شاطئ جميرا 1
+    - نخلة جميرا
     - مرسى دبي
   line_name:
     filled: 1.0
@@ -486,59 +486,59 @@ chatbot_ai.tram_stations_gis:
   station_num:
     filled: 1.0
     values:
-    - '2'
+    - '1'
     - '4'
     - '9'
-    - '11'
-    - '10'
-    - '7'
+    - '8'
     - '3'
     - '6'
+    - '10'
+    - '11'
+    - '2'
+    - '7'
     - '5'
-    - '1'
-    - '8'
   station_name_en:
     filled: 1.0
     values:
     - Media City
+    - Palm Jumeirah
+    - Mina Seyahi
+    - Al Sufouh
     - Marina Towers
+    - Jumeirah Beach Residence 1
     - Jumeirah Lakes Towers
     - Dubai Marina
-    - Jumeirah Beach Residence 1
-    - Jumeirah Beach Residence 2
-    - Mina Seyahi
     - Dubai Marina Mall
-    - Palm Jumeirah
-    - Al Sufouh
+    - Jumeirah Beach Residence 2
     - Knowledge Village
   station_name_ar:
     filled: 1.0
     values:
-    - قرية المعرفة
-    - مدينة دبي للإعلام
-    - أبراج المارينا
-    - أبراح شاطئ جميرا 2
     - الميناء السياحي
+    - أبراج المارينا
+    - قرية المعرفة
+    - نخلة جميرا
     - مرسى دبي
     - أبراح شاطئ جميرا 1
     - الصفوح
-    - نخلة جميرا
+    - مدينة دبي للإعلام
     - أبراج بحيرات جميرا
     - دبي مارينا مول
+    - أبراح شاطئ جميرا 2
   tram_station_id:
     filled: 1.0
     values:
-    - '2687310'
-    - '2687303'
     - '2687306'
-    - '2687307'
-    - '2687308'
-    - '2687302'
-    - '2687301'
-    - '2687305'
-    - '2687304'
     - '2687309'
+    - '2687305'
+    - '2687308'
+    - '2687310'
+    - '2687301'
     - '2687311'
+    - '2687307'
+    - '2687303'
+    - '2687304'
+    - '2687302'
   last_edited_date:
     filled: 1.0
     values:
@@ -546,101 +546,101 @@ chatbot_ai.tram_stations_gis:
   station_id:
     filled: 1.0
     values:
-    - S1
-    - S10
-    - S5
-    - S2
-    - S8
-    - S7
-    - S4
-    - S11
     - S3
+    - S10
+    - S1
     - S6
     - S9
+    - S2
+    - S7
+    - S5
+    - S11
+    - S4
+    - S8
   longitude:
     filled: 1.0
     values:
     - '55.1519835871878'
     - '55.1486050621739'
-    - '55.1322321216386'
-    - '55.1557427275049'
-    - '55.1469096075965'
-    - '55.1500520113108'
-    - '55.1419740661071'
-    - '55.1651474041101'
-    - '55.1382325091255'
     - '55.1615809612589'
+    - '55.1322321216386'
+    - '55.1469096075965'
+    - '55.1557427275049'
+    - '55.1419740661071'
+    - '55.1500520113108'
+    - '55.1382325091255'
     - '55.1377636773838'
+    - '55.1651474041101'
   latitude:
     filled: 1.0
     values:
-    - '25.1080912437885'
     - '25.0797378843234'
+    - '25.0944999150424'
     - '25.0982842699342'
     - '25.0910587885668'
-    - '25.0808038955816'
-    - '25.0944999150424'
-    - '25.073813780321'
-    - '25.0714800665699'
-    - '25.0866416602366'
-    - '25.1042516688717'
     - '25.0763002414094'
+    - '25.0714800665699'
+    - '25.0808038955816'
+    - '25.1042516688717'
+    - '25.0866416602366'
+    - '25.1080912437885'
+    - '25.073813780321'
   lat:
     filled: 1.0
     values:
-    - '25.1080912437885'
     - '25.0797378843234'
+    - '25.0944999150424'
     - '25.0982842699342'
     - '25.0910587885668'
-    - '25.0808038955816'
-    - '25.0944999150424'
-    - '25.073813780321'
-    - '25.0714800665699'
-    - '25.0866416602366'
-    - '25.1042516688717'
     - '25.0763002414094'
+    - '25.0714800665699'
+    - '25.0808038955816'
+    - '25.1042516688717'
+    - '25.0866416602366'
+    - '25.1080912437885'
+    - '25.073813780321'
   long:
     filled: 1.0
     values:
     - '55.1519835871878'
     - '55.1486050621739'
-    - '55.1322321216386'
-    - '55.1557427275049'
-    - '55.1469096075965'
-    - '55.1500520113108'
-    - '55.1419740661071'
-    - '55.1651474041101'
-    - '55.1382325091255'
     - '55.1615809612589'
+    - '55.1322321216386'
+    - '55.1469096075965'
+    - '55.1557427275049'
+    - '55.1419740661071'
+    - '55.1500520113108'
+    - '55.1382325091255'
     - '55.1377636773838'
+    - '55.1651474041101'
   coordinates:
     filled: 1.0
     values:
-    - POINT(55.1519835871878 25.0944999150424)
-    - POINT(55.1382325091255 25.0797378843234)
-    - POINT(55.1322321216386 25.073813780321)
     - POINT(55.1377636773838 25.0714800665699)
-    - POINT(55.1486050621739 25.0910587885668)
+    - POINT(55.1419740661071 25.0763002414094)
+    - POINT(55.1469096075965 25.0808038955816)
+    - POINT(55.1500520113108 25.0866416602366)
+    - POINT(55.1382325091255 25.0797378843234)
     - POINT(55.1557427275049 25.0982842699342)
     - POINT(55.1651474041101 25.1080912437885)
-    - POINT(55.1469096075965 25.0808038955816)
-    - POINT(55.1419740661071 25.0763002414094)
     - POINT(55.1615809612589 25.1042516688717)
-    - POINT(55.1500520113108 25.0866416602366)
+    - POINT(55.1486050621739 25.0910587885668)
+    - POINT(55.1519835871878 25.0944999150424)
+    - POINT(55.1322321216386 25.073813780321)
   google_location:
     filled: 1.0
     values:
     - 25.0714800665699,55.1377636773838
-    - 25.1080912437885,55.1651474041101
-    - 25.1042516688717,55.1615809612589
     - 25.0866416602366,55.1500520113108
+    - 25.1080912437885,55.1651474041101
     - 25.073813780321,55.1322321216386
-    - 25.0763002414094,55.1419740661071
-    - 25.0910587885668,55.1486050621739
-    - 25.0982842699342,55.1557427275049
     - 25.0797378843234,55.1382325091255
     - 25.0944999150424,55.1519835871878
     - 25.0808038955816,55.1469096075965
+    - 25.0910587885668,55.1486050621739
+    - 25.1042516688717,55.1615809612589
+    - 25.0763002414094,55.1419740661071
+    - 25.0982842699342,55.1557427275049
 chatbot_ai.tram_lines:
   line_name:
     filled: 1.0
@@ -661,27 +661,27 @@ chatbot_ai.tram_lines_gis:
   placemark_name:
     filled: 1.0
     values:
-    - kml_4
-    - kml_5
-    - kml_3
     - kml_10
-    - kml_1
-    - kml_7
-    - kml_8
-    - kml_9
+    - kml_4
     - kml_6
+    - kml_8
+    - kml_5
+    - kml_7
+    - kml_1
+    - kml_3
     - kml_2
+    - kml_9
   point_count:
     filled: 1.0
     values:
-    - '4'
     - '2'
+    - '4'
+    - '158'
     - '12'
     - '2320'
-    - '2064'
-    - '158'
-    - '2456'
     - '9'
+    - '2064'
+    - '2456'
   line_segment_count:
     filled: 1.0
     values:
@@ -692,52 +692,52 @@ chatbot_ai.tram_lines_gis:
     - '55.1374556311081'
     - '55.1377355051297'
     - '55.1550945374122'
-    - '55.1442202839442'
-    - '55.1383801795684'
-    - '55.1384402671156'
     - '55.1375157184677'
+    - '55.1383801795684'
+    - '55.1442202839442'
+    - '55.1384402671156'
     - '55.1551019833431'
-    - '55.1430108153033'
     - '55.1368400889082'
+    - '55.1430108153033'
   start_lat:
     filled: 1.0
     values:
     - '25.0722324415064'
-    - '25.0772628633456'
     - '25.0711395232383'
-    - '25.0977109839146'
+    - '25.0703729443273'
+    - '25.0715010012353'
     - '25.0784563954493'
     - '25.072188509323'
-    - '25.0703729443273'
     - '25.0711834550547'
-    - '25.0715010012353'
+    - '25.0977109839146'
     - '25.0975996407079'
+    - '25.0772628633456'
   end_lon:
     filled: 1.0
     values:
-    - '55.1563254506857'
-    - '55.1372263142745'
     - '55.1386695891746'
+    - '55.1564667278452'
+    - '55.1563254506857'
+    - '55.137166226975'
     - '55.1377355051297'
     - '55.1653699904614'
-    - '55.1387296777716'
-    - '55.142919966712'
     - '55.165349177067'
-    - '55.137166226975'
-    - '55.1564667278452'
+    - '55.142919966712'
+    - '55.1387296777716'
+    - '55.1372263142745'
   end_lat:
     filled: 1.0
     values:
-    - '25.0708111637127'
     - '25.1083076782092'
-    - '25.07256079966'
-    - '25.0708550945116'
     - '25.1083292597269'
-    - '25.098933869146'
-    - '25.0989190194799'
+    - '25.07256079966'
     - '25.0781906134057'
-    - '25.072516867363'
     - '25.0715010012353'
+    - '25.072516867363'
+    - '25.0989190194799'
+    - '25.0708550945116'
+    - '25.0708111637127'
+    - '25.098933869146'
   coordinates:
     filled: 1.0
 chatbot_ai.dubai_tram_lines:
@@ -842,7 +842,7 @@ chatbot_ai.bus_stop_details:
     - 'Yes'
   last_survey_date:
     filled: 0.005
-    covers: 2018-03-09 to 2019-04-30
+    covers: 2018-05-06 to 2019-05-01
   valid_from:
     filled: 1.0
     covers: 1970-01-01 to 2024-11-29
@@ -856,18 +856,18 @@ chatbot_ai.bus_stop_details:
     common_values:
     - Khalid bin waleed road
     - Al Nahda Road
-    - 22 street
     - Damascus Street
     - Amman Street
-    - No name no number
+    - 22 street
     - Sheikh khalifa bin zayed road
-    - 23 street
-    - Jumeirah road
-    - Oud metha road
     - Doha Road
-    - Omer Bin Khattab Road
+    - Oud metha road
+    - Al wasl road
+    - Jumeirah road
     - 25 Street
-    - Al Mina road
+    - 23 street
+    - Jebel Ali Garden
+    - Beirut Street
     - 13 Street
   route_name:
     filled: 1.0
@@ -1114,18 +1114,18 @@ chatbot_ai.marine_stations:
     common_values:
     - Burj Plaza
     - Global Village
+    - Marina Mall-WB
     - Jumeirah Beach Park
-    - Sofitel Resort, The Palm
     - Creek Park - A
     - Jumeirah Beach Hotel
     - Creek Park - B
     - Safa Park
+    - Atlantis
     - Waldorf Astoria
     - Dubai Old Souq Marine Transport Station
-    - Atlantis
     - Al Sabkha
-    - Marina Mall Waterbus Station
     - One & Only The Palm
+    - Marina Mall Waterbus Station
     - Godolphin Marine Transport Station
   route_name:
     filled: 1.0
@@ -1143,16 +1143,16 @@ chatbot_ai.marine_stations:
     - CR2,CR5
     - BM2
     - BM2,DC1
+    - FR5
     - CR5
     - CR2,CR3
-    - FR5
     - CR6
     - DC2
     - FR1,FR4
   station_location_latitiude:
-    filled: 1.0
+    filled: 0.814
   station_location_longitiude:
-    filled: 1.0
+    filled: 0.814
   valid_from:
     filled: 1.0
     covers: 2020-01-01 to 2020-04-24
@@ -1345,21 +1345,21 @@ chatbot_ai.marine_lines:
   route_name:
     filled: 1.0
     common_values:
-    - TR-8
-    - BM-2
-    - DownTown-E-Abra
-    - FR-2
-    - BM-1
-    - FR-1
-    - DC-2
-    - CR7
-    - TR-6
+    - CR11
+    - CR-1
+    - FR-5
     - Water Taxi-Charter
     - CR9
     - Petrol Abra -Charter
+    - FR-3
+    - CR-5
+    - GV-E-Abra
+    - CR-3
+    - FR-4
+    - TR-8
+    - BM-2
     - CR-4
-    - CR-6
-    - TR-10
+    - DownTown-E-Abra
   route_description:
     filled: 1.0
   route_direction:
@@ -1374,31 +1374,31 @@ chatbot_ai.marine_lines:
     - Electrical Abra
     - Private Abra
     - AC Abra
-    - Waterbus
     - Water taxi
+    - Waterbus
     - Ferry
   start_station:
     filled: 1.0
     values:
     - Al Ghubaiba Marine Transport Station 1
-    - Al Jaddaf Marine Transport Station
-    - Al Seef Marine Transport Station
-    - Alwajeha Al Maeyah Marine Transport Station
     - Dubai Festival City Marine Transport station
+    - Al Jaddaf Marine Transport Station
     - Al Jaddaf Marine Transport Station 2
+    - Alwajeha Al Maeyah Marine Transport Station
+    - Al Seef Marine Transport Station
     - Al Jaddaf Marine Transport station
-    - Bur Dubai Marine Transport Station
-    - Al Ghubaiba Marine Transport Station 2
-    - Marina Promenade Marine Transport Station
-    - Dubai Old Souq Marine Transport Station
-    - Sheikh Zayed Road Marine Transport Station
-    - Al Sabkha Marine Transport Station
-    - Dubai Marina Mall Marine Transport Station 1
-    - Al Seef Marine Transport Station 1
     - Dubai Marina Mall Marine Transport Station
     - Baniyas Marine Transport Station 1
     - Al Fahidi Marine Transport Station
     - Dubai Water Canal Marine station
+    - Al Sabkha Marine Transport Station
+    - Dubai Old Souq Marine Transport Station
+    - Bur Dubai Marine Transport Station
+    - Sheikh Zayed Road Marine Transport Station
+    - Al Ghubaiba Marine Transport Station 2
+    - Dubai Marina Mall Marine Transport Station 1
+    - Al Seef Marine Transport Station 1
+    - Marina Promenade Marine Transport Station
   end_station:
     filled: 1.0
     values:
@@ -1406,18 +1406,18 @@ chatbot_ai.marine_lines:
     - Dubai Old Souq Marine Transport Station
     - Sheikh Zayed Road Marine Transport Station
     - Dubai Marina Mall Marine Transport Station
-    - Al Ghubaiba Marine Transport Station 1
     - Dubai Canal Marine Transport Station 2
     - Deira Old Souq Marine Transport Station+
-    - Marina Terrace Marine Transport Station
+    - Al Ghubaiba Marine Transport Station 1
+    - Bluewaters Marine Transport Station
     - Al Sabkha Marine Transport Station
     - Baniyas Marine Transport Station 1
-    - Dubai Design District Marine Transport Station
-    - Dubai Water Canal Marine station
-    - Sharjah Aquarium Marine Transport Station
     - Al Fahidi Marine Transport Station
+    - Dubai Water Canal Marine station
+    - Marina Terrace Marine Transport Station
+    - Sharjah Aquarium Marine Transport Station
+    - Dubai Design District Marine Transport Station
     - Dubai Festival City Marine Transport Station
-    - Bluewaters Marine Transport Station
   number_of_stops:
     filled: 0.0
 chatbot_ai.number_of_parking_spaces_per_zone:
@@ -1603,20 +1603,20 @@ chatbot_ai.rail_parking:
   rail_parking_id:
     filled: 1.0
     values:
-    - '2722902'
-    - '2722901'
     - '2722903'
+    - '2722901'
+    - '2722902'
   parking_name:
     filled: 1.0
     values:
+    - Jumeirah Island
     - Rashidiya
     - AL Qusais Car Park
-    - Jumeirah Island
   parking_area:
     filled: 1.0
     values:
-    - '18000.006036'
     - '15478.930702'
+    - '18000.006036'
     - '29571.632943'
   status:
     filled: 1.0
@@ -1645,39 +1645,39 @@ chatbot_ai.rail_parking:
   start_lat:
     filled: 1.0
     values:
-    - '25.2553375031499'
     - '25.230153144374'
     - '25.0565733529114'
+    - '25.2553375031499'
   longitude:
     filled: 1.0
     values:
+    - '55.3913337733092'
     - '55.40280455442472'
     - '55.127615948418075'
-    - '55.3913337733092'
   latitude:
     filled: 1.0
     values:
-    - '25.22961137913762'
-    - '25.254599508781343'
     - '25.05685471079638'
+    - '25.254599508781343'
+    - '25.22961137913762'
   lat:
     filled: 1.0
     values:
-    - '25.22961137913762'
-    - '25.254599508781343'
     - '25.05685471079638'
+    - '25.254599508781343'
+    - '25.22961137913762'
   long:
     filled: 1.0
     values:
+    - '55.3913337733092'
     - '55.40280455442472'
     - '55.127615948418075'
-    - '55.3913337733092'
   google_location:
     filled: 1.0
     values:
-    - 25.22961137913762,55.3913337733092
-    - 25.05685471079638,55.127615948418075
     - 25.254599508781343,55.40280455442472
+    - 25.05685471079638,55.127615948418075
+    - 25.22961137913762,55.3913337733092
   coordinates:
     filled: 1.0
 chatbot_ai.salik_tariff:
@@ -1711,14 +1711,14 @@ chatbot_ai.salik_tolling_gates_location:
   gate_name:
     filled: 1.0
     values:
+    - Al Garhoud Bridge
     - Al Makhtoum Bridge
     - Al Barsha
-    - Al Garhoud Bridge
     - Jebel Ali Toll Gate
-    - Al Mamzar North
-    - Al Mamzar South
     - Airport Tunnel
     - Al Safa
+    - Al Mamzar North
+    - Al Mamzar South
   last_edited_date:
     filled: 1.0
     values:
@@ -1729,116 +1729,116 @@ chatbot_ai.salik_tolling_gates_location:
     filled: 1.0
     values:
     - '55.1015893633379'
-    - '55.3872764645601'
-    - '55.2620344346184'
-    - '55.1918289680068'
-    - '55.3590553889116'
-    - '55.3612701181309'
-    - '55.1012982074103'
-    - '55.1924849869842'
-    - '55.3355129857363'
-    - '55.3223233034298'
-    - '55.3614370569398'
     - '55.3593496475878'
-    - '55.2618707086643'
     - '55.3226438352903'
+    - '55.3355129857363'
+    - '55.3872764645601'
     - '55.3357078189204'
     - '55.3870132738365'
+    - '55.2620344346184'
+    - '55.1918289680068'
+    - '55.1012982074103'
+    - '55.3590553889116'
+    - '55.3612701181309'
+    - '55.3223233034298'
+    - '55.3614370569398'
+    - '55.1924849869842'
+    - '55.2618707086643'
   latitude:
     filled: 1.0
     values:
     - '25.1939247745372'
+    - '25.253981204993'
     - '25.2858040137392'
-    - '25.2490713651811'
-    - '25.2530878173972'
     - '25.1157766269128'
     - '25.2961141338184'
     - '25.2492334871079'
-    - '25.2307225365849'
-    - '25.253981204993'
+    - '25.2530878173972'
     - '25.2976635237512'
+    - '25.2307225365849'
     - '25.2863144358341'
-    - '25.2310347100505'
-    - '25.1166581240141'
     - '25.0278062767182'
-    - '25.0279451378267'
     - '25.1935085966862'
+    - '25.0279451378267'
+    - '25.2490713651811'
+    - '25.1166581240141'
+    - '25.2310347100505'
   lat:
     filled: 1.0
     values:
     - '25.1939247745372'
+    - '25.253981204993'
     - '25.2858040137392'
-    - '25.2490713651811'
-    - '25.2530878173972'
     - '25.1157766269128'
     - '25.2961141338184'
     - '25.2492334871079'
-    - '25.2307225365849'
-    - '25.253981204993'
+    - '25.2530878173972'
     - '25.2976635237512'
+    - '25.2307225365849'
     - '25.2863144358341'
-    - '25.2310347100505'
-    - '25.1166581240141'
     - '25.0278062767182'
-    - '25.0279451378267'
     - '25.1935085966862'
+    - '25.0279451378267'
+    - '25.2490713651811'
+    - '25.1166581240141'
+    - '25.2310347100505'
   long:
     filled: 1.0
     values:
     - '55.1015893633379'
-    - '55.3872764645601'
-    - '55.2620344346184'
-    - '55.1918289680068'
-    - '55.3590553889116'
-    - '55.3612701181309'
-    - '55.1012982074103'
-    - '55.1924849869842'
-    - '55.3355129857363'
-    - '55.3223233034298'
-    - '55.3614370569398'
     - '55.3593496475878'
-    - '55.2618707086643'
     - '55.3226438352903'
+    - '55.3355129857363'
+    - '55.3872764645601'
     - '55.3357078189204'
     - '55.3870132738365'
+    - '55.2620344346184'
+    - '55.1918289680068'
+    - '55.1012982074103'
+    - '55.3590553889116'
+    - '55.3612701181309'
+    - '55.3223233034298'
+    - '55.3614370569398'
+    - '55.1924849869842'
+    - '55.2618707086643'
   coordinates:
     filled: 1.0
     values:
-    - POINT(55.1918289680068 25.1157766269128)
-    - POINT(55.1015893633379 25.0278062767182)
-    - POINT(55.3593496475878 25.2858040137392)
-    - POINT(55.3614370569398 25.2976635237512)
+    - POINT(55.3226438352903 25.253981204993)
     - POINT(55.1924849869842 25.1166581240141)
     - POINT(55.3870132738365 25.2492334871079)
-    - POINT(55.2618707086643 25.1939247745372)
-    - POINT(55.3612701181309 25.2961141338184)
-    - POINT(55.3226438352903 25.253981204993)
-    - POINT(55.1012982074103 25.0279451378267)
-    - POINT(55.3872764645601 25.2490713651811)
-    - POINT(55.2620344346184 25.1935085966862)
     - POINT(55.3223233034298 25.2530878173972)
     - POINT(55.3355129857363 25.2310347100505)
+    - POINT(55.1918289680068 25.1157766269128)
+    - POINT(55.3593496475878 25.2858040137392)
+    - POINT(55.1012982074103 25.0279451378267)
     - POINT(55.3357078189204 25.2307225365849)
     - POINT(55.3590553889116 25.2863144358341)
+    - POINT(55.3872764645601 25.2490713651811)
+    - POINT(55.3614370569398 25.2976635237512)
+    - POINT(55.2618707086643 25.1939247745372)
+    - POINT(55.3612701181309 25.2961141338184)
+    - POINT(55.2620344346184 25.1935085966862)
+    - POINT(55.1015893633379 25.0278062767182)
   google_location:
     filled: 1.0
     values:
     - 25.253981204993,55.3226438352903
     - 25.2863144358341,55.3590553889116
-    - 25.2490713651811,55.3872764645601
-    - 25.1935085966862,55.2620344346184
     - 25.1166581240141,55.1924849869842
+    - 25.0279451378267,55.1012982074103
+    - 25.2492334871079,55.3870132738365
     - 25.0278062767182,55.1015893633379
+    - 25.2976635237512,55.3614370569398
     - 25.2307225365849,55.3357078189204
+    - 25.2310347100505,55.3355129857363
+    - 25.2858040137392,55.3593496475878
+    - 25.2530878173972,55.3223233034298
+    - 25.2490713651811,55.3872764645601
     - 25.1157766269128,55.1918289680068
     - 25.2961141338184,55.3612701181309
     - 25.1939247745372,55.2618707086643
-    - 25.2530878173972,55.3223233034298
-    - 25.2310347100505,55.3355129857363
-    - 25.0279451378267,55.1012982074103
-    - 25.2492334871079,55.3870132738365
-    - 25.2976635237512,55.3614370569398
-    - 25.2858040137392,55.3593496475878
+    - 25.1935085966862,55.2620344346184
 chatbot_ai.bicycle_tracks:
   id:
     filled: 1.0

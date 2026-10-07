@@ -120,26 +120,151 @@ public.category_property:
     filled: 1.0
   category_id:
     filled: 1.0
+public.amenities:
+  id:
+    filled: 1.0
+  title_en:
+    filled: 1.0
+    common_values:
+    - Prayer Room
+    - Intercom
+    - Cleaning and Maintenance
+    - Maid Service
+    - Cafeteria or Canteen
+    - Year Completion
+    - Reception/Waiting Room
+    - Basketball Court
+    - Facilities of Disable
+    - Maids Room
+    - Valet Parking
+    - ATM Facility
+    - Built-in Wardrobes
+    - Parking Spaces
+    - Shared Kitchen
+  title_ar:
+    filled: 1.0
+    common_values:
+    - مفروش
+    - الوصول إلى الشاطئ
+    - الأعمال والأمن
+    - مكتبة
+    - ردهة
+    - صالة ألعاب رياضية خاصة
+    - ملعب اسكواش
+    - صالة ألعاب رياضية مشتركة
+    - منطقة لعب للأطفال
+    - مطبخ مشترك
+    - موقف سيارات مغطى
+    - خزانة ملابس واسعة
+    - أجهزة مطبخ مدمجة
+    - ملعب تنس
+    - ميزات الاستدامة / شهادة المباني الخضراء
+public.amenity_property:
+  id:
+    filled: 1.0
+  amenity_id:
+    filled: 1.0
+  property_id:
+    filled: 1.0
+public.views:
+  id:
+    filled: 1.0
+  title_en:
+    filled: 1.0
+    values:
+    - City Skyline View
+    - Golf Course View
+    - Desert View
+    - Palm Jumeirah View
+    - Racecourse View
+    - Park View
+    - Waterfront View
+    - Forest View
+    - Burj Khalifa View
+    - Ain Dubai View
+    - Ocean View
+    - Pool View
+    - Burj Al Arab View
+  title_ar:
+    filled: 0.0
+  created_at:
+    filled: 1.0
+    covers: 2025-08-04 to 2025-08-04
+  updated_at:
+    filled: 1.0
+    covers: 2025-08-04 to 2025-08-04
+public.property_view:
+  id:
+    filled: 1.0
+  property_id:
+    filled: 1.0
+  view_id:
+    filled: 1.0
+  created_at:
+    filled: 0.287
+    covers: 2026-07-14 to 2026-10-03
+  updated_at:
+    filled: 0.287
+    covers: 2026-07-14 to 2026-10-03
+public.nearby_locations:
+  id:
+    filled: 1.0
+  title_en:
+    filled: 1.0
+    values:
+    - mall
+    - airport
+    - bus stop
+    - cafe
+    - park
+    - coffee shop
+    - restaurant
+    - lagoon
+    - college
+    - mosque
+    - university
+    - hospital
+    - school
+    - metro station
+  title_ar:
+    filled: 0.0
+  created_at:
+    filled: 1.0
+    covers: 2025-08-04 to 2025-08-04
+  updated_at:
+    filled: 1.0
+    covers: 2025-08-04 to 2025-08-04
+public.nearby_location_property:
+  id:
+    filled: 1.0
+  property_id:
+    filled: 1.0
+  nearby_location_id:
+    filled: 1.0
+  created_at:
+    filled: 0.0
+  updated_at:
+    filled: 0.0
 chatbot_ai.building_property_records:
   land_type_en:
     filled: 0.911
     values:
     - Commercial
     - Residential
-    - Industrial
     - Government Authorities
+    - Industrial
     - Public Facilities
     - Agricultural
     - Hospitality
-    - Public Facility
     - Educational
+    - Public Facility
   land_type_ar:
     filled: 0.911
     values:
     - تجارى
     - سكنى
-    - مؤسسات حكومية
     - صناعى
+    - مؤسسات حكومية
     - مرافق عامة
     - زراعى
     - Hospitality
@@ -148,22 +273,22 @@ chatbot_ai.building_property_records:
   land_type_id:
     filled: 0.911
   project_name_en:
-    filled: 0.573
+    filled: 0.575
   project_name_ar:
-    filled: 0.573
+    filled: 0.575
   project_id:
-    filled: 0.573
+    filled: 0.575
   master_project_ar:
-    filled: 0.506
+    filled: 0.507
     common_values:
     - داماك هيليز 2
     - ذا فالي
     - دبي ورلد سنترال
     - روعة الإمارات
     - مجمع دبي للاستثمار الاول
-    - المرابع العربية - 1
     - الفرجان
     - المرابع العربية 3
+    - المرابع العربية - 1
     - مدن
     - تاون سكوير
     - مدينة محمد بن راشد آل مكتوم – ديستركت 11
@@ -172,15 +297,15 @@ chatbot_ai.building_property_records:
     - داماك هيلز
     - تلال الغاف
   master_project_en:
-    filled: 0.506
+    filled: 0.507
     common_values:
     - DAMAC HILLS 2
     - The Valley
-    - Emirates Living
     - Dubai World Central
+    - Emirates Living
     - Dubai Investment Park First
-    - Al Furjan
     - Arabian Ranches - 1
+    - Al Furjan
     - Arabian Ranches 3
     - Mudon
     - TOWN SQUARE
@@ -190,17 +315,17 @@ chatbot_ai.building_property_records:
     - DAMAC HILLS
     - TILAL AL GHAF
   master_project_id:
-    filled: 0.506
+    filled: 0.507
   pre_registration_number:
     filled: 0.0
     values:
-    - '12110.18'
+    - '2140.07'
     - JLT-PH1-E1
     - PJCH01
   is_registered:
-    filled: 0.701
+    filled: 0.703
   is_lease_hold:
-    filled: 0.585
+    filled: 0.586
   is_free_hold:
     filled: 0.982
   parcel_id:
@@ -218,8 +343,8 @@ chatbot_ai.building_property_records:
     - Factory
     - Education
     - Nursery
-    - Clinic
     - Warehouse
+    - Clinic
     - Hospital
     - Land
   property_sub_type_ar:
@@ -230,9 +355,10 @@ chatbot_ai.building_property_records:
     - مصنع
     - تعليمي
     - حضانة
-    - مستشفى
-    - مستودع
     - عيادة
+    - مستودع
+    - مستشفى
+    - أرض
   property_sub_type_id:
     filled: 1.0
   property_type_en:
@@ -260,11 +386,11 @@ chatbot_ai.building_property_records:
   bld_levels:
     filled: 0.021
   built_up_area:
-    filled: 0.922
+    filled: 0.923
   car_parks:
-    filled: 0.9
+    filled: 0.902
   rooms_en:
-    filled: 0.877
+    filled: 0.878
     common_values:
     - 4 B/R
     - 3 B/R
@@ -275,14 +401,14 @@ chatbot_ai.building_property_records:
     - 2 B/R
     - 6 B/R
     - 2 bed rooms+hall
-    - NA
     - 6 bed rooms+hall
+    - NA
     - 1 B/R
     - 7 bed rooms+hall
     - 7 B/R
     - 8 bed rooms+hall
   rooms_ar:
-    filled: 0.877
+    filled: 0.878
     common_values:
     - أربعة غرف
     - ثلاث غرف
@@ -300,9 +426,9 @@ chatbot_ai.building_property_records:
     - سبع غرف
     - ثمانية غرف و صالة
   rooms:
-    filled: 0.877
+    filled: 0.878
   floors:
-    filled: 0.843
+    filled: 0.845
     common_values:
     - '2'
     - '3'
@@ -320,11 +446,11 @@ chatbot_ai.building_property_records:
     - '11'
     - '13'
   actual_common_area:
-    filled: 0.485
+    filled: 0.487
   common_area:
-    filled: 0.691
+    filled: 0.692
   building_number:
-    filled: 0.864
+    filled: 0.866
   land_sub_number:
     filled: 1.0
   land_number:
@@ -382,6 +508,7 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Public Facilities
     - Hospitality
     - Agricultural
+    - Public Facility
   land_type_ar:
     filled: 0.839
     values:
@@ -401,7 +528,7 @@ chatbot_ai.registered_freehold_real_estate_units:
   project_id:
     filled: 0.36
   master_project_ar:
-    filled: 0.484
+    filled: 0.481
     common_values:
     - قرية جميرا الدائرية
     - الخليج التجاري
@@ -412,14 +539,14 @@ chatbot_ai.registered_freehold_real_estate_units:
     - داون تاون دبي
     - مجمع دبي لاند السكني
     - واحة السيليكون
-    - مجمع دبي للاستثمار الثاني
     - أرجان
     - دبي ورلد سنترال
+    - مجمع دبي للاستثمار الثاني
     - مدينة دبي الرياضية
     - المنطقة العالمية للإنتاج الإعلامي
     - نخلة جميرا
   master_project_en:
-    filled: 0.484
+    filled: 0.481
     common_values:
     - Jumeirah Village Circle
     - Business Bay
@@ -437,19 +564,15 @@ chatbot_ai.registered_freehold_real_estate_units:
     - International Media Production Zone
     - Palm Jumeirah
   master_project_id:
-    filled: 0.484
+    filled: 0.481
   pre_registration_number:
     filled: 0.0
-    values:
-    - '28'
-    - JPA4LX026
-    - JPA4LX043
   is_registered:
-    filled: 0.531
+    filled: 0.528
   is_lease_hold:
-    filled: 0.518
+    filled: 0.516
   is_free_hold:
-    filled: 0.985
+    filled: 0.986
   parcel_id:
     filled: 0.957
   munc_number:
@@ -457,8 +580,8 @@ chatbot_ai.registered_freehold_real_estate_units:
   munc_zip_code:
     filled: 1.0
     common_values:
-    - '681'
     - '599'
+    - '681'
     - '346'
     - '264'
     - '392'
@@ -467,20 +590,20 @@ chatbot_ai.registered_freehold_real_estate_units:
     - '621'
     - '118'
     - '365'
-    - '598'
-    - '117'
     - '393'
+    - '117'
+    - '598'
     - '318'
     - '373'
   creation_date:
-    filled: 0.957
-    covers: 2008-10-16 to 2026-06-05
+    filled: 0.958
+    covers: 2008-10-16 to 2026-05-22
   grandparent_property_id:
-    filled: 0.827
+    filled: 0.825
   parent_property_id:
-    filled: 0.626
+    filled: 0.624
   property_sub_type_en:
-    filled: 0.531
+    filled: 0.528
     values:
     - Flat
     - Office
@@ -492,17 +615,15 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Parking
     - Workshop
     - Kiosk
-    - Show Rooms
-    - Hotel
     - Clinic
+    - Show Rooms
     - Stacked Townhouses
+    - Hotel
     - Gymnasium
     - Sized Partition
     - Education
-    - Nursery
-    - Building
   property_sub_type_ar:
-    filled: 0.531
+    filled: 0.528
     values:
     - شقه سكنيه
     - مكتب
@@ -515,24 +636,23 @@ chatbot_ai.registered_freehold_real_estate_units:
     - ورشة
     - كشك
     - غرف عرض
-    - عيادة
     - فندق
-    - جمانيزيوم
+    - عيادة
     - منازل متلاصقة
-    - حضانة
+    - جمانيزيوم
     - تقسيم حجمى
   property_sub_type_id:
-    filled: 0.531
+    filled: 0.528
   property_type_en:
-    filled: 0.89
+    filled: 0.889
     values:
     - Unit
   property_type_ar:
-    filled: 0.89
+    filled: 0.889
     values:
     - وحدة
   property_type_id:
-    filled: 0.89
+    filled: 0.889
   actual_area:
     filled: 0.873
   rooms_en:
@@ -574,11 +694,11 @@ chatbot_ai.registered_freehold_real_estate_units:
   rooms:
     filled: 0.878
   floor:
-    filled: 0.824
+    filled: 0.823
   actual_common_area:
     filled: 0.383
   common_area:
-    filled: 0.805
+    filled: 0.804
   parking_allocation_type_en:
     filled: 0.002
     values:
@@ -592,9 +712,9 @@ chatbot_ai.registered_freehold_real_estate_units:
   parking_allocation_type:
     filled: 0.003
   unit_parking_number:
-    filled: 0.382
+    filled: 0.381
   unit_balcony_area:
-    filled: 0.489
+    filled: 0.487
   unit_number:
     filled: 1.0
   building_number:
@@ -616,11 +736,11 @@ chatbot_ai.registered_freehold_real_estate_units:
     - Al Warsan First
     - Naif
     - Al Goze Industrial Second
-    - Al Thanyah Fifth
     - Al Mararr
-    - Al Barsha First
     - Dubai Investment Park First
-    - Burj Khalifa
+    - Al Thanyah Fifth
+    - Al Karama
+    - Al Barsha First
   area_name_ar:
     filled: 1.0
     common_values:
@@ -634,11 +754,11 @@ chatbot_ai.registered_freehold_real_estate_units:
     - ورسان الاولى
     - نايف
     - القوز الصناعيه الثانيه
-    - المرر
     - الثنيه الخامسة
     - الكرامه
+    - المرر
     - مجمع دبي للاستثمار الاول
-    - البرشاء الاولى
+    - مجمع دبي للاستثمار الثاني
   zone_id:
     filled: 1.0
   area_id:
@@ -647,15 +767,15 @@ chatbot_ai.registered_freehold_real_estate_units:
     filled: 1.0
 chatbot_ai.land_registry:
   project_id:
-    filled: 0.353
+    filled: 0.354
   project_name_ar:
-    filled: 0.353
+    filled: 0.354
   project_name_en:
-    filled: 0.353
+    filled: 0.354
   master_project_id:
-    filled: 0.416
+    filled: 0.418
   master_project_en:
-    filled: 0.416
+    filled: 0.418
     common_values:
     - DAMAC HILLS 2
     - DAMAC Lagoons
@@ -673,7 +793,7 @@ chatbot_ai.land_registry:
     - Palm Jabal Ali
     - Jumeirah Golf Estates
   master_project_ar:
-    filled: 0.416
+    filled: 0.417
     common_values:
     - داماك هيليز 2
     - داماك لاغون
@@ -683,9 +803,9 @@ chatbot_ai.land_registry:
     - جبل علي هيلز
     - مدن
     - ذا فالي
+    - نخلة جميرا
     - دبي ورلد سنترال
     - جميرا بارك
-    - نخلة جميرا
     - المرابع العربية - 1
     - ند الشبا جاردنز
     - نخلة جبل علي
@@ -707,10 +827,10 @@ chatbot_ai.land_registry:
     - Public Facility
     - Future Development
     - Transport
-    - Facilities
     - Transportation
-    - Water Body
+    - Facilities
     - Educational
+    - Water Body
     - Hospitality
     - Healthcare
   land_type_en:
@@ -730,9 +850,9 @@ chatbot_ai.land_registry:
     - Transport
     - Facilities
     - Transportation
-    - Water Body
     - Educational
     - Hospitality
+    - Water Body
     - Healthcare
   property_id:
     filled: 1.0
@@ -793,9 +913,9 @@ chatbot_ai.land_registry:
     values:
     - Land
   property_sub_type_id:
-    filled: 0.842
+    filled: 0.843
   property_sub_type_ar:
-    filled: 0.842
+    filled: 0.843
     common_values:
     - سكنية
     - تجارية
@@ -813,7 +933,7 @@ chatbot_ai.land_registry:
     - زراعية
     - سكن عمال
   property_sub_type_en:
-    filled: 0.842
+    filled: 0.843
     common_values:
     - Residential
     - Commercial
@@ -831,7 +951,7 @@ chatbot_ai.land_registry:
     - Agricultural
     - Labor Camp
   munc_zip_code:
-    filled: 0.876
+    filled: 0.875
     common_values:
     - '683'
     - '921'
@@ -849,24 +969,24 @@ chatbot_ai.land_registry:
     - '711'
     - '682'
   munc_number:
-    filled: 0.876
+    filled: 0.875
   parcel_id:
-    filled: 0.876
+    filled: 0.875
   is_free_hold:
     filled: 0.973
   is_registered:
     filled: 0.975
   pre_registration_number:
-    filled: 0.454
+    filled: 0.456
   separated_from:
-    filled: 0.424
+    filled: 0.425
   separated_reference:
-    filled: 0.476
+    filled: 0.478
 chatbot_ai.building_summary_information:
   building_id:
     filled: 1.0
   community_name_english:
-    filled: 0.88
+    filled: 0.881
     common_values:
     - DUBAI INVESTMENT PARK FIRST
     - MIRDIF
@@ -875,8 +995,8 @@ chatbot_ai.building_summary_information:
     - AL THANYAH  FOURTH
     - AL AWIR FIRST
     - AL YALAYIS 1
-    - DUBAI INVESTMENT PARK SECOND
     - WADI AL SAFA 3
+    - DUBAI INVESTMENT PARK SECOND
     - JUMEIRA FIRST
     - AL KHWANEEJ FIRST
     - AL YALAYIS 2
@@ -895,8 +1015,8 @@ chatbot_ai.building_summary_information:
     - مجمع دبي للاستثمار الثاني
     - اليلايس 1
     - وادي الصفا 3
-    - البدع
     - جبل علي الصناعية الأولى
+    - البدع
     - الخوانيج الأولى
     - اليلايس 2
     - وادي الصفا 6
@@ -907,7 +1027,7 @@ chatbot_ai.building_summary_information:
     filled: 0.988
   building_permitted_date:
     filled: 0.392
-    covers: 1992-01-26 to 2026-04-17
+    covers: 1992-01-30 to 2026-04-20
   building_type_english:
     filled: 1.0
     values:
@@ -933,27 +1053,27 @@ chatbot_ai.building_summary_information:
   parcel_id:
     filled: 1.0
   building_floor_height:
-    filled: 0.998
+    filled: 0.997
   building_height:
     filled: 0.997
   building_total_area:
     filled: 1.0
   facilities_circulation_area:
-    filled: 0.998
+    filled: 0.997
   is_green_building:
     filled: 1.0
     values:
     - 'NO'
     - 'YES'
   building_usages_english:
-    filled: 0.961
+    filled: 0.96
   building_usages_arabic:
-    filled: 0.961
+    filled: 0.96
   plot_area:
     filled: 0.848
   building_completion_date:
-    filled: 0.359
-    covers: 1950-01-01 to 2026-04-09
+    filled: 0.36
+    covers: 1950-01-01 to 2026-04-06
   building_status_english:
     filled: 1.0
     values:
@@ -976,14 +1096,14 @@ chatbot_ai.building_summary_information:
     - معتمد
     - مطلوب للهدم
     - انتظار لتغيير التصميم
-    - الهدم موافق
     - في انتظار الغاء البطاقة
+    - الهدم موافق
   air_conditioned_area:
-    filled: 0.911
+    filled: 0.912
   no_of_lifts:
-    filled: 0.911
+    filled: 0.912
   electrical_load_for_ac:
-    filled: 0.997
+    filled: 0.996
   soil_barring_capacity:
     filled: 0.996
   ac_unit_type:
@@ -998,9 +1118,9 @@ chatbot_ai.building_summary_information:
     - '6'
     - '3'
   thermal_load_for_ac:
-    filled: 0.911
+    filled: 0.912
   building_ownership_type:
-    filled: 0.78
+    filled: 0.781
     values:
     - Private
     - Granted
@@ -1009,25 +1129,25 @@ chatbot_ai.building_summary_information:
     - unidentified
     - Reserved
   building_construction_year:
-    filled: 0.359
+    filled: 0.36
   project_no:
     filled: 1.0
   permit_no:
     filled: 1.0
   indoor_car_parking:
-    filled: 0.156
+    filled: 0.157
   outdoor_car_parking:
-    filled: 0.436
+    filled: 0.435
   outdoor_bus_parking:
     filled: 0.013
   community_no:
     filled: 1.0
   building_demolition_date:
     filled: 0.012
-    covers: 2007-07-17 to 2026-05-18
+    covers: 2008-01-12 to 2026-05-14
   building_cancellation_date:
     filled: 0.006
-    covers: 2007-04-16 to 2026-01-14
+    covers: 2007-04-16 to 2026-01-30
 chatbot_ai.building_floor_level_information:
   building_id:
     filled: 1.0
@@ -1064,8 +1184,8 @@ chatbot_ai.building_floor_level_information:
     - Hospitals
     - Banks
     - Petrol Station /Car Services
-    - Cinema
     - Theatre
+    - Cinema
   floor_type_arabic:
     filled: 1.0
     values:
@@ -1095,14 +1215,14 @@ chatbot_ai.building_floor_level_information:
     - سكن طلاب / عمال
     - المساجد
     - المستشفيات
-    - البنوك
     - محطة بترول/خدمة السيارات
+    - البنوك
     - السينما
     - المسارح
   no_of_units:
-    filled: 0.255
+    filled: 0.253
   usages_area:
-    filled: 0.444
+    filled: 0.443
 chatbot_ai.building_usage_classifications:
   building_id:
     filled: 1.0
@@ -1114,51 +1234,51 @@ chatbot_ai.building_usages_lookup:
   usage_description_english:
     filled: 1.0
     values:
-    - Others
-    - Indoor Services
-    - Employees /Students Accommodation
-    - Cinema
     - Labour Accomadation
+    - Hospitals
     - Banks
+    - Hotels
+    - Mosques
     - Outdoor Services
+    - Hotel Apartment
+    - Villa
+    - Others
+    - Theatre
+    - Indoor Services
+    - Warehouse/Factory/Workshop
     - Resedential
     - Services Block
+    - Employees /Students Accommodation
     - Petrol Station /Car Services
-    - Hotels
-    - Offices
-    - Hotel Apartment
-    - Hospitals
-    - Villa
-    - Warehouse/Factory/Workshop
+    - Cinema
     - Commercial
     - Shopping Center
-    - Mosques
-    - Theatre
+    - Offices
     - Education
   usage_description_arabic:
     filled: 1.0
     values:
-    - التعليم
-    - فلل
-    - مستودعات/مصانع/ورش
-    - سكن طلاب / عمال
-    - المساجد
-    - مراكز التسوق
-    - المكاتب
-    - الفنادق
-    - البنوك
-    - الشقق الفندقية
     - الملحق
-    - الخدمات في المبنى
-    - تجاري
-    - سكن العمال
-    - اخرى
-    - المستشفيات
+    - مراكز التسوق
     - المسارح
     - الخدمات الخارجية
+    - سكن طلاب / عمال
+    - الخدمات في المبنى
     - محطة بترول/خدمة السيارات
     - السينما
+    - المكاتب
     - سكني
+    - اخرى
+    - المستشفيات
+    - التعليم
+    - تجاري
+    - فلل
+    - سكن العمال
+    - المساجد
+    - البنوك
+    - مستودعات/مصانع/ورش
+    - الفنادق
+    - الشقق الفندقية
 chatbot_ai.building_types:
   id:
     filled: 1.0
@@ -1186,135 +1306,135 @@ chatbot_ai.building_types:
     - بيت عربي
     - '''أخرى (شبرة، كرفان ، صندقة)'''
     - مبنى مستوى واحد
-    - أخرى (شبرة، كرفان ، صندقة)
     - مبنى صناعي
+    - أخرى (شبرة، كرفان ، صندقة)
     - مبنى نسب طابقية
 chatbot_ai.building_characteristics:
   english_classification:
     filled: 1.0
     values:
     - Main Building
-    - Auxiliary Building
     - Inapplicable, such as storage, public toilets, power transformers, etc
+    - Auxiliary Building
   code:
     filled: 1.0
     values:
     - '2'
-    - '99'
     - '1'
+    - '99'
   arabic_classification:
     filled: 1.0
     values:
+    - ‫المبنى الثانوي‬‏
     - ‫لا ينطبق، مثل )مخزن / دورات المياه‬‏ ‫العامة / محولات الكهرباء... إلخ(.‬‏
     - ‫المبنى الرئيسي‬‏
-    - ‫المبنى الثانوي‬‏
 chatbot_ai.building_forms_types:
   english_classification:
     filled: 1.0
     values:
+    - Shabra
+    - Farm without any building
+    - Factory
+    - Animal Farm
+    - Caravan
     - Arabic House
     - Mosque
-    - public utilities, etc'
-    - Villa
-    - Multi- Storey Building
-    - Shabra
-    - Factory
-    - Caravan
+    - One Floor Building
     - Palace
+    - Villa
     - Compound'
     - Shack, tent or wooden cabin
     - subsidised house'
     - Two-Floor Building
-    - Animal Farm
-    - One Floor Building
     - Electrical Power Station
     - Petrol Station
-    - Farm without any building
+    - public utilities, etc'
+    - Multi- Storey Building
   code:
     filled: 1.0
     values:
-    - '13'
-    - '14'
-    - '6'
-    - '2'
+    - '1'
     - '9'
     - '4'
-    - '11'
+    - '8'
     - '97'
     - '12'
     - '10'
     - '7'
+    - '17'
+    - '13'
     - '15'
     - '5'
-    - '1'
-    - '17'
+    - '14'
+    - '6'
     - '3'
+    - '2'
+    - '11'
     - '16'
-    - '8'
   arabic_classification:
     filled: 1.0
     values:
-    - ‫كرفان‬‏
-    - ‫بيت شعبي‬‏
-    - ‫مبنى من طابق‬‏
-    - ‫فيلا‬‏
-    - ‫مصنع‬‏
-    - ‫قصر‬‏
-    - ‫مجمع سكني تجاري‬‏
-    - ‫شبرة‬‏
-    - ‫محطة محروقات )بترول(‬‏
-    - ‫محطة توليد كهرباء‬‏
-    - ‫مزرعة بدون مبنى‬‏
     - ‫عشة أو خيمة أو صندقة‬‏
     - ‫بيت عربي‬‏
     - ‫مبنى من طابقين‬‏
     - ‫أخرى غير ما ذكر، مثل )المرافق العامة، إلخ(‬‏
+    - ‫كرفان‬‏
     - ‫مبنى متكرر )أكثر من طابقين(‬‏
+    - ‫شبرة‬‏
+    - ‫بيت شعبي‬‏
+    - ‫محطة محروقات )بترول(‬‏
     - ‫عزبة‬‏
+    - ‫مبنى من طابق‬‏
+    - ‫فيلا‬‏
     - ‫مسجد‬‏
+    - ‫محطة توليد كهرباء‬‏
+    - ‫مصنع‬‏
+    - ‫قصر‬‏
+    - ‫مجمع سكني تجاري‬‏
+    - ‫مزرعة بدون مبنى‬‏
 chatbot_ai.building_predominant_substances:
   english_classification:
     filled: 1.0
     values:
-    - Tin
+    - Asbestos
+    - Concrete
+    - Cement
     - Brick
     - Adobe/ Clay
+    - Other Specify
+    - Ready Walls
     - Wood
     - Fronds
-    - Cement
     - sandwich Panel
-    - Ready Walls
-    - Concrete
-    - Asbestos
-    - Other Specify
+    - Tin
   code:
     filled: 1.0
     values:
-    - '6'
-    - '2'
+    - '1'
     - '9'
     - '4'
+    - '8'
     - '97'
+    - '6'
+    - '3'
     - '10'
+    - '2'
     - '7'
     - '5'
-    - '1'
-    - '3'
-    - '8'
   arabic_classification:
     filled: 1.0
     values:
-    - ‫صفيح‬
-    - ‫اسبيستوس‬
-    - ‫هيكل خرساني )اسمنت مسلح(‬
-    - ‫أخرى )حدد(‬
-    - ‫سعف‬
     - ‫ألومنيوم‬
     - ‫خشب‬
     - ‫اسمنت غير مسلح‬
-    - ‫الطين أو اللبن‬
+    - ‫هيكل خرساني )اسمنت مسلح(‬
+    - ‫صفيح‬
+    - ‫أخرى )حدد(‬
+    - ‫سعف‬
     - ‫جدران جاهزة‬
+    - ‫اسبيستوس‬
     - ‫طابوق‬
+    - ‫الطين أو اللبن‬
 chatbot_ai.housing_units:
   id:
     filled: 1.0
@@ -1323,10 +1443,9 @@ chatbot_ai.housing_units:
     values:
     - Apartment
     - Villa
-    - Arabic House
     - Room
+    - Arabic House
     - Collective Household
-    - Part of Arabic House
     - Other
   year:
     filled: 1.0
@@ -1335,31 +1454,31 @@ chatbot_ai.housing_units:
     values:
     - شقة
     - فيلا
-    - غرفة/ غرف مستقلة
     - بيت عربي
+    - غرفة/ غرف مستقلة
     - مسكن جماعي
     - أخرى
-    - جزء بيت عربي
     - ملحق فيلا
+    - جزء بيت عربي
 chatbot_ai.household_types:
   english_classification:
     filled: 1.0
     values:
     - Collective Households
-    - Emirati Households
     - Non-Emirati Households
+    - Emirati Households
   code:
     filled: 1.0
     values:
     - '2'
-    - '1'
     - '3'
+    - '1'
   arabic_classification:
     filled: 1.0
     values:
-    - ‫أسرة إماراتية‬
     - ‫أسرة جماعية‬
     - ‫أسرة غير إماراتية‬
+    - ‫أسرة إماراتية‬
 chatbot_ai.ps_buildings:
   building_id:
     filled: 1.0
@@ -1393,48 +1512,30 @@ public.buildings:
     filled: 1.0
   name_en:
     filled: 1.0
-    common_values:
-    - AZIZI MINA
-    - 29 BLVD T1
-    - 10 OXFORD by IMAN
-    - 15 Northside - Tower 1
-    - Act One Act Two Tower 1
-    - GREEN COMMUNITY WEST - EXTENSION - PHASE III
-    - CENTURION RESIDENCE - TOWER 1
-    - Act One Act Two Tower 2
-    - ACES CHATEAU
-    - Azizi Mina
-    - BD 29 BLVD PODIUM
-    - Burj Khalifa
-    - Al NOUJOUM TOWER
-    - Harbour Views Podium
-    - 15 Northside - Tower 2
   name_ar:
-    filled: 0.201
+    filled: 0.045
     common_values:
-    - اكت وان اكت تو تاور 1
-    - اكت وان اكت تو تاور 2
-    - Azizi Mina
-    - برج خليفة
-    - نورث سايد 15 - تاور 1
-    - هاربر فيوز بوديوم
-    - بلو ويف
-    - نورث سايد 15 - تاور 2
-    - Centurion Residence - Tower 1
-    - 'بوليفارد هايتس  بوديوم '
-    - شوبا هارتلاند ويفز جراندى
-    - بالم فيوز الغربية
-    - فيرمونت النخلة
-    - ذا ايفي
-    - آريــا
+    - وينوود من امتياز
+    - بريز من دانوب
+    - برج فينتو
+    - عزيزي وصل
+    - سونيت ريزيدنسيز
+    - كوندور جولف لينكس 18
+    - بيتش ووك جراند 2 من امتياز
+    - كوستال هافين من بريستيج هاربور للتطوير العقاري
+    - سي سايد باي برستيج ون
+    - ماج 560
+    - ''
+    - مارينا ستار
+    - داماك هيلز (2) - ايفرجرينز
+    - ريف 998
+    - صن سيت باي ثري من امتياز
   year_of_completion:
-    filled: 0.981
+    filled: 0.095
   total_floors:
-    filled: 0.977
+    filled: 0.081
   retail_centers:
-    filled: 0.002
-    values:
-    - '0'
+    filled: 0.0
   swimming_pools:
     filled: 1.0
   parking_spaces:
@@ -1442,27 +1543,30 @@ public.buildings:
   elevators:
     filled: 1.0
   building_number:
-    filled: 0.998
-    values:
+    filled: 0.987
+    common_values:
     - '1'
     - '2'
     - '3'
+    - '4'
+    - '6'
+    - '37'
     - '10'
     - '5'
+    - '43'
+    - '34'
+    - '35'
+    - '46'
+    - '29'
     - '11'
-    - '4'
-    - '7'
-    - '41'
-    - '9'
-    - '26'
-    - '6'
+    - '12'
 public.revamp_buildings:
   building_id:
     filled: 1.0
   building_name:
     filled: 1.0
   building_type:
-    filled: 0.975
+    filled: 0.973
     values:
     - Building
     - Residential
@@ -1470,22 +1574,24 @@ public.revamp_buildings:
     - Mixed-use
     - Residential tower
     - Hotel apartment
+    - Hotel
     - Residential building
+    - Commercial
   community:
     filled: 1.0
     values:
     - Jumeirah Village Circle (JVC)
+    - Dubai Marina
     - Arjan
     - Al Furjan
-    - Dubai Marina
     - Jumeirah Village Triangle (JVT)
   sub_community:
     filled: 1.0
     values:
     - Al Barsha South Fourth
+    - Marsa Dubai
     - Al Barshaa South Third
     - Jabal Ali First
-    - Marsa Dubai
     - Al Barsha South Fifth
     - Al Safouh Second
   project_name_en:
@@ -1494,9 +1600,9 @@ public.revamp_buildings:
     filled: 1.0
     values:
     - Jumeirah Village Circle
+    - Dubai Marina
     - Arjan
     - Al Furjan
-    - Dubai Marina
     - Jumeirah Village Triangle
     - Dubai Harbour
     - Site A
@@ -1510,92 +1616,92 @@ public.revamp_buildings:
   longitude:
     filled: 1.0
   developer_name:
-    filled: 0.902
+    filled: 0.692
     common_values:
     - Binghatti Developers Fze
     - Azizi Developments L.L.C
     - Danube Properties Development L.L.C
     - Tiger Properties
     - Damac Properties Co (L.L.C)
-    - Ellington Properties Development L.L.C
     - Iman Developers L.L.C
-    - Oro24 Real Estate Development L.L.C
-    - Vincitore Real Estate Development L.L.C
+    - Ellington Properties Development L.L.C
+    - Emaar Properties (P.J.S.C)
     - Diamond  Developers Co.Limited
-    - Seasons Development Limited
-    - Damac Development(L L C)
-    - Trident International Holding (Fzco)
+    - Oro24 Real Estate Development L.L.C
     - Object One Real Estate Development L.L.C
-    - Imtiaz Real Estate Investment & Development L.L.C
+    - Tameer Holding Investment   (Llc)
+    - Seasons Development Limited
+    - Vincitore Real Estate Development L.L.C
+    - Damac Development(L L C)
   developer_founded_year:
-    filled: 0.009
+    filled: 0.01
   project_status:
-    filled: 0.833
+    filled: 0.642
     values:
     - FINISHED
     - ACTIVE
     - NOT_STARTED
     - CONDITIONAL_ACTIVATING
   completion_date:
-    filled: 0.615
+    filled: 0.469
     covers: 2009-05-12 to 2027-09-01
   completion_year:
-    filled: 0.615
+    filled: 0.469
   dld_registration_date:
-    filled: 0.899
+    filled: 0.69
     covers: 2007-01-10 to 2025-01-27
   total_floors:
-    filled: 0.89
+    filled: 0.682
   total_units:
-    filled: 0.889
+    filled: 0.681
   units_for_sale:
-    filled: 0.081
+    filled: 0.062
   units_for_rent:
-    filled: 0.072
+    filled: 0.058
   median_price_aed_per_sqft:
-    filled: 0.905
+    filled: 0.694
   median_sale_price_aed_12_months:
-    filled: 0.874
+    filled: 0.673
   median_sale_price_aed_all_time:
-    filled: 0.905
+    filled: 0.694
   median_sale_area_sqft_12_months:
-    filled: 0.874
+    filled: 0.673
   median_sale_area_sqft_all_time:
-    filled: 0.905
+    filled: 0.694
   median_rent_aed_per_year:
-    filled: 0.554
+    filled: 0.422
   net_yield_pct:
-    filled: 0.532
+    filled: 0.407
   service_charge_aed_per_sqft:
-    filled: 0.351
+    filled: 0.339
   sales_transactions:
-    filled: 0.905
+    filled: 0.694
   tenancies_signed:
-    filled: 0.557
+    filled: 0.425
   amenities_list:
-    filled: 0.38
+    filled: 0.367
   shared_facilities:
-    filled: 0.336
+    filled: 0.342
   building_description:
-    filled: 0.405
+    filled: 0.395
   units_breakdown:
-    filled: 0.898
+    filled: 0.683
   yearly_rent_trends:
-    filled: 1.0
+    filled: 0.745
   service_charge_history:
-    filled: 0.091
+    filled: 0.131
   recent_sale_transactions:
-    filled: 0.905
+    filled: 0.694
   recent_rent_transactions:
-    filled: 0.557
+    filled: 0.425
   metro_travel_times:
-    filled: 0.293
+    filled: 0.35
   schools_travel_times:
-    filled: 0.799
+    filled: 0.855
   hospitals_travel_times:
-    filled: 0.801
+    filled: 0.856
   groceries_travel_times:
-    filled: 0.801
+    filled: 0.856
 public.dda_plots:
   plot_number:
     filled: 1.0

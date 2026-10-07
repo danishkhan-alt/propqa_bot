@@ -226,21 +226,21 @@ chatbot_ai.real_estate_projects:
     filled: 1.0
 chatbot_ai.projects_information:
   work_start_date:
-    filled: 0.229
-    covers: 2006-07-24 to 2026-05-01
+    filled: 0.23
+    covers: 2006-08-23 to 2026-04-30
   expected_completion_date:
-    filled: 0.186
-    covers: 2012-01-31 to 2029-03-15
+    filled: 0.188
+    covers: 2012-04-27 to 2029-02-16
   project_no:
     filled: 1.0
   consultant_english:
     filled: 0.573
   consultant_arabic:
-    filled: 0.573
+    filled: 0.574
   contractor_english:
-    filled: 0.778
+    filled: 0.776
   contractor_arabic:
-    filled: 0.778
+    filled: 0.777
   project_status_english:
     filled: 1.0
     values:
@@ -253,10 +253,10 @@ chatbot_ai.projects_information:
     - Open
   project_creation_date:
     filled: 1.0
-    covers: 1992-04-16 to 2026-04-16
+    covers: 1992-04-27 to 2026-04-10
   project_completion_date:
-    filled: 0.542
-    covers: 1950-01-01 to 2026-04-24
+    filled: 0.54
+    covers: 1950-01-01 to 2026-04-23
   parcel_id:
     filled: 1.0
   related_entity_name_en:
@@ -273,14 +273,14 @@ chatbot_ai.projects_information:
     - Dubai Industrial City
     - Meras
     - Dubai Multi Commodities Centre – DMCC
-    - Mizin
     - Dubai Properities Group
     - Dubai Police
+    - Mizin
     - DHA
     - Cultural village - Al Jaddaf (DPG)
     - Dubai Maritime City - DMC
-    - Meras/Jumeira Bay
     - Business Bay- DPG
+    - Meras/Jumeira Bay
   related_entity_name_ar:
     filled: 0.632
     values:
@@ -295,9 +295,9 @@ chatbot_ai.projects_information:
     - مدينة دبي الصناعية
     - مراس
     - DMCC- مركز دبي للسلع المتعددة
+    - مزن
     - شرطة دبي
     - مجموعة دبي للعقارات
-    - مزن
     - هيئة الصحة بدبي
     - قرية الثقافة - الجداف (مجموعة دبي للعقارات)
     - DMC - مدينة دبي الملاحية
@@ -309,21 +309,21 @@ chatbot_ai.projects_information:
     - Consultant
     - OWNER
   consultant_license_no:
-    filled: 0.996
+    filled: 0.997
   contractor_license_no:
     filled: 0.999
   permit_date:
-    filled: 0.647
-    covers: 1992-05-19 to 2026-04-10
+    filled: 0.648
+    covers: 1992-06-07 to 2026-04-16
 chatbot_ai.project_building_information:
   project_no:
     filled: 1.0
   building_id:
     filled: 1.0
   building_construction_stage_e:
-    filled: 0.528
+    filled: 0.526
   building_construction_stage_a:
-    filled: 0.528
+    filled: 0.526
   building_cost:
     filled: 0.992
 chatbot_ai.project_applications:
@@ -331,7 +331,7 @@ chatbot_ai.project_applications:
     filled: 1.0
   app_processing_completion_date:
     filled: 0.904
-    covers: 2006-05-23 to 2026-05-12
+    covers: 2006-05-22 to 2026-05-14
   application_no:
     filled: 1.0
   application_type_english:
@@ -348,10 +348,10 @@ chatbot_ai.project_applications:
     - Normal Decor Permit
     - Temporary permit to Occupy Parcel
     - Preliminary-New Building
-    - Final Arrangement and Digging
     - Permit Cancellation (before start of work)
-    - Extending Approval Validity
+    - Final Arrangement and Digging
     - Walkside Booking Permit
+    - Extending Approval Validity
   application_type_arabic:
     filled: 1.0
     common_values:
@@ -373,7 +373,7 @@ chatbot_ai.project_applications:
 chatbot_ai.consultant_projects:
   project_closing_date:
     filled: 0.483
-    covers: 1950-01-01 to 2026-07-06
+    covers: 1950-01-01 to 2026-07-07
   project_status:
     filled: 1.0
     values:
@@ -381,9 +381,9 @@ chatbot_ai.consultant_projects:
     - Open
   last_app_submission_date:
     filled: 0.994
-    covers: 1991-11-05 to 2026-07-15
+    covers: 1991-11-09 to 2026-07-15
   building_count:
-    filled: 0.521
+    filled: 0.519
   community_name:
     filled: 1.0
     common_values:
@@ -394,17 +394,17 @@ chatbot_ai.consultant_projects:
     - AL MURAQQABAT
     - NADD AL HAMAR
     - DUBAI INVESTMENT PARK SECOND
-    - AL MIZHAR FIRST
     - AL QOUZ IND.THIRD
+    - AL MIZHAR FIRST
     - AL TWAR THIRD
     - AL QOUZ IND.FOURTH
     - AL QOUZ IND.FIRST
     - AL GARHOUD
     - NAIF
-    - HOR AL ANZ
+    - PORT SAEED
   first_building_permit_date:
-    filled: 0.646
-    covers: 1991-12-25 to 2026-06-13
+    filled: 0.645
+    covers: 1991-12-25 to 2026-06-11
   building_type:
     filled: 0.557
     values:
@@ -416,7 +416,7 @@ chatbot_ai.consultant_projects:
     - Floor Area Ratio
     - Others
   contractor_english_ar:
-    filled: 0.767
+    filled: 0.766
   contractor_english:
     filled: 0.075
   project_type:
@@ -431,12 +431,12 @@ chatbot_ai.consultant_projects:
   project_no:
     filled: 1.0
   consultant_english:
-    filled: 0.629
+    filled: 0.628
   consultant_license_no:
-    filled: 0.994
+    filled: 0.993
 chatbot_ai.contractor_projects:
   project_closing_date:
-    filled: 0.484
+    filled: 0.485
     covers: 1950-01-01 to 2026-07-06
   project_status:
     filled: 1.0
@@ -445,9 +445,9 @@ chatbot_ai.contractor_projects:
     - Open
   last_app_submission_date:
     filled: 0.994
-    covers: 1991-11-04 to 2026-07-14
+    covers: 1991-11-06 to 2026-07-14
   building_count:
-    filled: 0.518
+    filled: 0.519
   community_name:
     filled: 1.0
     common_values:
@@ -458,19 +458,19 @@ chatbot_ai.contractor_projects:
     - AL MURAQQABAT
     - DUBAI INVESTMENT PARK SECOND
     - NADD AL HAMAR
-    - AL QOUZ IND.THIRD
     - AL MIZHAR FIRST
-    - AL TWAR THIRD
+    - AL QOUZ IND.THIRD
     - AL QOUZ IND.FOURTH
+    - AL TWAR THIRD
     - AL QOUZ IND.FIRST
-    - AL GARHOUD
     - NAIF
-    - PORT SAEED
+    - AL GARHOUD
+    - AL MIZHAR SECOND
   first_building_permit_date:
     filled: 0.645
     covers: 1991-12-24 to 2026-06-11
   building_type:
-    filled: 0.557
+    filled: 0.558
     values:
     - Private Villa
     - Multi Storey
@@ -480,9 +480,9 @@ chatbot_ai.contractor_projects:
     - Floor Area Ratio
     - Others
   consultant_english_ar:
-    filled: 0.628
+    filled: 0.629
   consultant_english:
-    filled: 0.627
+    filled: 0.628
   project_type:
     filled: 1.0
     values:
@@ -508,7 +508,7 @@ chatbot_ai.building_permits_applications:
   permit_no:
     filled: 1.0
   building_type:
-    filled: 0.718
+    filled: 0.719
     values:
     - Private Villa
     - Multi Storey
@@ -518,14 +518,14 @@ chatbot_ai.building_permits_applications:
     - Investment Villa
     - Others
   approval_date:
-    filled: 0.648
-    covers: 1993-06-12 to 2026-05-05
+    filled: 0.646
+    covers: 1993-03-22 to 2026-04-28
   permit_date:
-    filled: 0.437
-    covers: 1993-02-24 to 2026-05-01
+    filled: 0.433
+    covers: 1993-02-23 to 2026-05-03
   permit_renewal_date:
     filled: 0.002
-    covers: 2007-01-04 to 2024-02-16
+    covers: 2007-05-17 to 2025-06-24
   building_count:
     filled: 1.0
   total_area:
@@ -544,8 +544,8 @@ chatbot_ai.building_permits_applications:
     - Normal Decor Permit
     - Temporary permit to Occupy Parcel
     - Preliminary-New Building
-    - Permit Cancellation (before start of work)
     - Final Arrangement and Digging
+    - Permit Cancellation (before start of work)
     - Walkside Booking Permit
     - Extending Approval Validity
   application_type_arabic:
@@ -562,8 +562,8 @@ chatbot_ai.building_permits_applications:
     - ترخيص اعمال ديكور عادى
     - طلب تصريح اشغال مؤقت للأراضي
     - تقديم أولي \ مبنى جديد
-    - إلغاء رخصة (قبل بدء العمل)
     - تقديم نهائي - ترخيص اعمال الحفر وتدعيم الحفر ونضح المياه
+    - إلغاء رخصة (قبل بدء العمل)
     - تصريح حجز الارصفه واستغلالها
     - تمديد فترة بقاء المخططات المعتمده  خدمات من خلال استشاري
   application_status_english:
@@ -579,11 +579,11 @@ chatbot_ai.building_permits_applications:
     - Consultant Changed
     - Permit Renewed
     - Contractor Changed
-    - Final Approval Certificate Issued
     - Initial Approval Letter Issued
+    - Final Approval Certificate Issued
     - Not allowed
     - Extension of expiry date
-    - Waiting for pricing certificate
+    - Cancelled-No reply by new consultant
   application_status_arabic:
     filled: 1.0
     common_values:
@@ -597,14 +597,14 @@ chatbot_ai.building_permits_applications:
     - تم تغيير الاستشاري
     - الرخصة مجددة
     - تم تغيير المقاول
-    - تم اصدار رسالة الإعتماد الأولي
     - تم اصدار شهادة الاعتماد النهائي
+    - تم اصدار رسالة الإعتماد الأولي
     - غير مسموح
     - تمديد تاريخ صلاحية المعاملة المعتمدة
     - بانتظار شهادة التثمين
   application_submission_date:
     filled: 1.0
-    covers: 1993-10-13 to 2026-04-29
+    covers: 1993-05-06 to 2026-04-27
 chatbot_ai.demolition_permits:
   building_type:
     filled: 1.0
@@ -663,8 +663,8 @@ chatbot_ai.service_entities_transactions_listing:
     - Building NOC - Electricity
     - RTA-Shoring and Access/External Paving Works
     - ROW RTA-Temporary Access/Fence/ Project Board
-    - Building Application - Water
     - Building NOC – Water
+    - Building Application - Water
     - Demarcation
     - RTA-Gate Level
     - Electricity Preliminary NOC
@@ -677,10 +677,10 @@ chatbot_ai.service_entities_transactions_listing:
     - DEWA NOC for Demolition
   application_submission_date:
     filled: 1.0
-    covers: 2012-02-29 to 2026-05-16
+    covers: 2012-02-28 to 2026-05-15
   app_completion_date:
     filled: 1.0
-    covers: 2012-03-07 to 2026-06-03
+    covers: 2012-03-13 to 2026-06-03
   final_status:
     filled: 1.0
     values:
@@ -704,7 +704,7 @@ chatbot_ai.service_entities_transactions_listing:
     - Cancelled
   final_status_decision_date:
     filled: 0.991
-    covers: 2012-02-29 to 2026-05-22
+    covers: 2012-02-28 to 2026-05-22
 chatbot_ai.mrhe_projects:
   project_id:
     filled: 1.0

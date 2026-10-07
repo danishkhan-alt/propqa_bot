@@ -309,8 +309,8 @@ chatbot_ai.population_cluster:
   arabic_classification:
     filled: 1.0
     values:
-    - ‫سكن العمال‬
     - ‫مسكن عام )فندق، مستشفى، الخ(‬
+    - ‫سكن العمال‬
 chatbot_ai.ps_communities:
   community_id:
     filled: 1.0
@@ -388,8 +388,8 @@ chatbot_ai.ps_subcommunities:
     - dubai-south
     - mohammed-bin-rashid-city
     - deira
-    - meydan
     - emirates-living
+    - meydan
     - jebel-ali-first
     - al-barsha-1
     - palm-jumeirah
@@ -397,8 +397,8 @@ chatbot_ai.ps_subcommunities:
     - damac-hills-2
     - bur-dubai
     - damac-hills
-    - arabian-ranches
     - world-islands
+    - arabian-ranches
   subcommunity_slug:
     filled: 1.0
   subcommunity_name:

@@ -539,25 +539,25 @@ chatbot_ai.completed_buildings_aggregation:
   building_type_ar:
     filled: 1.0
     values:
-    - بيت عربي
-    - أخرى
-    - مبانى صناعية
-    - مبانى عامة
     - فيلا خاصة
+    - أخرى
     - فيلا استثمارية
+    - بيت عربي
     - مبنى متعدد الطوابق
+    - مبانى صناعية
     - مبنى مستوى واحد
+    - مبانى عامة
   building_type_en:
     filled: 1.0
     values:
+    - Other
     - Multi-Storey Building
     - Arabic House
-    - Private Villa
-    - Other
     - Public Building
     - Investment Villa
-    - Industrial Building
+    - Private Villa
     - One Storey Building
+    - Industrial Building
   count:
     filled: 1.0
 chatbot_ai.completed_buildings_2026_07_16:
@@ -675,25 +675,25 @@ chatbot_ai.housing_units_aggregation:
   unit_type_ar:
     filled: 1.0
     values:
-    - بيت عربي
-    - مسكن جماعي
-    - أخرى
-    - جزء بيت عربي
-    - غرفة/غرف مستقلة
     - فيلا
-    - شقة
+    - أخرى
     - ملحق فيلا
+    - جزء بيت عربي
+    - بيت عربي
+    - غرفة/غرف مستقلة
+    - مسكن جماعي
+    - شقة
   unit_type_en:
     filled: 1.0
     values:
     - Arabic house
-    - Flat
     - room /rooms
-    - villa
-    - others
+    - Flat
     - collective
-    - Partvilla
+    - others
     - Part Arabic house
+    - villa
+    - Partvilla
   count:
     filled: 1.0
   year:
@@ -776,17 +776,17 @@ public.dld_community_avg_sale_price:
     - Palm Jumeirah
     - Business Bay
     - Jumeirah Village Circle
-    - Dubai Marina
     - Burj Khalifa
-    - Dubai South Residential District
-    - Jumeriah Beach Residence  - JBR
-    - Dubai Investment Park First
+    - Dubai Marina
     - Al Furjan
-    - DownTown Dubai
+    - Dubai Investment Park First
+    - Jumeriah Beach Residence  - JBR
+    - Dubai South Residential District
     - Dubai Sports City
     - Jumeirah Village Triangle
-    - Jumeirah Islands
-    - Jumeirah Lakes Towers
+    - DownTown Dubai
+    - Dubai Investment Park Second
+    - DAMAC HILLS
   property_sub_type_en:
     filled: 1.0
     values:
@@ -797,7 +797,6 @@ public.dld_community_avg_sale_price:
     - Hotel Apartments
     - Penthouses
     - Villa Compounds
-    - Plots
     - Townhouses
   avg_price_type:
     filled: 1.0
@@ -814,8 +813,8 @@ public.dld_community_avg_sale_price:
     - 'Hospitality '
     - Other
     - Tourist origin
-    - Industrial
     - Residential / Commercial
+    - Industrial
     - Health Facility
     - Educational facility
     - Storage
@@ -823,7 +822,7 @@ public.dld_community_avg_sale_price:
     - Industrial / Commercial
   date_updated:
     filled: 1.0
-    covers: 2026-01-15 to 2026-01-15
+    covers: 2026-01-12 to 2026-01-12
 public.mv_community_dld_market_metrics:
   community_name:
     filled: 1.0
@@ -885,10 +884,10 @@ public.mv_community_landing_page_stats:
   community_name:
     filled: 1.0
     common_values:
+    - Green Community
     - Al Khawaneej
     - Al Nahda (Dubai)
     - Emirates Golf Club
-    - Green Community
     - Al Wasl
     - Expo City
     - Dubai Studio City
@@ -901,68 +900,52 @@ public.mv_community_landing_page_stats:
     - Jebel Ali
     - The Springs
   avg_sale_price_aed_per_sqft:
-    filled: 0.372
+    filled: 0.377
   sales_transactions:
     filled: 1.0
   master_developer:
     filled: 0.317
-    common_values:
-    - Emaar
-    - DAMAC
-    - Meraas
-    - ALDAR
-    - Binghatti
-    - Prestige One Developments
-    - Sobha
-    - H and H Development
-    - Ellington
-    - Dubai Properties
-    - Azizi
-    - Imtiaz Development
-    - Omniyat
-    - Range Developments
-    - Dubai South Developers
   gross_rental_yield_pct:
     filled: 0.317
   handover:
     filled: 0.317
     common_values:
+    - June 30, 2028
+    - December 31, 2028
     - '2029'
+    - December 31, 2027
     - 2024–28 Phased
-    - 2027–28 Phased
-    - 2025–29 Phased
-    - 2027–29 Phased
-    - 2018–27 Phased
-    - '2025'
-    - 2026–30 Phased
-    - 2026–28 Phased
-    - 2016–29 Phased
+    - December 31, 2029
+    - December 31, 2030
+    - June 30, 2029
+    - June 30, 2030
+    - March 31, 2030
     - 2027–30 Phased
-    - '2027'
-    - 2025–28 Phased
+    - March 31, 2029
+    - '2026'
     - 2020–26 Phased
-    - '2028'
+    - 2026–30 Phased
   rental_contracts:
     filled: 1.0
   metrics_as_of_date:
     filled: 1.0
-    covers: 2026-09-23 to 2026-09-23
+    covers: 2026-10-01 to 2026-10-01
 public.price_trend_buy_fact:
   instance_date:
     filled: 1.0
-    covers: 2002-10-28 to 2026-04-29
+    covers: 2001-05-01 to 2026-09-15
   month:
     filled: 1.0
-    covers: 1999-09-01 to 2026-05-01
+    covers: 2001-07-01 to 2026-09-01
   building_name_en:
     filled: 0.715
   project_name_en:
-    filled: 0.732
+    filled: 0.737
   master_project_en:
-    filled: 0.83
+    filled: 0.832
     common_values:
-    - Business Bay
     - Jumeirah Village Circle
+    - Business Bay
     - Dubai Marina
     - Jumeirah Lakes Towers
     - Burj Khalifa
@@ -971,11 +954,11 @@ public.price_trend_buy_fact:
     - Dubai Sports City
     - Silicon Oasis
     - Al Furjan
-    - Arjan
-    - TOWN SQUARE
-    - The Greens
-    - DAMAC HILLS 2
+    - Dubai World Central
     - International Media Production Zone
+    - Arjan
+    - Motor City
+    - TOWN SQUARE
   rooms_en:
     filled: 0.788
     values:
@@ -988,12 +971,13 @@ public.price_trend_buy_fact:
     - 5 B/R
     - Shop
     - PENTHOUSE
-    - 6 B/R
     - Single Room
+    - 6 B/R
     - Store
     - 7 B/R
     - GYM
-    - 10 B/R
+    - 8 B/R
+    - 9 B/R
   sale_price:
     filled: 1.0
   area_sqft:
@@ -1003,24 +987,24 @@ public.price_trend_buy_fact:
 public.price_trend_rent_fact:
   contract_start_date:
     filled: 1.0
-    covers: 2011-08-15 to 2026-01-29
+    covers: 2012-01-01 to 2026-05-05
   month:
     filled: 1.0
-    covers: 2011-10-01 to 2026-01-01
+    covers: 2011-07-01 to 2026-05-01
   project_name_en:
-    filled: 0.166
+    filled: 0.165
   master_project_en:
-    filled: 0.377
+    filled: 0.378
     common_values:
     - International City Phase 1
     - Silicon Oasis
     - Business Bay
-    - Discovery Gardens
     - Dubai Marina
     - Jumeirah Village Circle
-    - Dubai Investment Park Second
-    - Dubai Investment Park First
+    - Discovery Gardens
     - Jumeirah Lakes Towers
+    - Dubai Investment Park First
+    - Dubai Investment Park Second
     - Barsha Heights
     - Dubai Sports City
     - Burj Khalifa
@@ -1028,23 +1012,23 @@ public.price_trend_rent_fact:
     - Dubai Land Residence Complex
     - International Media Production Zone
   property_sub_type_en:
-    filled: 0.991
+    filled: 0.992
     common_values:
     - 1bed room+Hall
     - 2 bed rooms+hall
     - Studio
     - Office
     - Shop
-    - 3 bed rooms+hall
     - Room in labor Camp
+    - 3 bed rooms+hall
     - 4 bed rooms+hall
     - Warehouse
     - 5 bed rooms+hall
     - Hotel
     - Shop with a mezzanine
     - Showroom
-    - Restaurant
     - 6 bed rooms+hall
+    - Restaurant
   area_sqft:
     filled: 1.0
   annual_rent:
@@ -1056,16 +1040,16 @@ public.rental_contract_summary:
     filled: 1.0
   contract_start_date:
     filled: 1.0
-    covers: 2011-10-01 to 2026-04-30
+    covers: 2011-11-15 to 2026-05-14
   contract_end_date:
     filled: 1.0
-    covers: 2012-09-30 to 2028-09-09
+    covers: 2012-11-30 to 2028-07-31
   contract_amount:
     filled: 1.0
   annual_amount:
     filled: 1.0
   actual_area:
-    filled: 0.873
+    filled: 0.876
   line_number:
     filled: 1.0
   contract_reg_type_en:
@@ -1082,15 +1066,15 @@ public.rental_contract_summary:
     - Shop
     - Villa
     - Warehouse
-    - 'Studio '
     - Hotel
+    - 'Studio '
     - Complex Villas
     - Showroom
     - Hotel apartments
-    - Portacabin
+    - Staff Accommodation
     - Store
     - Workshop
-    - Warehouse complex
+    - Restaurant
   property_sub_type_en:
     filled: 0.993
     common_values:
@@ -1105,45 +1089,45 @@ public.rental_contract_summary:
     - 4 bed rooms+hall
     - Labor Camp
     - 5 bed rooms+hall
-    - Shop with a mezzanine
     - Hotel
+    - Shop with a mezzanine
     - Showroom
-    - 6 bed rooms+hall
+    - Restaurant
   project_name_en:
-    filled: 0.153
+    filled: 0.152
   master_project_en:
-    filled: 0.329
+    filled: 0.326
     common_values:
     - International City Phase 1
-    - Business Bay
     - Silicon Oasis
+    - Business Bay
     - Discovery Gardens
-    - Dubai Marina
     - Jumeirah Village Circle
+    - Dubai Marina
     - Dubai Investment Park Second
     - Jumeirah Lakes Towers
     - Dubai Investment Park First
     - Barsha Heights
-    - Dubai Sports City
     - Burj Khalifa
+    - Dubai Sports City
     - International Media Production Zone
     - International City Phase 3
-    - Arjan
+    - Dubai Land Residence Complex
   area_name_en:
     filled: 1.0
     common_values:
-    - Al Warsan First
     - Jabal Ali Industrial First
-    - Muhaisanah Second
+    - Al Warsan First
     - Jabal Ali First
+    - Muhaisanah Second
+    - Al Goze Industrial Second
     - Business Bay
     - Al Karama
-    - Al Goze Industrial Second
     - Naif
     - Marsa Dubai
     - Al Mararr
     - Al Nahda Second
     - Al Barsha First
-    - Al Murqabat
-    - Al Suq Al Kabeer
     - Nadd Hessa
+    - Al Suq Al Kabeer
+    - Al Murqabat
