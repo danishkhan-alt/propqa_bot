@@ -1,8 +1,10 @@
 id: transactions
 name: Sales, rents, and valuations
 schema: chatbot_ai
-description: DLD sales, Ejari-style rent contracts, official valuations, and the residential sale index.
-  Use for transacted prices, volumes, and rents.
+description: DLD registered sales and other procedures (real_estate_dld_transactions), Ejari rent contracts
+  (real_estate_dld_rent_contracts), the DLD area, project, developer, building, unit and land registers,
+  official valuations, and the residential sale index. Use for transacted prices, volumes, and registered
+  rents.
 synonyms:
 - sales
 - sold
@@ -14,7 +16,7 @@ synonyms:
 - tenancy
 - valuation
 - average price
-grain: one row is a sale, a rent-contract line, a valuation, or a monthly index point
+grain: one row is a DLD procedure, a rent-contract line, a registered project, developer, building, unit or parcel, a valuation, or a monthly index point
 joins:
 - domain: locations
   keys:
@@ -31,17 +33,37 @@ joins:
   - property_id
 pitfalls:
 - actual_worth is the registered transacted price, not an asking price.
-- rent_contracts are registered tenancies, not listing rents.
+- real_estate_dld_rent_contracts are registered tenancies, not listing rents.
 - A rent contract made, registered, or running from a period is dated by contract_start_date. contract_end_date
   is when the lease ends; use it only when the user asks about leases ending or expiring. Rent contracts in a
   recent period, such as this month, are filtered on contract_start_date even when that finds none.
-- Filter by procedure / group to separate sales from mortgages and other DLD procedures.
+- real_estate_dld_transactions mixes procedures: trans_group_en is Sales, Mortgages or Gifts. Filter trans_group_en = 'Sales' for sales; use procedure_name_en for finer procedures.
 - meter_sale_price is AED per sqm; do not mix with actual_worth totals.
 - A rent contract's annual_amount can cover several units (no_of_prop). Do not divide an average rent by an
   average sale price for a yield; the market domain holds community yields computed on a matched basis.
+- 'Time columns: sales and procedures use instance_date; rent contracts use contract_start_date with contract_start_date
+  <= CURRENT_DATE (a few contracts start in the future). Value columns: actual_worth for sales, annual_amount
+  for rents. Never put a sale-only column (actual_worth, meter_sale_price, trans_group_en) on real_estate_dld_rent_contracts,
+  and never read annual_amount from real_estate_dld_transactions.'
+- 'Joins: real_estate_dld_transactions and real_estate_dld_rent_contracts join real_estate_dld_areas ON
+  area_id (area name_en). real_estate_dld_projects joins real_estate_dld_developers ON developer_id. real_estate_dld_buildings
+  and real_estate_dld_units join real_estate_dld_projects ON project_id. real_estate_dld_transactions
+  joins real_estate_dld_projects ON project_number. A named place can also be filtered directly on area_name_en,
+  master_project_en, or project_name_en in the fact tables.'
+- 'Yield or ROI is not computed here. Do not divide an average rent by an average sale price: community
+  yields are in the market pack.'
+- Never join these DLD tables to public.properties (listings pack) or to the off-plan catalog (developers
+  pack). A registered fact and an asking price or marketing record are different worlds; answer each from
+  its own pack.
+- 'Not in this pack: what is for sale now (listings); community average prices, price indices, trends,
+  and yields (market); the off-plan project catalog, brochures, and payment plans (developers); what an
+  area is like (locations).'
 tables:
-- name: real_estate_transactions
-  description: Real estate transactions from Dubai Land Department
+- name: real_estate_dld_transactions
+  description: >-
+    DLD registered transactions, one row per procedure (sales, mortgages, gifts). Date column: instance_date.
+    Value column: actual_worth (AED). Sales are trans_group_en = 'Sales'. Join real_estate_dld_areas on area_id
+    for the area; projects by project_number = real_estate_dld_projects.project_number.
   segments: [property_sub_type_en, property_type_en, rooms_en]
   basis: [trans_group_en]
   primary_key:
@@ -262,84 +284,19 @@ tables:
     examples:
     - 1-102-2000-2
     - 1-102-2003-103
-  qualified_name: chatbot_ai.real_estate_transactions
-- name: real_estate_transaction_groups
-  description: Dubai Land Department real estate transaction group lookup
-  primary_key:
-  - group_id
-  columns:
-  - name: group_id
-    type: numeric(22,0)
-    meaning: Transaction group identifier
-    examples:
-    - 1
-    - 2
-  - name: name_ar
-    type: character varying(200)
-    meaning: Name in Arabic
-  - name: name_en
-    type: character varying(200)
-    meaning: Name in English
-    examples:
-    - Sales
-    - Mortgages
-  qualified_name: chatbot_ai.real_estate_transaction_groups
-- name: real_estate_transaction_procedures
-  description: Dubai Land Department real estate transaction procedure lookup
-  primary_key:
-  - group_id
-  - procedure_id
-  columns:
-  - name: group_id
-    type: numeric(22,0)
-    meaning: Transaction group identifier
-    examples:
-    - 1
-  - name: procedure_id
-    type: numeric(22,0)
-    meaning: Procedure identifier
-    examples:
-    - 4
-    - 11
-  - name: is_pre_registration
-    type: numeric(22,0)
-    meaning: Is pre registration
-    examples:
-    - 0
-    - 1
-  - name: name_ar
-    type: character varying(400)
-    meaning: Name in Arabic
-  - name: name_en
-    type: character varying(400)
-    meaning: Name in English
-    examples:
-    - Adding Land By Sell
-    - Sell
-  qualified_name: chatbot_ai.real_estate_transaction_procedures
-- name: real_estate_market_types
-  description: Dubai Land Department real estate market type lookup
-  primary_key:
-  - market_type_id
-  columns:
-  - name: market_type_id
-    type: numeric(22,0)
-    meaning: Market type identifier
-    examples:
-    - 1
-    - 2
-  - name: name_ar
-    type: character varying(200)
-    meaning: Name in Arabic
-  - name: name_en
-    type: character varying(200)
-    meaning: Name in English
-    examples:
-    - Primary Market
-    - Secondary Market
-  qualified_name: chatbot_ai.real_estate_market_types
-- name: rent_contracts
-  description: Dubai Land Department rent contracts
+  - name: lat
+    type: numeric(10,8)
+    meaning: Latitude of the property
+  - name: lng
+    type: numeric(11,8)
+    meaning: Longitude of the property
+  qualified_name: public.real_estate_dld_transactions
+- name: real_estate_dld_rent_contracts
+  description: >-
+    DLD Ejari rent contracts, one row per contract line. Date column: contract_start_date (a few rows start in the
+    future, so add contract_start_date <= CURRENT_DATE for a past or recent period). Value column: annual_amount
+    (AED per year). Join real_estate_dld_areas on area_id. This table has no sale columns (actual_worth,
+    meter_sale_price, trans_group_en).
   segments: [ejari_property_type_en, ejari_property_sub_type_en]
   primary_key:
   - contract_id
@@ -529,7 +486,424 @@ tables:
     meaning: Contract reg type identifier
     examples:
     - 1
-  qualified_name: chatbot_ai.rent_contracts
+  qualified_name: public.real_estate_dld_rent_contracts
+- name: real_estate_dld_areas
+  description: DLD area dimension (about 300 areas). Join facts on area_id; name_en is the English area
+    name.
+  primary_key:
+  - area_id
+  columns:
+  - name: area_id
+    type: bigint
+    meaning: DLD area identifier; transactions, rent contracts, projects, buildings and units carry it
+  - name: name_en
+    type: character varying(255)
+    meaning: Area name in English (DLD spelling, for example Marsa Dubai)
+  - name: municipality_number
+    type: bigint
+    meaning: Dubai Municipality area number
+  qualified_name: public.real_estate_dld_areas
+- name: real_estate_dld_projects
+  description: 'DLD project register: one row per registered project with developer, status, dates, and
+    completion. Join real_estate_dld_developers on developer_id; area on area_id. Not the off-plan marketing
+    catalog (developers pack: offplan_projects).'
+  primary_key:
+  - project_id
+  columns:
+  - name: project_id
+    type: bigint
+    meaning: DLD project identifier (buildings and units reference it)
+  - name: project_number
+    type: bigint
+    meaning: DLD project number (transactions.project_number matches it)
+  - name: project_name
+    type: character varying(200)
+    meaning: Project name as registered
+  - name: developer_id
+    type: bigint
+    meaning: Joins real_estate_dld_developers.developer_id
+  - name: developer_number
+    type: bigint
+  - name: developer_name
+    type: character varying(200)
+  - name: master_developer_id
+    type: bigint
+  - name: master_developer_number
+    type: bigint
+  - name: master_developer_name
+    type: character varying(200)
+  - name: project_start_date
+    type: date
+    meaning: Project start date
+  - name: project_end_date
+    type: date
+    meaning: Planned project end date
+  - name: project_type_id
+    type: bigint
+  - name: project_classification_id
+    type: bigint
+  - name: escrow_agent_id
+    type: bigint
+  - name: escrow_agent_name
+    type: character varying(200)
+  - name: project_status
+    type: character varying(200)
+    meaning: ACTIVE, FINISHED, NOT_STARTED, PENDING, CONDITIONAL_ACTIVATING or FRIEZED
+  - name: percent_completed
+    type: numeric(10,3)
+    meaning: Construction progress, percent
+  - name: completion_date
+    type: date
+    meaning: Completion date
+  - name: cancellation_date
+    type: date
+    meaning: Cancellation date when cancelled
+  - name: project_description_en
+    type: text
+  - name: property_id
+    type: bigint
+  - name: area_id
+    type: bigint
+    meaning: Joins real_estate_dld_areas.area_id
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Area name in English
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project name in English
+  - name: zoning_authority_id
+    type: bigint
+  - name: zoning_authority_en
+    type: text
+  - name: no_of_lands
+    type: character varying(50)
+  - name: no_of_buildings
+    type: character varying(50)
+    meaning: Registered building count (text)
+  - name: no_of_villas
+    type: character varying(50)
+    meaning: Registered villa count (text)
+  - name: no_of_units
+    type: character varying(50)
+    meaning: Registered unit count (text)
+  - name: project_name_en
+    type: character varying(255)
+    meaning: Project name in English
+  - name: developer_name_en
+    type: character varying(255)
+    meaning: Developer name in English
+  qualified_name: public.real_estate_dld_projects
+- name: real_estate_dld_developers
+  description: 'DLD developer register: licensed developers with license dates and contacts. Joins real_estate_dld_projects
+    on developer_id. Not the developer profile cards (developers pack: public.developers).'
+  primary_key:
+  - developer_id
+  columns:
+  - name: developer_id
+    type: bigint
+    meaning: DLD developer identifier
+  - name: participant_id
+    type: bigint
+  - name: developer_number
+    type: bigint
+  - name: developer_name_en
+    type: character varying(200)
+    meaning: Developer name in English
+  - name: registration_date
+    type: date
+    meaning: Registration date
+  - name: license_source_id
+    type: bigint
+  - name: license_source_en
+    type: character varying(200)
+  - name: license_type_id
+    type: bigint
+  - name: license_type_en
+    type: character varying(100)
+  - name: legal_status
+    type: bigint
+  - name: legal_status_en
+    type: character varying(100)
+  - name: webpage
+    type: character varying(100)
+  - name: phone
+    type: character varying(50)
+  - name: fax
+    type: character varying(50)
+  - name: license_number
+    type: character varying(50)
+    meaning: Trade license number
+  - name: license_issue_date
+    type: date
+    meaning: License issue date
+  - name: license_expiry_date
+    type: date
+    meaning: License expiry date
+  - name: chamber_of_commerce_no
+    type: character varying(20)
+  qualified_name: public.real_estate_dld_developers
+- name: real_estate_dld_buildings
+  description: EXTENDED. DLD registered buildings (one row per building property). Join real_estate_dld_projects
+    on project_id and real_estate_dld_areas on area_id. Registered stock, not listings.
+  primary_key:
+  - property_id
+  columns:
+  - name: property_id
+    type: bigint
+    meaning: DLD property identifier of the building
+  - name: bld_levels
+    type: bigint
+    meaning: Number of levels
+  - name: shops
+    type: bigint
+    meaning: Number of shops
+  - name: flats
+    type: bigint
+    meaning: Number of flats
+  - name: offices
+    type: bigint
+    meaning: Number of offices
+  - name: swimming_pools
+    type: integer
+    meaning: Number of swimming pools
+  - name: elevators
+    type: integer
+    meaning: Number of elevators
+  - name: actual_area
+    type: numeric(18,2)
+  - name: property_type_id
+    type: integer
+  - name: property_type_en
+    type: character varying(50)
+  - name: property_sub_type_id
+    type: integer
+  - name: property_sub_type_en
+    type: character varying(50)
+  - name: parent_property_id
+    type: bigint
+  - name: creation_date
+    type: timestamp(0) without time zone
+  - name: parcel_id
+    type: bigint
+  - name: is_free_hold
+    type: boolean
+  - name: area_id
+    type: bigint
+    meaning: Joins real_estate_dld_areas.area_id
+  - name: zone_id
+    type: integer
+  - name: area_name_en
+    type: character varying(200)
+  - name: land_number
+    type: character varying(100)
+  - name: land_sub_number
+    type: bigint
+  - name: building_number
+    type: character varying(100)
+  - name: common_area
+    type: numeric(20,4)
+  - name: actual_common_area
+    type: numeric(20,4)
+  - name: floors
+    type: character varying(40)
+  - name: rooms
+    type: bigint
+  - name: rooms_en
+    type: character varying(60)
+  - name: car_parks
+    type: bigint
+  - name: built_up_area
+    type: numeric(10,2)
+  - name: is_lease_hold
+    type: boolean
+  - name: is_registered
+    type: boolean
+  - name: pre_registration_number
+    type: character varying(100)
+  - name: master_project_id
+    type: bigint
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project name in English
+  - name: project_id
+    type: bigint
+    meaning: Joins real_estate_dld_projects.project_id
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project name in English
+  - name: land_type_id
+    type: integer
+  - name: land_type_en
+    type: character varying(50)
+  - name: building_name_en
+    type: character varying(255)
+    meaning: Building name in English
+  - name: lat
+    type: numeric(10,7)
+  - name: lng
+    type: numeric(10,7)
+  - name: slug_en
+    type: character varying(255)
+  - name: image_path
+    type: character varying(255)
+  - name: source
+    type: character varying(191)
+  qualified_name: public.real_estate_dld_buildings
+- name: real_estate_dld_units
+  description: EXTENDED. DLD registered units (one row per unit property, about 1.8 million). Join real_estate_dld_projects
+    on project_id. Registered stock, not listings and not sales.
+  primary_key:
+  - property_id
+  columns:
+  - name: property_id
+    type: bigint
+    meaning: DLD property identifier of the unit
+  - name: unit_number
+    type: character varying(100)
+    meaning: Unit number
+  - name: unit_balcony_area
+    type: numeric(10,2)
+  - name: unit_parking_number
+    type: character varying(1000)
+  - name: parking_allocation_type
+    type: bigint
+  - name: parking_allocation_type_en
+    type: character varying(100)
+  - name: common_area
+    type: numeric(20,4)
+  - name: actual_common_area
+    type: numeric(20,4)
+  - name: floor
+    type: character varying(40)
+  - name: rooms
+    type: bigint
+  - name: rooms_en
+    type: character varying(60)
+    meaning: Bedrooms label (for example 1 B/R, Studio)
+  - name: actual_area
+    type: numeric(18,2)
+    meaning: Registered area in square metres
+  - name: property_type_id
+    type: integer
+  - name: property_type_en
+    type: character varying(50)
+  - name: property_sub_type_id
+    type: integer
+  - name: property_sub_type_en
+    type: character varying(50)
+  - name: parent_property_id
+    type: bigint
+  - name: grandparent_property_id
+    type: bigint
+  - name: creation_date
+    type: timestamp(0) without time zone
+  - name: munc_zip_code
+    type: character varying(3)
+  - name: munc_number
+    type: character varying(10)
+  - name: parcel_id
+    type: bigint
+  - name: is_free_hold
+    type: boolean
+  - name: is_lease_hold
+    type: boolean
+  - name: is_registered
+    type: boolean
+  - name: pre_registration_number
+    type: character varying(100)
+  - name: master_project_id
+    type: bigint
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project name in English
+  - name: project_id
+    type: bigint
+    meaning: Joins real_estate_dld_projects.project_id
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project name in English
+  - name: land_type_id
+    type: bigint
+  - name: land_type_en
+    type: character varying(50)
+  - name: area_id
+    type: bigint
+    meaning: Joins real_estate_dld_areas.area_id
+  - name: zone_id
+    type: integer
+  - name: area_name_en
+    type: character varying(200)
+  - name: land_number
+    type: character varying(100)
+  - name: land_sub_number
+    type: bigint
+  - name: building_number
+    type: character varying(100)
+  qualified_name: public.real_estate_dld_units
+- name: real_estate_dld_land_registry
+  description: EXTENDED. DLD land parcels (plots). Join real_estate_dld_areas on area_id and real_estate_dld_projects
+    on project_id.
+  primary_key:
+  - property_id
+  columns:
+  - name: property_id
+    type: bigint
+    meaning: DLD property identifier of the parcel
+  - name: project_id
+    type: bigint
+    meaning: Joins real_estate_dld_projects.project_id
+  - name: project_name_en
+    type: character varying(200)
+  - name: master_project_id
+    type: bigint
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project name in English
+  - name: land_type_id
+    type: integer
+  - name: land_type_en
+    type: character varying(50)
+  - name: area_id
+    type: bigint
+    meaning: Joins real_estate_dld_areas.area_id
+  - name: area_name_en
+    type: character varying(200)
+    meaning: Area name in English
+  - name: zone_id
+    type: integer
+  - name: land_number
+    type: character varying(100)
+    meaning: Land number
+  - name: land_sub_number
+    type: bigint
+  - name: actual_area
+    type: numeric(18,2)
+    meaning: Parcel area in square metres
+  - name: property_type_id
+    type: integer
+  - name: property_type_en
+    type: character varying(50)
+  - name: property_sub_type_id
+    type: integer
+  - name: property_sub_type_en
+    type: character varying(50)
+  - name: munc_zip_code
+    type: character varying(3)
+  - name: munc_number
+    type: character varying(10)
+  - name: parcel_id
+    type: bigint
+  - name: is_free_hold
+    type: smallint
+  - name: is_registered
+    type: smallint
+  - name: pre_registration_number
+    type: character varying(100)
+  - name: separated_from
+    type: bigint
+  - name: separated_reference
+    type: bigint
+  qualified_name: public.real_estate_dld_land_registry
 - name: property_valuation_records
   description: Property valuation records from Dubai Land Department
   segments: [property_sub_type_en, property_type_en]
@@ -746,27 +1120,27 @@ tables:
 # so the SQL model filters on the exact value. same_place_as names a column on the same
 # row that holds the official name of the same place; that pairing is learned from the data.
 named_values:
-- table: chatbot_ai.real_estate_transactions
+- table: public.real_estate_dld_transactions
   column: area_name_en
   kind: area
-- table: chatbot_ai.real_estate_transactions
+- table: public.real_estate_dld_transactions
   column: master_project_en
   kind: master_project
   same_place_as: area_name_en
-- table: chatbot_ai.real_estate_transactions
+- table: public.real_estate_dld_transactions
   column: project_name_en
   kind: project
-- table: chatbot_ai.real_estate_transactions
+- table: public.real_estate_dld_transactions
   column: building_name_en
   kind: building
-- table: chatbot_ai.rent_contracts
+- table: public.real_estate_dld_rent_contracts
   column: area_name_en
   kind: area
-- table: chatbot_ai.rent_contracts
+- table: public.real_estate_dld_rent_contracts
   column: master_project_en
   kind: master_project
   same_place_as: area_name_en
-- table: chatbot_ai.rent_contracts
+- table: public.real_estate_dld_rent_contracts
   column: project_name_en
   kind: project
 - table: chatbot_ai.property_valuation_records
