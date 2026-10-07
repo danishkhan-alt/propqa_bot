@@ -32,9 +32,34 @@ pitfalls:
   ST_DistanceSphere to it. A station's name says nothing about where the place is; never find the nearest
   one by matching the place name against station names.
 - Parking zone names and community numbers may not match DLD area names exactly.
+- 'Cue to table: metro stations or lines -> metro_stations / metro_stations_gis; tram -> tram_stations,
+  tram_stations_gis; bus routes at a named stop -> bus_stops_gis joined to public_transportation_routes_stops;
+  bus coverage of a community -> bus_network_coverage; parking tariff -> parking_rates; parking spaces
+  in a community -> bus_network_coverage joined to number_of_parking_spaces_per_zone; ferry, abra, water
+  bus -> marine_stations or marine_stations_gis; Salik tariff -> salik_tariff, gate locations -> salik_tolling_gates_location.'
+- 'Bus join: bus_stops_gis.bus_stop_id (6-digit text) = public_transportation_routes_stops.stop_id. Never
+  use bus_stop_details.stop_id for this join; it is a different numbering. bus_routes has no stop id and
+  joins by name or stop_number only.'
+- 'Parking tariff: parking_rates.zone is a tariff band such as ''A'', ''B'', ''C'', ''D'', or ''Multi-Storey
+  Parking'', not an area name or community number. A community''s parking spaces come from bus_network_coverage
+  JOIN number_of_parking_spaces_per_zone ON community_num. A user''s zone letter for a tariff question
+  filters parking_rates.zone only.'
+- 'Marine join: marine_stations and marine_stations_gis join on station_id only (cast both sides to text).
+  marine_lines has no station id, so link it to stations by route_name or station names.'
+- 'Time: parking_rates and salik_tariff store year (integer) and month as a 3-letter name (''Jan'', ''Feb'');
+  there is no date column. The latest tariff is the highest year and then the latest month.'
+- No ridership, passenger-trip, fleet, or taxi-trip tables are loaded in the warehouse; for 'metro ridership
+  in March' say the data is not available here and offer stations, lines, parking, or tariffs instead.
+  Never answer ridership from station or line rows.
+- 'Display names: if a metro station row is named ''DAMAC Properties'', show it to the user as ''Sobha
+  Realty''; a station named ''Nakheel'' is shown as ''Al Fardan Exchange''. Filter on the stored name,
+  show the display name.'
+- 'Not in this pack: properties for rent or sale near a station, such as ''2-bed rent near metro'' (listings;
+  use public.properties with its nearby_locations and nearest_metro fields); what a community is like
+  (locations); schools, hospitals, malls (amenities).'
 tables:
 - name: metro_stations
-  description: RTA Dubai metro stations
+  description: "RTA Dubai metro stations by name and line (location_name_english, line_name, coordinates). Use for the station list and line; use metro_stations_gis when a community name is needed"
   primary_key:
   - location_id
   columns:
@@ -87,7 +112,7 @@ tables:
     - YYYY-MM-DD
   qualified_name: chatbot_ai.metro_stations
 - name: metro_stations_gis
-  description: Metro stations gis
+  description: "Metro stations with community_name and coordinates stored as text (cast latitude and longitude to numeric); use for the stations in a community and for nearest-station distance"
   primary_key:
   - id
   columns:
@@ -518,7 +543,7 @@ tables:
     - Tram Line
   qualified_name: chatbot_ai.dubai_tram_lines
 - name: bus_stops_gis
-  description: Bus stops gis
+  description: "Bus stops with a 6-digit bus_stop_id, stops_name_en, area_en, coordinates as text, and routes as a comma list. Join to public_transportation_routes_stops on bus_stop_id = stop_id to list the routes at a named stop"
   primary_key:
   - id
   columns:
@@ -619,7 +644,7 @@ tables:
     - Al Hamriya Street
   qualified_name: chatbot_ai.bus_stops_gis
 - name: bus_stop_details
-  description: RTA bus stop details
+  description: "Survey of bus stop furniture (timetable panel, MUPI, RTPI) with its own numeric stop_id that is NOT the 6-digit bus_stop_id; many rows per stop and report_date. Never join it to bus_stops_gis or public_transportation_routes_stops; answer shelter and facility questions from it alone"
   primary_key:
   - stop_id
   - route_name
@@ -691,7 +716,7 @@ tables:
     - DDD.dddddd
   qualified_name: chatbot_ai.bus_stop_details
 - name: bus_routes
-  description: RTA bus routes and stops
+  description: "Bus route stop lists by route_name, direction, stop_name, and stop_number. It has no stop id: join to other tables by stop name only if needed, prefer public_transportation_routes_stops for routes at a stop"
   primary_key:
   - route_name
   - direction
@@ -730,7 +755,7 @@ tables:
     - 8
   qualified_name: chatbot_ai.bus_routes
 - name: bus_network_coverage
-  description: RTA bus network coverage by community
+  description: "Bus network coverage by community: community_num, community_name, population, number of bus stops (nume_of_bus_stops), accessible_population, and geographic_coverage. community_num links to number_of_parking_spaces_per_zone"
   primary_key:
   - community_num
   columns:
@@ -788,116 +813,8 @@ tables:
     - 94
     - 98
   qualified_name: chatbot_ai.bus_network_coverage
-- name: public_transportation_stations
-  description: RTA public transportation stations
-  primary_key:
-  - transport_mode
-  - station_number
-  columns:
-  - name: transport_mode
-    type: character varying(50)
-    meaning: Transport mode
-  - name: station_name_english
-    type: character varying(200)
-    meaning: Station name english
-  - name: station_name_arabic
-    type: character varying(50)
-    meaning: Station name arabic
-  - name: station_number
-    type: character varying(50)
-    meaning: Station number
-  - name: station_location_type_english
-    type: character varying(50)
-    meaning: Station location type english
-  - name: station_location_type_arabic
-    type: character varying(50)
-    meaning: Station location type arabic
-  - name: current_service_status
-    type: character varying(50)
-    meaning: Current service status
-  - name: number_stops
-    type: numeric(3,0)
-    meaning: Number stops
-  - name: number_layby
-    type: numeric(3,0)
-    meaning: Number layby
-  - name: customer_facilities
-    type: character varying(200)
-    meaning: Customer facilities
-  - name: parking_facilities
-    type: character varying(50)
-    meaning: Parking facilities
-  - name: zone_id
-    type: character varying(50)
-    meaning: Zone identifier
-  - name: line_name
-    type: character varying(250)
-    meaning: Line name
-  - name: station_location_longitude
-    type: numeric(12,8)
-    meaning: Station location longitude
-    examples:
-    - DDD.dddddd
-  - name: station_location_latitude
-    type: numeric(12,8)
-    meaning: Station location latitude
-    examples:
-    - DD.dddddd
-  - name: station_opening_date
-    type: date
-    meaning: Station opening date
-    examples:
-    - YYYY-MM-DD
-  - name: station_closing_date
-    type: date
-    meaning: Station closing date
-    examples:
-    - YYYY-MM-DD
-  - name: station_starttime_saturday
-    type: time without time zone
-    meaning: Station starttime saturday
-  - name: station_endtime_saturday
-    type: time without time zone
-    meaning: Station endtime saturday
-  - name: station_starttime_sunday
-    type: time without time zone
-    meaning: Station starttime sunday
-  - name: station_endtime_sunday
-    type: time without time zone
-    meaning: Station endtime sunday
-  - name: station_starttime_monday
-    type: time without time zone
-    meaning: Station starttime monday
-  - name: station_endtime_monday
-    type: time without time zone
-    meaning: Station endtime monday
-  - name: station_starttime_tuesday
-    type: time without time zone
-    meaning: Station starttime tuesday
-  - name: station_endtime_tuesday
-    type: time without time zone
-    meaning: Station endtime tuesday
-  - name: station_starttime_wednesday
-    type: time without time zone
-    meaning: Station starttime wednesday
-  - name: station_endtime_wednesday
-    type: time without time zone
-    meaning: Station endtime wednesday
-  - name: station_starttime_thursday
-    type: time without time zone
-    meaning: Station starttime thursday
-  - name: station_endtime_thursday
-    type: time without time zone
-    meaning: Station endtime thursday
-  - name: station_starttime_friday
-    type: time without time zone
-    meaning: Station starttime friday
-  - name: station_endtime_friday
-    type: time without time zone
-    meaning: Station endtime friday
-  qualified_name: chatbot_ai.public_transportation_stations
 - name: public_transportation_routes_stops
-  description: RTA public transportation routes and stops
+  description: "Route and stop sequence for all modes with a string stop_id equal to bus_stops_gis.bus_stop_id (6-digit) plus route_name, stop_order_number, route_frequency, and stop coordinates. Use to list the routes that serve a bus stop"
   primary_key:
   - route_name
   - route_direction
@@ -1051,7 +968,7 @@ tables:
     meaning: Pattern
   qualified_name: chatbot_ai.public_transportation_routes_stops
 - name: marine_stations
-  description: RTA marine stations
+  description: "Marine transport stations with a numeric station_id, route_name, and coordinates. Its station_id equals marine_stations_gis.station_id after a ::text cast"
   primary_key:
   - station_id
   columns:
@@ -1097,7 +1014,7 @@ tables:
     - YYYY-MM-DD
   qualified_name: chatbot_ai.marine_stations
 - name: marine_stations_gis
-  description: Marine stations gis
+  description: "Marine stations with a text station_id, route_name, and coordinates as text. Join to marine_stations on station_id only (cast both to text)"
   primary_key:
   - id
   columns:
@@ -1168,7 +1085,7 @@ tables:
     - lng,lat
   qualified_name: chatbot_ai.marine_stations_gis
 - name: marine_lines
-  description: RTA marine transport lines
+  description: "Marine route list with route_name, start_station, end_station, and number_of_stops. It has no station id: link to stations through station names only"
   primary_key:
   - route_name
   - route_direction
@@ -1216,7 +1133,7 @@ tables:
     meaning: Number of stops
   qualified_name: chatbot_ai.marine_lines
 - name: number_of_parking_spaces_per_zone
-  description: RTA number of parking spaces per zone
+  description: "Count of public parking spaces (park_spaces_count) by community_num and community_name_en. Join to bus_network_coverage on community_num to get spaces for a community"
   primary_key:
   - parking_area
   - community_num
@@ -1338,7 +1255,7 @@ tables:
     - lng,lat
   qualified_name: chatbot_ai.parking_inspector_path
 - name: parking_rates
-  description: RTA parking rates
+  description: "Parking fare table by year, month (3-letter name), tariff zone, duration, and fare. zone is the tariff band ('A', 'B', 'C', 'D', 'Multi-Storey Parking'), not an area or community code; duration is in hours"
   primary_key:
   - year
   - month
