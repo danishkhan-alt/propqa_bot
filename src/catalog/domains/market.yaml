@@ -29,6 +29,26 @@ pitfalls:
 - The community metrics are one row per community for all property types together; they do not split by
   apartment, villa, or bedroom count.
 - Qualify public tables as public.<table>.
+- 'Cue to table: rental yield, ROI, or price growth for a community -> public.mv_community_dld_market_metrics.
+  A community average sale or rent price -> public.dld_community_avg_sale_price (filter avg_price_type).
+  Price per square foot or sale price over time in a community -> public.price_trend_buy_fact. Rent over
+  time in a community -> public.price_trend_rent_fact. Count or median of registered rents for an area
+  over time -> public.rental_contract_summary. City-wide movement, indices, and construction statistics
+  -> the chatbot_ai DSC tables.'
+- 'Time columns: price_trend_buy_fact and price_trend_rent_fact use month; rental_contract_summary uses
+  contract_start_date (with contract_start_date <= CURRENT_DATE); the DSC series use year plus quarter_number
+  or month_number.'
+- 'Quote a community KPI only when its quality flag is ''ok'': average_property_price_growth_pct needs
+  price_growth_data_quality = ''ok''; estimated_annual_rental_return_pct needs rental_yield_data_quality
+  = ''ok''; estimated_monthly_payment_aed needs monthly_payment_data_quality = ''ok''. When the flag is
+  insufficient_sample, say the sample is too small and do not quote the raw_* figure as the answer. Most
+  communities are insufficient_sample for at least one flag.'
+- Join the community metric tables to each other by lower(community_name) = lower(community_name); they
+  are one row per community. Do not join them to the DLD fact tables in the transactions pack.
+- 'Not in this pack: a single deal, sale volumes, or an average price over a named period (transactions);
+  what is on sale now (listings); what a community is like, who lives there, or its schools and amenities
+  (locations). ''What is Business Bay like'' is a locations question that may add this pack for the yield
+  and growth figures.'
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16
   description: Residential property price index base year 2019 2026 07 16
@@ -1075,6 +1095,57 @@ tables:
     type: numeric
     meaning: Annual rent in AED per square foot
   qualified_name: public.price_trend_rent_fact
+- name: rental_contract_summary
+  description: 'Materialized view of registered Ejari rent contracts, one row per contract line (about
+    9.8 million), with area, master project and project names. Use it to count or aggregate rents for
+    an area over time. Date column: contract_start_date (add contract_start_date <= CURRENT_DATE; a few
+    rows start in the future). Value column: annual_amount (AED per year). Aggregate it; never list rows.
+    A single contract or the full DLD rent record is in the transactions pack.'
+  primary_key: []
+  columns:
+  - name: contract_id
+    type: character varying(100)
+    meaning: Contract identifier
+  - name: contract_start_date
+    type: date
+    meaning: Contract start date; the date to filter a period on
+  - name: contract_end_date
+    type: date
+    meaning: Contract end date; only for leases ending or expiring
+  - name: contract_amount
+    type: numeric(18,2)
+    meaning: Contract amount in AED
+  - name: annual_amount
+    type: numeric(18,2)
+    meaning: Annual rent in AED; the value to average or take the median of
+  - name: actual_area
+    type: numeric(18,2)
+    meaning: Area in square metres
+  - name: line_number
+    type: integer
+    meaning: Contract line number
+  - name: contract_reg_type_en
+    type: character varying(50)
+    meaning: New or Renew
+    examples:
+    - New
+    - Renew
+  - name: property_type_en
+    type: character varying(50)
+    meaning: Property type
+  - name: property_sub_type_en
+    type: character varying(50)
+    meaning: Property sub type, such as Studio or 2 bed rooms
+  - name: project_name_en
+    type: character varying(200)
+    meaning: Project name in English
+  - name: master_project_en
+    type: character varying(250)
+    meaning: Master project (community) name in English
+  - name: area_name_en
+    type: character varying(200)
+    meaning: DLD area name in English
+  qualified_name: public.rental_contract_summary
 
 # Columns whose values are names users type. Grounding loads their stored spellings,
 # so the SQL model filters on the exact value. same_place_as names a column on the same
