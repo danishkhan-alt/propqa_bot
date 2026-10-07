@@ -176,7 +176,7 @@ cases:
 
 - id: bus_routes_ghubaiba
   message: which bus routes stop at Al Ghubaiba
-  sql_contains: [bus_stop_id, public_transportation_routes_stops]
+  sql_contains: [bus_stops_gis, routes]
 
 - id: parking_tariff_zone_b
   message: what is the parking tariff in zone B
