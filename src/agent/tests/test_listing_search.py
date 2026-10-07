@@ -78,7 +78,7 @@ def test_filters_become_parameters_and_price_reads_the_filled_column():
     query = build_listing_query(ListingSearch(filters=filters), limit=5, offset=10)
     assert "COALESCE(p.price_max, p.price_min) <= %(price_max)s" in query.sql
     assert "p.rooms >= %(bedrooms_min)s" in query.sql and "p.rooms <= %(bedrooms_max)s" in query.sql
-    assert query.params["category_ids"] == [50]
+    assert query.params["category_ids"] == [25]
     assert query.params["price_max"] == 1_500_000
     assert query.sql.index("ORDER BY COALESCE(p.price_max, p.price_min) ASC NULLS LAST")
     assert (query.params["limit"], query.params["offset"]) == (5, 10)
@@ -87,7 +87,7 @@ def test_filters_become_parameters_and_price_reads_the_filled_column():
 
 def test_types_map_to_catalog_categories_and_unknown_types_are_reported():
     ids, unknown = resolve_category_ids(["Villas", "hotel apartment", "Penthouse", "castle"])
-    assert ids == [3, 22, 33]
+    assert ids == [24, 20, 22]
     assert unknown == ["castle"]
 
 
@@ -141,7 +141,7 @@ def _index() -> GroundingIndex:
     ]
     places = build_place_directory(v2, [], ListingCountsByPlaceLink(), region="Dubai")
     stored = StoredValueIndex(
-        [StoredValue("chatbot_ai.real_estate_transactions", "area_name_en", "Marsa Dubai", "area", 10)],
+        [StoredValue("public.real_estate_dld_transactions", "area_name_en", "Marsa Dubai", "area", 10)],
         {},
         {"dubai marina": ["Marsa Dubai"]},
     )
@@ -226,7 +226,7 @@ def _sales_state() -> dict:
     return {
         "messages": [HumanMessage(content="How many sales in downtown in 2025?")],
         "domain_route": DomainRoute(domain_ids=["transactions"], join_ids=[], confidence=1, rationale="Sales."),
-        "catalog_context": "real_estate_transactions",
+        "catalog_context": "real_estate_dld_transactions",
         "grounding": Grounding(
             names=[
                 GroundedName(
@@ -234,7 +234,7 @@ def _sales_state() -> dict:
                     kind=MentionKind.PLACE,
                     stored=[
                         {
-                            "table": "chatbot_ai.real_estate_transactions",
+                            "table": "public.real_estate_dld_transactions",
                             "column": "area_name_en",
                             "value": "Burj Khalifa",
                             "kind": "area",
@@ -247,14 +247,14 @@ def _sales_state() -> dict:
 
 
 def test_resolved_names_reach_the_sql_model():
-    models = _DraftRecorder(["SELECT count(*) AS n FROM real_estate_transactions"])
+    models = _DraftRecorder(["SELECT count(*) AS n FROM real_estate_dld_transactions"])
     pages = [SqlPage(columns=["n"], rows=[{"n": 4091}], truncated=False, duration_ms=1)]
     run_sql_lookup(_sales_state(), models, lambda sql: pages[0])
     resolved = models.calls[0]["resolved_names"]
     assert resolved == [
         {
             "name": "downtown",
-            "stored_values": [{"column": "chatbot_ai.real_estate_transactions.area_name_en", "value": "Burj Khalifa"}],
+            "stored_values": [{"column": "public.real_estate_dld_transactions.area_name_en", "value": "Burj Khalifa"}],
         }
     ]
 
@@ -262,8 +262,8 @@ def test_resolved_names_reach_the_sql_model():
 def test_an_all_zero_aggregate_is_retried_with_the_reason():
     models = _DraftRecorder(
         [
-            "SELECT count(*) AS n FROM real_estate_transactions WHERE area_name_en ILIKE '%Downtown%'",
-            "SELECT count(*) AS n FROM real_estate_transactions WHERE area_name_en = 'Burj Khalifa'",
+            "SELECT count(*) AS n FROM real_estate_dld_transactions WHERE area_name_en ILIKE '%Downtown%'",
+            "SELECT count(*) AS n FROM real_estate_dld_transactions WHERE area_name_en = 'Burj Khalifa'",
         ]
     )
     pages = iter(
@@ -279,7 +279,7 @@ def test_an_all_zero_aggregate_is_retried_with_the_reason():
 
 
 def test_a_failed_retry_keeps_the_answer_it_was_retrying():
-    models = _DraftRecorder(["SELECT count(*) AS n FROM real_estate_transactions", "DELETE FROM x"])
+    models = _DraftRecorder(["SELECT count(*) AS n FROM real_estate_dld_transactions", "DELETE FROM x"])
     page = SqlPage(columns=["n"], rows=[{"n": 0}], truncated=False, duration_ms=1)
     update = run_sql_lookup(_sales_state(), models, lambda sql: page)
     assert update["sql_result"]["status"] == "rows"

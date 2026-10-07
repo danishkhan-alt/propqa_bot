@@ -124,7 +124,7 @@ class ScriptedModels:
 
     def draft_sql(self, **kwargs) -> SqlDraft:
         bare = [name for name in kwargs.get("allowed_tables") or [] if "." not in name]
-        table = bare[0] if bare else "real_estate_transactions"
+        table = bare[0] if bare else "real_estate_dld_transactions"
         return SqlDraft(sql=f"SELECT * FROM {table}", purpose="lookup")
 
     def answer_from_sql(self, **kwargs) -> str:
@@ -288,7 +288,7 @@ def test_catalog_yaml_is_loaded_for_the_turn_and_not_kept():
         ),
     }
     loaded = load_domain_catalog(state)
-    assert "real_estate_transactions" in loaded["catalog_context"]
+    assert "real_estate_dld_transactions" in loaded["catalog_context"]
     assert "# join: locations" in loaded["catalog_context"]
     final = record_search_and_clear_turn_state({**state, **loaded}, {"configurable": {"thread_id": "t-catalog"}})
     assert final["catalog_context"] == ""

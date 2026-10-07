@@ -13,7 +13,7 @@ from agent.sql.execute import SqlFailed
 from agent.sql.filter_values import check_filter_values, explain_missing_column
 from agent.sql.lookup import run_sql_lookup
 
-SALES = "chatbot_ai.real_estate_transactions"
+SALES = "public.real_estate_dld_transactions"
 AVERAGES = "public.dld_community_avg_sale_price"
 
 MAMZAR = Grounding(

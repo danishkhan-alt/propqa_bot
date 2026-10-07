@@ -41,7 +41,7 @@ class _Draft:
     def __init__(
         self,
         sql: str = (
-            "SELECT property_sub_type_en, avg(actual_worth) AS average_price FROM real_estate_transactions "
+            "SELECT property_sub_type_en, avg(actual_worth) AS average_price FROM real_estate_dld_transactions "
             "WHERE trans_group_en = 'Sales' GROUP BY property_sub_type_en"
         ),
     ) -> None:
@@ -78,50 +78,50 @@ def _state(message: str = "Average sale price in Dubai Marina") -> dict:
             confidence=1,
             rationale="Sold prices.",
         ),
-        "catalog_context": "real_estate_transactions",
+        "catalog_context": "real_estate_dld_transactions",
     }
 
 
 def test_prepare_select_caps_a_catalog_query_and_rejects_the_rest():
     allowed = tables_in_domains(["transactions", "locations"])
     sql = prepare_select(
-        "SELECT avg(actual_worth) AS average_price FROM real_estate_transactions",
+        "SELECT avg(actual_worth) AS average_price FROM real_estate_dld_transactions",
         allowed,
         row_cap=100,
     )
-    assert "real_estate_transactions" in sql.lower()
+    assert "real_estate_dld_transactions" in sql.lower()
     assert "limit 101" in sql.lower()
 
     kept = prepare_select(
-        "SELECT actual_worth FROM real_estate_transactions LIMIT 5",
+        "SELECT actual_worth FROM real_estate_dld_transactions LIMIT 5",
         allowed,
         row_cap=100,
     )
     assert "limit 5" in kept.lower()
 
     with pytest.raises(SqlRejected):
-        prepare_select("DELETE FROM real_estate_transactions", allowed, 100)
+        prepare_select("DELETE FROM real_estate_dld_transactions", allowed, 100)
     with pytest.raises(SqlRejected):
         prepare_select(
-            "SELECT * FROM real_estate_transactions; DROP TABLE real_estate_transactions",
+            "SELECT * FROM real_estate_dld_transactions; DROP TABLE real_estate_dld_transactions",
             allowed,
             100,
         )
     with pytest.raises(SqlRejected):
         prepare_select("SELECT * FROM secret_table", allowed, 100)
     with pytest.raises(SqlRejected):
-        prepare_select("SELECT * INTO copy FROM real_estate_transactions", allowed, 100)
+        prepare_select("SELECT * INTO copy FROM real_estate_dld_transactions", allowed, 100)
     with pytest.raises(SqlRejected):
         prepare_select("SELECT 1", allowed, 100)
     with pytest.raises(SqlRejected):
-        prepare_select("SELECT * FROM public.real_estate_transactions", allowed, 100)
+        prepare_select("SELECT * FROM chatbot_ai.real_estate_dld_transactions", allowed, 100)
 
     cte = prepare_select(
-        "WITH recent AS (SELECT actual_worth FROM real_estate_transactions) SELECT * FROM recent",
+        "WITH recent AS (SELECT actual_worth FROM real_estate_dld_transactions) SELECT * FROM recent",
         allowed,
         row_cap=10,
     )
-    assert "real_estate_transactions" in cte.lower()
+    assert "real_estate_dld_transactions" in cte.lower()
 
 
 def test_lookup_logs_every_returned_row_and_sends_them_to_langfuse(caplog):
@@ -171,10 +171,10 @@ def test_an_empty_result_is_retried_once():
 
 def test_applied_conditions_lists_every_filter_but_not_joins_or_presence_checks():
     sql = (
-        "WITH rents AS (SELECT area_name_en, avg(annual_amount) AS rent FROM chatbot_ai.rent_contracts "
+        "WITH rents AS (SELECT area_name_en, avg(annual_amount) AS rent FROM public.real_estate_dld_rent_contracts "
         "WHERE contract_start_date >= CURRENT_DATE - INTERVAL '2 years' AND annual_amount > 0 "
         "AND area_name_en IS NOT NULL GROUP BY 1 HAVING count(*) >= 20) "
-        "SELECT r.area_name_en FROM rents r JOIN chatbot_ai.real_estate_transactions t "
+        "SELECT r.area_name_en FROM rents r JOIN public.real_estate_dld_transactions t "
         "ON t.area_name_en = r.area_name_en WHERE t.area_name_en = r.area_name_en"
     )
 
@@ -188,7 +188,7 @@ def test_applied_conditions_lists_every_filter_but_not_joins_or_presence_checks(
 
 def test_an_empty_lookup_carries_its_filters_and_the_data_span():
     draft = _Draft(
-        "SELECT avg(annual_amount) AS rent FROM chatbot_ai.rent_contracts "
+        "SELECT avg(annual_amount) AS rent FROM public.real_estate_dld_rent_contracts "
         "WHERE contract_start_date >= CURRENT_DATE - INTERVAL '2 years'"
     )
     runner = _Rows([SqlPage(columns=[], rows=[], truncated=False, duration_ms=1)])
@@ -305,7 +305,7 @@ class _GraphModels:
 
     def draft_sql(self, **kwargs) -> SqlDraft:
         return SqlDraft(
-            sql="SELECT avg(actual_worth) AS average_price FROM real_estate_transactions",
+            sql="SELECT avg(actual_worth) AS average_price FROM real_estate_dld_transactions",
             purpose="average sale price",
         )
 
@@ -404,13 +404,13 @@ def test_a_dld_property_id_is_not_a_listing():
 def test_an_average_must_not_mix_kinds_of_property():
     rules = segment_rules(["transactions", "market"])
     mixed = blended_average_reasons(
-        "SELECT area_name_en, avg(actual_worth) FROM real_estate_transactions WHERE trans_group_en = 'Sales' "
+        "SELECT area_name_en, avg(actual_worth) FROM real_estate_dld_transactions WHERE trans_group_en = 'Sales' "
         "GROUP BY area_name_en",
         rules,
     )
     assert len(mixed) == 1 and "property_sub_type_en" in mixed[0]
     assert "trans_group_en" in blended_average_reasons(
-        "SELECT property_sub_type_en, avg(actual_worth) FROM real_estate_transactions GROUP BY 1", rules
+        "SELECT property_sub_type_en, avg(actual_worth) FROM real_estate_dld_transactions GROUP BY 1", rules
     )[0]
     # A presence check is not a split; filtering to the kind the user named is.
     assert blended_average_reasons(
@@ -430,7 +430,7 @@ def test_an_average_must_not_mix_kinds_of_property():
         "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) FROM public.price_trend_buy_fact", rules
     )
     # Counts and totals are not averages.
-    assert not blended_average_reasons("SELECT count(*) FROM real_estate_transactions", rules)
+    assert not blended_average_reasons("SELECT count(*) FROM real_estate_dld_transactions", rules)
 
 
 def test_every_declared_segment_is_a_column_of_its_table_or_a_join():
@@ -441,7 +441,7 @@ def test_every_declared_segment_is_a_column_of_its_table_or_a_join():
 
 
 def test_a_blended_draft_is_redrafted_once_then_answered_with_a_note():
-    blended = "SELECT avg(actual_worth) AS average_price FROM real_estate_transactions"
+    blended = "SELECT avg(actual_worth) AS average_price FROM real_estate_dld_transactions"
     page = SqlPage(columns=["average_price"], rows=[{"average_price": "1650000"}], truncated=False, duration_ms=1)
     runner = _Rows([page])
     draft = _Draft(blended)
@@ -493,7 +493,22 @@ def test_a_recipe_binds_only_the_names_it_takes():
 
 def test_every_recipe_passes_the_guard_and_splits_kinds_of_property():
     for item in load_recipes_by_id().values():
-        grounding = _grounded("Dubai Marina") if item.params else Grounding()
+        grounding = (
+            Grounding(
+                names=[
+                    GroundedName(
+                        text="Dubai Marina",
+                        kind="place",
+                        stored=[
+                            StoredMatch(table=param.table, column="name", value="Dubai Marina", kind=param.kind)
+                            for param in item.params
+                        ],
+                    )
+                ]
+            )
+            if item.params
+            else Grounding()
+        )
         bound = bind_recipe(item, grounding)
         guarded = prepare_select(bound.sql, tables_in_domains(list(item.domains)), 100)
         assert blended_average_reasons(guarded, segment_rules(list(item.domains))) == [], item.id

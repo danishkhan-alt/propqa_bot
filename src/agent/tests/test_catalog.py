@@ -50,13 +50,13 @@ def test_a_loaded_domain_is_a_copy_the_caller_may_change():
 
 def test_the_sql_model_sees_how_far_a_date_column_reaches():
     prompt = render_domain_prompt(load_domain("transactions"))
-    columns = _columns(prompt, "chatbot_ai.rent_contracts")
+    columns = _columns(prompt, "public.real_estate_dld_rent_contracts")
     first, _, last = columns["contract_start_date"]["covers"].partition(" to ")
     assert first < last
 
 
 def test_date_coverage_names_the_data_not_the_table():
-    spans = get_table_date_coverage({"CHATBOT_AI.rent_contracts"})
+    spans = get_table_date_coverage({"PUBLIC.real_estate_dld_rent_contracts"})
     assert spans
     assert all("rent_contracts" not in span["table"] for span in spans)
     assert get_table_date_coverage({"no.such_table"}) == []
