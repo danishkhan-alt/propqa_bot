@@ -844,22 +844,43 @@ public.mv_community_dld_market_metrics:
     - Jebel Ali
     - The Springs
   average_property_price_growth_pct:
-    filled: 0.372
-  estimated_annual_rental_return_pct:
-    filled: 0.311
-  estimated_monthly_payment_aed:
-    filled: 0.311
-  median_sale_price_aed:
     filled: 0.377
+  estimated_annual_rental_return_pct:
+    filled: 0.317
+  estimated_monthly_payment_aed:
+    filled: 0.322
+  price_growth_data_quality:
+    filled: 1.0
+    values:
+    - insufficient_sample
+    - ok
+  rental_yield_data_quality:
+    filled: 1.0
+    values:
+    - insufficient_sample
+    - ok
+  monthly_payment_data_quality:
+    filled: 1.0
+    values:
+    - insufficient_sample
+    - ok
+  raw_price_growth_pct:
+    filled: 0.377
+  raw_rental_yield_pct:
+    filled: 0.317
+  prior_sales_n:
+    filled: 1.0
+  median_sale_price_aed:
+    filled: 0.383
   median_annual_rent_aed:
-    filled: 0.53
+    filled: 0.541
   recent_sales_n:
     filled: 1.0
   rental_contracts_n:
     filled: 1.0
   metrics_as_of_date:
     filled: 1.0
-    covers: 2026-09-23 to 2026-09-23
+    covers: 2026-10-07 to 2026-10-07
 public.mv_community_landing_page_stats:
   community_name:
     filled: 1.0

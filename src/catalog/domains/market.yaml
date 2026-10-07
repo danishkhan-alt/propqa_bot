@@ -987,6 +987,33 @@ tables:
   - name: estimated_monthly_payment_aed
     type: bigint
     meaning: Estimated monthly payment in AED
+  - name: price_growth_data_quality
+    type: text
+    meaning: Quality flag for average_property_price_growth_pct; quote the growth only when it is 'ok'
+    examples:
+    - ok
+    - insufficient_sample
+  - name: rental_yield_data_quality
+    type: text
+    meaning: Quality flag for estimated_annual_rental_return_pct; quote the yield only when it is 'ok'
+    examples:
+    - ok
+    - insufficient_sample
+  - name: monthly_payment_data_quality
+    type: text
+    meaning: Quality flag for estimated_monthly_payment_aed; quote it only when it is 'ok'
+    examples:
+    - ok
+    - insufficient_sample
+  - name: raw_price_growth_pct
+    type: numeric
+    meaning: Unqualified price growth percent; never quote it as the answer when the quality flag is insufficient_sample
+  - name: raw_rental_yield_pct
+    type: numeric
+    meaning: Unqualified gross rental yield percent; never quote it as the answer when the quality flag is insufficient_sample
+  - name: prior_sales_n
+    type: bigint
+    meaning: Number of sales in the period before the recent one
   - name: median_sale_price_aed
     type: numeric
     meaning: Median sale price in AED

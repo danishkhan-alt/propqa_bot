@@ -152,3 +152,48 @@ recipes:
     GROUP BY bedroom_count
     HAVING COUNT(*) FILTER (WHERE recent) >= 10
     ORDER BY bedroom_count
+
+- id: community_overview
+  domains: [locations, market]
+  when: >-
+    "What is X like", "tell me about X", or "is X a good place to live" for ONE named community
+    (Business Bay, JVC, Dubai Marina), with no property type, bedroom count, school, or
+    period asked about. Not for registered sale volumes or a named period (transactions), not
+    for what is for sale now (listings), and not for a question about one subject only such as
+    schools or metro.
+  purpose: >-
+    One community profile: area, property types, readiness, who lives there, how many schools,
+    parks, healthcare, and restaurants it lists, listings and registered activity, and the
+    gross rental yield and price growth when their quality flags are ok.
+  params:
+    community: {table: chatbot_ai.area_insights_communities, kind: community}
+  sql: |
+    SELECT
+      a.title_en AS community,
+      a.browse_by_area_of_dubai AS area_of_dubai,
+      a.community_property_types AS property_types,
+      a.readiness_status,
+      a.people_living,
+      a.community_amenities,
+      CASE WHEN jsonb_typeof(a.schools) = 'array' THEN jsonb_array_length(a.schools) END AS schools_listed,
+      CASE WHEN jsonb_typeof(a.parks) = 'array' THEN jsonb_array_length(a.parks) END AS parks_listed,
+      CASE WHEN jsonb_typeof(a.healthcare) = 'array' THEN jsonb_array_length(a.healthcare) END AS healthcare_listed,
+      CASE WHEN jsonb_typeof(a.restaurants) = 'array' THEN jsonb_array_length(a.restaurants) END AS restaurants_listed,
+      CASE WHEN jsonb_typeof(a.metro) = 'array' THEN jsonb_array_length(a.metro) END AS metro_listed,
+      l.total_listings AS listings_on_market_now,
+      l.properties_sold AS registered_sales_all_time,
+      l.rental_contracts_signed AS registered_rent_contracts_all_time,
+      l.top_nationality_name,
+      l.top_nationality_pct,
+      CASE WHEN d.rental_yield_data_quality = 'ok' THEN d.estimated_annual_rental_return_pct END AS gross_rental_yield_pct,
+      CASE WHEN d.price_growth_data_quality = 'ok' THEN d.average_property_price_growth_pct END AS price_growth_pct,
+      d.median_sale_price_aed,
+      d.median_annual_rent_aed,
+      d.recent_sales_n,
+      d.rental_contracts_n,
+      d.metrics_as_of_date AS as_of
+    FROM chatbot_ai.area_insights_communities AS a
+    LEFT JOIN public.mv_community_landing_metrics AS l ON LOWER(l.community_name) = LOWER(a.title_en)
+    LEFT JOIN public.mv_community_dld_market_metrics AS d ON LOWER(d.community_name) = LOWER(a.title_en)
+    WHERE a.title_en = ANY(:community)
+    LIMIT 1
