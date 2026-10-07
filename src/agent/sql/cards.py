@@ -50,7 +50,7 @@ SELECT
     category.name_en AS type,
     NULLIF(TRIM(agency.company_name), '') AS agency_company,
     NULLIF(TRIM(agency.name_en), '') AS agency_user_name,
-    NULLIF(TRIM(CONCAT_WS(' ', agent.name_en, agent.surname_en)), '') AS agent_name,
+    NULLIF(TRIM(agent.name_en), '') AS agent_name,
     agency_logo.url AS agency_logo_url,
     agent_photo.url AS agent_image_url,
     photos.urls AS images

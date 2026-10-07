@@ -22,7 +22,7 @@ SELECT
     NULLIF(TRIM(agency.email), '') AS agency_email,
     agency.verification_status AS agency_verification,
     agent.id AS agent_id,
-    NULLIF(TRIM(CONCAT_WS(' ', agent.name_en, agent.surname_en)), '') AS agent_name,
+    NULLIF(TRIM(agent.name_en), '') AS agent_name,
     NULLIF(TRIM(agent.phone), '') AS agent_phone,
     NULLIF(TRIM(agent.email), '') AS agent_email,
     agent.verification_status AS agent_verification
