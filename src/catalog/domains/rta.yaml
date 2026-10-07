@@ -40,10 +40,7 @@ pitfalls:
 - 'Bus join: bus_stops_gis.bus_stop_id (6-digit text) = public_transportation_routes_stops.stop_id. Never
   use bus_stop_details.stop_id for this join; it is a different numbering. bus_routes has no stop id and
   joins by name or stop_number only.'
-- 'Parking tariff: parking_rates.zone is a tariff band such as ''A'', ''B'', ''C'', ''D'', or ''Multi-Storey
-  Parking'', not an area name or community number. A community''s parking spaces come from bus_network_coverage
-  JOIN number_of_parking_spaces_per_zone ON community_num. A user''s zone letter for a tariff question
-  filters parking_rates.zone only.'
+- "Parking tariff: parking_rates.zone is a tariff band such as 'A', 'B', 'C', 'D', or 'Multi-Storey Parking', not an area name or community number. A community's parking spaces come from bus_network_coverage JOIN number_of_parking_spaces_per_zone ON community_num. A user's zone letter for a tariff question filters parking_rates.zone only. Only about a third of bus_network_coverage communities have a parking-spaces row; when the join finds none, say the parking-space count is not published for that community."
 - 'Marine join: marine_stations and marine_stations_gis join on station_id only (cast both sides to text).
   marine_lines has no station id, so link it to stations by route_name or station names.'
 - 'Time: parking_rates and salik_tariff store year (integer) and month as a 3-letter name (''Jan'', ''Feb'');
@@ -51,9 +48,7 @@ pitfalls:
 - No ridership, passenger-trip, fleet, or taxi-trip tables are loaded in the warehouse; for 'metro ridership
   in March' say the data is not available here and offer stations, lines, parking, or tariffs instead.
   Never answer ridership from station or line rows.
-- 'Display names: if a metro station row is named ''DAMAC Properties'', show it to the user as ''Sobha
-  Realty''; a station named ''Nakheel'' is shown as ''Al Fardan Exchange''. Filter on the stored name,
-  show the display name.'
+- "Display names: metro_stations.location_name_english stores 'DAMAC Properties Metro Station' and 'Nakheel Metro Station'; show them as 'Sobha Realty Metro Station' and 'Al Fardan Exchange Metro Station'. metro_stations_gis.station_name_en already stores 'SOBHA REALTY' and 'Al Fardan Exchange'. Filter on the stored name, show the display name."
 - 'Not in this pack: properties for rent or sale near a station, such as ''2-bed rent near metro'' (listings;
   use public.properties with its nearby_locations and nearest_metro fields); what a community is like
   (locations); schools, hospitals, malls (amenities).'
