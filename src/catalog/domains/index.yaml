@@ -5,13 +5,12 @@ domains:
 - id: listings
   file: listings.yaml
   name: Properties, units, and buildings
-  description: Live asking-price listings in public.properties, with their amenities, views, and
-    nearby places, plus DLD plots, freehold units, and buildings. Use this for beds,
-    price, what is for sale or rent (including a 2-bed rent near a metro), and for a
-    named building's profile (price per sqft, rent, yield, service charge, units) or a
+  description: Live asking-price listings in public.properties, plus DLD plots, freehold units, and
+    buildings. Use this for beds, price, and what is for sale or rent, and for a named
+    building's profile (price per sqft, rent, yield, service charge, units) or a
     comparison of buildings.
   not_for: Sold prices, sale volumes, and registered rents (transactions). Community average prices,
-    rents, and yields (market). Where a station or stop is (rta).
+    rents, and yields (market).
   synonyms:
   - listings
   - units
@@ -29,13 +28,11 @@ domains:
 - id: transactions
   file: transactions.yaml
   name: Sales, rents, and valuations
-  description: DLD registered sales and rent contracts (public.real_estate_dld_*) with their areas,
-    projects, developers, buildings, units, and land registry, plus official valuations
-    and the residential sale index. Use for transacted prices, volumes, registered rents
-    in an area and period, and who sold the most.
-  not_for: What is on the market now (listings). Community average rent or yield, how rents moved,
-    or a price index (market). What an area is like (locations). Off-plan brochures, starting
-    prices, and handover (developers).
+  description: DLD sales, Ejari-style rent contracts, official valuations, and the residential sale
+    index. Use for transacted prices, volumes, and rents.
+  not_for: What is on the market now (listings). Rents in a community or how rents moved over time
+    (market). Rental yield or ROI (market). City-wide market direction or a price index
+    (market).
   synonyms:
   - sales
   - sold
@@ -51,10 +48,9 @@ domains:
 - id: locations
   file: locations.yaml
   name: Communities, areas, and geo hierarchy
-  description: Dubai communities, subcommunities, the public location tree, community overviews and
-    landing metrics, places, points of interest, roads, Makani entrances, and population.
-    This is the usual join bridge for other domains. Use for what an area is like
-    together with market.
+  description: Dubai communities, subcommunities, the public location tree, community overviews,
+    community facility JSON, Makani entrances, and population. This is the usual join
+    bridge for other domains. Use for what an area is like together with market.
   not_for: Being the place another subject is filtered on. Only when the user asks where something
     is, which community it belongs to, or facts about the area itself such as population.
     Registered sales or rents in an area (transactions).
@@ -93,8 +89,7 @@ domains:
   name: Schools, nurseries, and universities
   description: KHDA private schools, ratings, fees, nearby schools per community, early-childhood centres,
     and universities. Use for education near a property.
-  not_for: Parks, beaches, and hospitals (amenities). Metro and commute (rta). Properties for sale
-    or rent near a school (listings).
+  not_for: Parks, beaches, and hospitals (amenities). Metro and commute (rta).
   synonyms:
   - school
   - KHDA
@@ -110,8 +105,7 @@ domains:
   description: Metro, tram, bus, marine stations, parking tariffs and spaces, Salik gates, cycle
     tracks, and major roads. Use for commute and parking around a community. Ridership
     and fleet data are not loaded.
-  not_for: Schools (schools). Parks, beaches, and hospitals (amenities). Properties for sale or rent
-    near a station (listings).
+  not_for: Schools (schools). Parks, beaches, and hospitals (amenities).
   synonyms:
   - metro
   - tram
@@ -128,8 +122,7 @@ domains:
   name: Parks, healthcare, and lifestyle
   description: Parks, healthcare, things-to-do, and named building or project amenities such as pool and
     gym. Use for lifestyle and facilities, not school or metro lookups.
-  not_for: Schools and nurseries (schools). Metro, parking, and roads (rta). Listings that have a
-    pool or gym (listings).
+  not_for: Schools and nurseries (schools). Metro, parking, and roads (rta).
   synonyms:
   - park
   - beach
@@ -172,8 +165,8 @@ domains:
   file: market.yaml
   name: Price indices and construction statistics
   description: Official DSC price indices, construction-cost series, community average sale and rent
-    prices, registered-rent summaries, and community rental yields. Use for market
-    movement and yield or ROI by area, not a single deal.
+    prices, and community rental yields. Use for market movement and yield or ROI by
+    area, not a single deal.
   not_for: A single deal, sale volumes, or an average sale price over a named period (transactions).
     Registered rents in a named area and period (transactions). What is on the market now
     (listings).

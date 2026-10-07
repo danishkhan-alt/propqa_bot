@@ -45,7 +45,7 @@ pitfalls:
 - Never join public.offplan_projects to the DLD tables (real_estate_dld_* in the transactions pack, real_estate_projects
   here) or to public.properties. Catalog, DLD registrations and asking-price listings are separate sources;
   answer each question from one of them.
-- 'Not in this pack: which developer sold the most units, or registered sale volumes and prices (transactions);
+- 'Not in this pack: registered sales by developer in a named period, or registered sale volumes and prices (transactions; the all-time units_sold figure of a developer profile stays here in public.developers);
   units for sale in a project with beds and asking prices (listings); how far a project is from a metro
   station (rta); what the area is like (locations); service charges (regulations).'
 tables:

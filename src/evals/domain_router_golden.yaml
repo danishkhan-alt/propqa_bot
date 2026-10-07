@@ -254,3 +254,52 @@ cases:
   domains: [rta]
   joins: [locations]
   recipe: null
+
+# Table-targeting cases from the legacy design: cue to pack, handoffs, join bans.
+- id: community_overview_like
+  message: What's Business Bay like?
+  domains: [locations, market]
+  recipe: community_overview
+
+- id: offplan_brochure
+  message: Send me the brochure for Binghatti Lavender
+  domains: [developers]
+  recipe: null
+
+- id: offplan_payment_plan
+  message: What is the payment plan for off-plan projects in Dubai Creek Harbour?
+  domains: [developers]
+  joins: [locations]
+  recipe: null
+
+- id: metro_ridership_not_loaded
+  message: How many people used the metro in March?
+  domains: [rta]
+  recipe: null
+
+- id: parking_tariff_zone
+  message: What is the parking tariff in zone B?
+  domains: [rta]
+  recipe: null
+
+- id: bus_routes_at_stop
+  message: Which bus routes stop at Al Ghubaiba?
+  domains: [rta]
+  recipe: null
+
+- id: registered_rents_last_month
+  message: How many rent contracts were registered in JVC last month?
+  domains: [transactions]
+  joins: [locations]
+  recipe: null
+
+- id: community_yield
+  message: What is the rental yield in JVC?
+  domains: [market]
+  joins: [locations]
+  recipe: null
+
+- id: developer_sales_volume
+  message: Which developer had the most registered sales in 2025?
+  domains: [transactions]
+  recipe: null

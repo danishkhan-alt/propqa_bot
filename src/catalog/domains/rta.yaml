@@ -47,7 +47,7 @@ pitfalls:
 - 'Marine join: marine_stations and marine_stations_gis join on station_id only (cast both sides to text).
   marine_lines has no station id, so link it to stations by route_name or station names.'
 - 'Time: parking_rates and salik_tariff store year (integer) and month as a 3-letter name (''Jan'', ''Feb'');
-  there is no date column. The latest tariff is the highest year and then the latest month.'
+  there is no date column. The latest tariff is the highest year and then the latest month; month is text, so order it with EXTRACT(MONTH FROM TO_DATE(month, ''Mon'')), never alphabetically.'
 - No ridership, passenger-trip, fleet, or taxi-trip tables are loaded in the warehouse; for 'metro ridership
   in March' say the data is not available here and offer stations, lines, parking, or tariffs instead.
   Never answer ridership from station or line rows.

@@ -97,10 +97,10 @@ cases:
     tolerance: 0.02
     sql:
     - >-
-      SELECT avg(actual_worth) FROM chatbot_ai.real_estate_transactions
+      SELECT avg(actual_worth) FROM public.real_estate_dld_transactions
       WHERE area_name_en = 'Marsa Dubai' AND trans_group_en = 'Sales' AND instance_date >= CURRENT_DATE - INTERVAL '12 months'
     - >-
-      SELECT avg(actual_worth) FROM chatbot_ai.real_estate_transactions
+      SELECT avg(actual_worth) FROM public.real_estate_dld_transactions
       WHERE master_project_en = 'Dubai Marina' AND trans_group_en = 'Sales' AND instance_date >= CURRENT_DATE - INTERVAL '12 months'
 
 - id: downtown_sales_count
@@ -109,10 +109,10 @@ cases:
     tolerance: 0
     sql:
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE area_name_en = 'Burj Khalifa' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2025
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE master_project_en = 'DownTown Dubai' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2025
 
 - id: jvc_sales_count
@@ -121,10 +121,10 @@ cases:
     tolerance: 0
     sql:
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE master_project_en = 'Jumeirah Village Circle' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE area_name_en = 'Al Barsha South Fourth' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
 
 - id: dubai_hills_sales_count
@@ -133,10 +133,10 @@ cases:
     tolerance: 0
     sql:
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE area_name_en = 'Hadaeq Sheikh Mohammed Bin Rashid' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
     - >-
-      SELECT count(*) FROM chatbot_ai.real_estate_transactions
+      SELECT count(*) FROM public.real_estate_dld_transactions
       WHERE master_project_en IN ('DUBAI HILLS', 'Dubai Hills Estate') AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
 
 - id: jlt_one_bed_rent
@@ -145,7 +145,7 @@ cases:
     tolerance: 0.02
     sql:
     - >-
-      SELECT avg(annual_amount) FROM chatbot_ai.rent_contracts
+      SELECT avg(annual_amount) FROM public.real_estate_dld_rent_contracts
       WHERE area_name_en = 'Al Thanyah Fifth' AND ejari_property_sub_type_en = '1bed room+Hall'
 
 - id: palm_service_charges
@@ -163,3 +163,29 @@ cases:
 - id: emaar_offplan_2027
   message: off-plan projects by Emaar with handover in 2027
   rows_contain: [Emaar]
+
+# Table-targeting cases: the SQL must reach the right table or carry the right join key.
+- id: community_overview_business_bay
+  message: What's Business Bay like?
+  sql_contains: [area_insights_communities, mv_community_landing_metrics]
+  rows_contain: [Business Bay]
+
+- id: registered_rents_jvc
+  message: how many rent contracts were registered in JVC in 2024
+  sql_contains: [real_estate_dld_rent_contracts]
+
+- id: bus_routes_ghubaiba
+  message: which bus routes stop at Al Ghubaiba
+  sql_contains: [bus_stop_id, public_transportation_routes_stops]
+
+- id: parking_tariff_zone_b
+  message: what is the parking tariff in zone B
+  sql_contains: [parking_rates]
+
+- id: offplan_brochure_files
+  message: brochure for Binghatti Lavender
+  sql_contains: [offplan_files, fileable_type]
+
+- id: community_yield_quality
+  message: what is the rental yield in Business Bay
+  sql_contains: [rental_yield_data_quality]

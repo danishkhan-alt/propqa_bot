@@ -58,6 +58,9 @@ pitfalls:
 - 'Not in this pack: what is for sale now (listings); community average prices, price indices, trends,
   and yields (market); the off-plan project catalog, brochures, and payment plans (developers); what an
   area is like (locations).'
+- 'Place filter: a community is either a DLD area (area_name_en, for example ''Burj Khalifa'') or a master
+  project (master_project_en, for example ''DownTown Dubai''). They overlap but count different rows.
+  Filter on one of them, never OR them together; when both are plausible say which one the figure uses.'
 tables:
 - name: real_estate_dld_transactions
   description: >-

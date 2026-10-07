@@ -49,6 +49,10 @@ pitfalls:
   what is on sale now (listings); what a community is like, who lives there, or its schools and amenities
   (locations). ''What is Business Bay like'' is a locations question that may add this pack for the yield
   and growth figures.'
+- 'Spellings: price_trend_buy_fact and price_trend_rent_fact spell master communities the same way, for
+  example ''Jumeirah Lakes Towers'' (with Lakes), not ''Jumeirah Lake Towers''. Filter master_project_en
+  on the stored value the grounding supplies. Rent sub types are stored as ''Studio'', ''1bed room+Hall'',
+  ''2 bed rooms+hall''.'
 tables:
 - name: residential_property_price_index_base_year_2019_2026_07_16
   description: Residential property price index base year 2019 2026 07 16
@@ -1185,6 +1189,9 @@ named_values:
   column: community_name
   kind: community
 - table: public.price_trend_buy_fact
+  column: master_project_en
+  kind: master_project
+- table: public.price_trend_rent_fact
   column: master_project_en
   kind: master_project
 - table: public.price_trend_buy_fact
