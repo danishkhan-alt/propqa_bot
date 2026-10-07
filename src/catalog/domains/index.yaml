@@ -83,7 +83,7 @@ domains:
   - contractor
   - consultant
   - escrow
-  table_count: 17
+  table_count: 18
 - id: schools
   file: schools.yaml
   name: Schools, nurseries, and universities

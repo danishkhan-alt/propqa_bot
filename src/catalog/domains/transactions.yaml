@@ -509,7 +509,7 @@ tables:
 - name: real_estate_dld_projects
   description: 'DLD project register: one row per registered project with developer, status, dates, and
     completion. Join real_estate_dld_developers on developer_id; area on area_id. Not the off-plan marketing
-    catalog (developers pack: offplan_projects).'
+    catalog (developers pack: offplan_projects_new).'
   primary_key:
   - project_id
   columns:

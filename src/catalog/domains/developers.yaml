@@ -1,9 +1,9 @@
 id: developers
 name: Developers, projects, and construction
 schema: chatbot_ai
-description: Off-plan projects and their brochures (public.offplan_projects, offplan_files), master and
-  DLD-registered projects, developer profiles, consultants, contractors, building permits, and MRHE housing
-  projects. Use for handover, completion, price from, payment plans, brochures, and who is building what.
+description: Off-plan projects with brochures (public.offplan_projects_new), master and DLD-registered
+  projects, developer profiles, consultants, contractors, building permits, and MRHE housing projects.
+  Use for handover, completion, price from, payment plans, brochures, and who is building what.
 synonyms:
 - developer
 - project
@@ -30,21 +30,13 @@ pitfalls:
 - real_estate_projects is the DLD project register; projects_information is municipality permit workflow.
 - percent_completed is a project-level figure, not a unit handover date.
 - public.developers is a developer profile (sold, delivered, HQ). It is not the DLD license register.
-- public.offplan_projects is the off-plan marketing catalog (starting price, handover text, payment plan, unit types, amenity JSON); public.offplan_files holds its brochures and images.
-- Qualify public tables as public.<table>.
-- 'Cue to table: an off-plan project, its developer, starting price, payment plan, or handover -> public.offplan_projects
-  (ILIKE on project_name_en, developer_name_en, location). A brochure, photos, or floor plans -> public.offplan_files
-  joined to offplan_projects on fileable_id = id with fileable_type = ''App\Models\offplan''. Registered
-  projects, escrow, and completion percentage -> chatbot_ai.real_estate_projects. Developer profile, units
-  sold or delivered -> public.developers. Permits -> the permit tables.'
-- 'Area filter: default is offplan_projects.location ILIKE ''%Business Bay%''. public.locations is only
-  for community-level follow-ups, joined for its parent or coordinates; do not use it for the first filter.'
-- 'Time: handover_date is free text (''Q4 2026'', ''Dec 2026''), not a date. Filter a year with ILIKE
-  ''%2026%''. There is no launch-date column. DLD real_estate_projects uses project_start_date, project_end_date,
-  and completion_date as real dates.'
-- Never join public.offplan_projects to the DLD tables (real_estate_dld_* in the transactions pack, real_estate_projects
-  here) or to public.properties. Catalog, DLD registrations and asking-price listings are separate sources;
-  answer each question from one of them.
+- "public.offplan_projects_new is the current off-plan project card: starting price, handover_date (a real date), project_status, payment plan, unit and bedroom types, amenity JSON, and brochure and floor-plan links in project_files."
+- "Qualify public tables as public.<table>."
+- "Cue to table: an off-plan project, its developer, starting price, payment plan, status, or handover -> public.offplan_projects_new (ILIKE on project_name_en, developer_name_en; area_en for the area). A brochure or floor plan -> offplan_projects_new.project_files->>'brochure' and ->>'floorplan'; photos -> project_gallery. Registered projects, escrow, and completion percentage -> chatbot_ai.real_estate_projects. Developer profile, units sold or delivered -> public.developers. Permits -> the permit tables."
+- "public.offplan_projects and public.offplan_files are an older catalog with its own ids. offplan_files joins only to offplan_projects (fileable_type = 'App\\Models\\offplan' AND fileable_id = offplan_projects.id). Never join offplan_files or offplan_projects to offplan_projects_new by id; they share project names only (lower(project_name_en)), for about 600 projects. Use them only when project_files has no brochure."
+- "Area filter: default is offplan_projects_new.area_en = the grounded area name (or ILIKE). public.locations is only for community-level follow-ups, joined for its parent or coordinates; do not use it for the first filter."
+- "Time: offplan_projects_new.handover_date is a date; filter a year with EXTRACT(YEAR FROM handover_date) = 2027. In the older offplan_projects, handover_date is free text ('Q4 2026'). DLD real_estate_projects uses project_start_date, project_end_date, and completion_date."
+- "Never join the off-plan tables to the DLD tables (real_estate_dld_* in the transactions pack, real_estate_projects here) or to public.properties. Catalog, DLD registrations and asking-price listings are separate sources; answer each question from one of them."
 - 'Not in this pack: registered sales by developer in a named period, or registered sale volumes and prices (transactions; the all-time units_sold figure of a developer profile stays here in public.developers);
   units for sale in a project with beds and asking prices (listings); how far a project is from a metro
   station (rta); what the area is like (locations); service charges (regulations).'
@@ -1030,6 +1022,136 @@ tables:
     type: boolean
     meaning: True when the profile is verified
   qualified_name: public.developers
+- name: offplan_projects_new
+  description: 'The current off-plan project card (about 2,000 projects): developer, area, starting price,
+    handover date, status, payment plan, bedroom and unit types, amenities, and brochure and floor-plan
+    links in project_files. Rows outside Dubai are filtered out by code. Filter project_name_en and developer_name_en
+    with ILIKE, and the area with area_en.'
+  region_scope:
+    id: id
+    location: locations_v2_id
+    place_name: project_city
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Project identifier
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: project_name_en
+    type: text
+    meaning: Project name
+  - name: project_name_dld_en
+    type: text
+    meaning: DLD project name, when matched
+  - name: developer_name_en
+    type: text
+    meaning: Developer name
+  - name: developer_id
+    type: bigint
+    meaning: Developer identifier on public.developers
+  - name: project_lat
+    type: numeric
+    meaning: Latitude
+  - name: project_lng
+    type: numeric
+    meaning: Longitude
+  - name: starting_price
+    type: numeric
+    meaning: Starting price
+  - name: starting_price_currency
+    type: text
+    meaning: Currency of starting_price
+  - name: area_min
+    type: numeric
+    meaning: Smallest unit area
+  - name: area_max
+    type: numeric
+    meaning: Largest unit area
+  - name: handover_date
+    type: date
+    meaning: Handover date
+  - name: handover_qtr
+    type: text
+    meaning: Handover quarter label
+  - name: project_status
+    type: text
+    meaning: Project status
+  - name: payment_plan_summary
+    type: text
+    meaning: Payment plan summary
+  - name: down_payment_percentage
+    type: numeric
+    meaning: Down payment percentage
+  - name: bedroom_types
+    type: jsonb
+    meaning: Bedroom types offered
+  - name: project_amenities
+    type: jsonb
+    meaning: Amenities inside the project
+  - name: community_amenities
+    type: jsonb
+    meaning: Amenities in the surrounding community
+  - name: area_en
+    type: text
+    meaning: Area name
+  - name: community_id
+    type: bigint
+    meaning: Community identifier
+  - name: locations_v2_id
+    type: bigint
+    meaning: Location identifier
+  - name: project_files
+    type: jsonb
+    meaning: Object with 'brochure' and 'floorplan' PDF URLs; read with project_files->>'brochure'
+  - name: project_gallery
+    type: jsonb
+    meaning: Array of image URLs
+  - name: project_city
+    type: text
+    meaning: City or community text, for example 'JVC (Jumeirah Village Circle)' or 'Abu Dhabi'
+  - name: project_district
+    type: text
+    meaning: District text
+  - name: project_emirate
+    type: text
+    meaning: Emirate; empty for most rows
+  - name: project_name_en_aliases
+    type: jsonb
+    meaning: Alternate project names
+  - name: developer_name_en_aliases
+    type: jsonb
+    meaning: Alternate developer names
+  - name: payment_plan_breakdown
+    type: jsonb
+    meaning: Payment plan stages
+  - name: development_schedule
+    type: jsonb
+    meaning: Construction and handover milestones
+  - name: bedroom_options
+    type: jsonb
+    meaning: Bedroom options offered
+  - name: property_type
+    type: jsonb
+    meaning: Property types offered
+  - name: property_category
+    type: text
+    meaning: Category such as residential
+  - name: furnishing_status
+    type: text
+    meaning: Furnishing, such as semi_furnished
+  - name: dld_registration
+    type: text
+    meaning: DLD registration number as published
+  - name: created_at
+    type: timestamp without time zone
+    meaning: When the row was added
+  - name: updated_at
+    type: timestamp without time zone
+    meaning: When the row was last updated
+  qualified_name: public.offplan_projects_new
 - name: offplan_projects
   description: 'The off-plan project catalog: one row per marketed project (about 1,700) with developer,
     location text, starting price, handover, payment plan, unit types, amenities, and nearby landmarks.
@@ -1212,13 +1334,13 @@ tables:
 # so the SQL model filters on the exact value. same_place_as names a column on the same
 # row that holds the official name of the same place; that pairing is learned from the data.
 named_values:
-- table: public.offplan_projects
+- table: public.offplan_projects_new
   column: developer_name_en
   kind: developer
-- table: public.offplan_projects
-  column: location
+- table: public.offplan_projects_new
+  column: area_en
   kind: area
-- table: public.offplan_projects
+- table: public.offplan_projects_new
   column: project_name_en
   kind: project
 - table: chatbot_ai.real_estate_projects

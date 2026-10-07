@@ -1020,6 +1020,200 @@ public.developers:
     filled: 1.0
   is_verified:
     filled: 1.0
+public.offplan_projects_new:
+  id:
+    filled: 1.0
+  slug_en:
+    filled: 1.0
+  project_name_en:
+    filled: 1.0
+  project_name_dld_en:
+    filled: 0.413
+  developer_name_en:
+    filled: 1.0
+  developer_id:
+    filled: 0.179
+  project_lat:
+    filled: 1.0
+  project_lng:
+    filled: 1.0
+  starting_price:
+    filled: 0.573
+  starting_price_currency:
+    filled: 1.0
+    values:
+    - AED
+  area_min:
+    filled: 0.764
+  area_max:
+    filled: 0.576
+  handover_date:
+    filled: 0.997
+    covers: 2016-12-31 to 2030-12-31
+  handover_qtr:
+    filled: 0.845
+    common_values:
+    - Handover Q4 2027
+    - Handover Q4 2026
+    - Handover Q4 2028
+    - Handover Q2 2027
+    - Handover Q3 2026
+    - Handover Q2 2028
+    - Handover Q1 2027
+    - Handover Q1 2028
+    - Handover Q3 2027
+    - Post handover payment
+    - Handover Q3 2028
+    - Handover Q4 2029
+    - Handover Q1 2029
+    - Handover Q2 2029
+    - Handover Q3 2029
+  project_status:
+    filled: 0.998
+    common_values:
+    - On sale
+    - Off-plan
+    - Handover Q4 2024
+    - Handover Q3 2025
+    - Handover Q4 2025
+    - Handover Q1 2024
+    - Handover Q2 2025
+    - Handover Q1 2025
+    - Handover Q4 2023
+    - Handover Q2 2024
+    - Handover Q1 2026
+    - Handover Q3 2023
+    - Handover Q2 2022
+    - Handover Q2 2026
+    - Handover Q3 2024
+  payment_plan_summary:
+    filled: 0.953
+    common_values:
+    - '100'
+    - 20/40/40
+    - 20/30/50
+    - 10/70/20
+    - 10/40/50
+    - 20/80
+    - 20/50/30
+    - 10/30/60
+    - 10/20/70
+    - 10/50/40
+    - 20/20/60
+    - 30/70
+    - 5/35/60
+    - 20/10/70
+    - 5/45/50
+  down_payment_percentage:
+    filled: 0.957
+  bedroom_types:
+    filled: 0.994
+  project_amenities:
+    filled: 1.0
+  community_amenities:
+    filled: 1.0
+  area_en:
+    filled: 0.994
+    common_values:
+    - Jumeirah Village Circle (JVC)
+    - Dubai Islands
+    - Dubai Land Residence Complex
+    - Dubai South
+    - Business Bay
+    - Abu Dhabi
+    - Al Marjan Island
+    - Jebel Ali
+    - Meydan
+    - Arjan
+    - Jumeirah Village Triangle (JVT)
+    - Dubai Hills Estate
+    - International City
+    - Al Furjan
+    - Town Square
+  community_id:
+    filled: 0.82
+  locations_v2_id:
+    filled: 0.597
+  project_files:
+    filled: 0.994
+  project_gallery:
+    filled: 1.0
+  project_city:
+    filled: 0.999
+    common_values:
+    - JVC (Jumeirah Village Circle)
+    - Dubai
+    - Dubai Islands
+    - Abu Dhabi
+    - Business Bay
+    - Dubailand Residence Complex
+    - Al Marjan Island
+    - Dubai South
+    - Arjan
+    - JVT (Jumeirah Village Triangle)
+    - Dubai Hills
+    - Jebel Ali Village
+    - Town Square
+    - Al Furjan
+    - Majan
+  project_district:
+    filled: 0.999
+    common_values:
+    - JVC (Jumeirah Village Circle)
+    - Dubai Islands
+    - Business Bay
+    - Abu Dhabi
+    - Dubailand Residence Complex
+    - Al Marjan Island
+    - Dubai South
+    - Arjan
+    - JVT (Jumeirah Village Triangle)
+    - Dubai Hills
+    - Dubai International City
+    - Jebel Ali Village
+    - Town Square
+    - Al Furjan
+    - Al Satwa
+  project_emirate:
+    filled: 0.006
+    values:
+    - Dubai
+    - Abu Dhabi
+    - Ras Al Khaimah
+    - Umm Al Quwain
+  project_name_en_aliases:
+    filled: 1.0
+  developer_name_en_aliases:
+    filled: 1.0
+  payment_plan_breakdown:
+    filled: 0.994
+  development_schedule:
+    filled: 1.0
+  bedroom_options:
+    filled: 0.994
+  property_type:
+    filled: 0.994
+  property_category:
+    filled: 0.994
+    values:
+    - residential
+  furnishing_status:
+    filled: 0.977
+    values:
+    - semi_furnished
+    - 'yes'
+    - 'no'
+    - only_kitchen
+    - optional_furnished
+    - no_information
+  dld_registration:
+    filled: 0.483
+  created_at:
+    filled: 1.0
+    covers: 2026-09-02 to 2026-09-10
+  updated_at:
+    filled: 1.0
+    covers: 2026-09-17 to 2026-09-17
 public.offplan_projects:
   id:
     filled: 1.0

@@ -184,7 +184,7 @@ cases:
 
 - id: offplan_brochure_files
   message: brochure for Binghatti Lavender
-  sql_contains: [offplan_files, fileable_type]
+  sql_contains: [offplan_projects_new, project_files]
 
 - id: community_yield_quality
   message: what is the rental yield in Business Bay
