@@ -102,9 +102,27 @@ pitfalls:
 - The asking price is price_max, for sale and for rent alike; price_min is only a lower bound and is usually empty. Use COALESCE(price_max, price_min). rental_period says what a rent price covers. area is square feet.
 - When listing ids are required, SELECT properties.id AS property_id.
 - DLD tables (building_property_records, registered_freehold_real_estate_units, land_registry) are registered inventory, not asking prices.
-- Use transactions for sold prices and rent_contracts for contracted rents.
+- Sold prices and registered rents are in the transactions pack (real_estate_dld_transactions, real_estate_dld_rent_contracts), not here.
 - public.buildings is a facility summary (pools, parking, floors). It is not the DLD unit register.
 - Qualify public tables as public.<table>.
+- 'Listing join contract: FROM public.properties p WHERE p.status = ''active'' AND p.deleted_at IS NULL.
+  Add property type, amenity, view, and nearby-place filters with EXISTS on the junction table (category_property,
+  amenity_property, property_view, nearby_location_property; junction.property_id = p.id). Never JOIN
+  a junction into the listing query, so a listing is never repeated.'
+- 'Place filter: find the place''s id in public.locations_v2 (locations pack, match title_en) and compare
+  p.location_v2_id = ANY(those ids). For listings whose location_v2_id is NULL, use the legacy columns
+  location_master_project_id, location_project_id, location_building_id (ids in public.locations).'
+- 'Amenity, view, and nearby-place names are fixed lists: public.amenities.title_en (for example Shared
+  Pool, Shared Gym, Furnished), public.views.title_en (for example Burj Khalifa View), public.nearby_locations.title_en
+  (for example metro station). Match them by title_en.'
+- '''2-bed rent near metro'' stays in this pack: filter public.properties with EXISTS on nearby_location_property
+  for ''metro station''. Use the rta pack only when the user asks how far a named station is.'
+- Never join the DLD tables (real_estate_dld_*, building_property_records, land_registry) to public.properties.
+  A listing is an asking price; a DLD row is a registered fact. Ask the transactions or market pack for
+  the registered figure instead.
+- 'Not in this pack: sold prices, volumes, and registered rents (transactions); community average prices
+  and yields (market); what an area is like (locations); who is building a project (developers); agents
+  and agencies (agencies).'
 tables:
 - name: properties
   description: Live property listings with asking price, size, and sale or rent. This is the table for what is on the market.
@@ -289,6 +307,155 @@ tables:
     referenced_columns:
     - id
   qualified_name: public.category_property
+- name: amenities
+  description: The 72 amenity names a listing can have (Shared Pool, Shared Gym, Furnished, Beach Access). One row is one amenity, not a place. Link to listings through amenity_property.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Amenity identifier
+  - name: title_en
+    type: character varying
+    meaning: Amenity name in English
+    examples:
+    - Shared Pool
+    - Shared Gym
+    - Furnished
+    - Yoga Studio / Meditation Room
+  - name: title_ar
+    type: character varying
+    meaning: Amenity name in Arabic
+  qualified_name: public.amenities
+- name: amenity_property
+  description: 'Junction: which amenities a listing has. Filter with EXISTS on property_id = p.id and
+    amenity_id; never JOIN it into a listing query.'
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: amenity_id
+    type: bigint
+    meaning: public.amenities id
+  - name: property_id
+    type: bigint
+    meaning: public.properties id
+  foreign_keys:
+  - columns:
+    - property_id
+    references: public.properties
+    referenced_columns:
+    - id
+  - columns:
+    - amenity_id
+    references: public.amenities
+    referenced_columns:
+    - id
+  qualified_name: public.amenity_property
+- name: views
+  description: The 13 named views a listing can have (Ocean View, Burj Khalifa View, Golf Course View,
+    and so on). Match title_en.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: View identifier
+  - name: title_en
+    type: character varying(255)
+    meaning: View name in English
+  - name: title_ar
+    type: character varying(255)
+    meaning: View name in Arabic
+  - name: created_at
+    type: timestamp(0) without time zone
+  - name: updated_at
+    type: timestamp(0) without time zone
+  qualified_name: public.views
+- name: property_view
+  description: 'Junction: which views a listing has. Filter with EXISTS on property_id = p.id and view_id.'
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: property_id
+    type: bigint
+    meaning: public.properties id
+  - name: view_id
+    type: bigint
+    meaning: public.views id
+  - name: created_at
+    type: timestamp(0) without time zone
+  - name: updated_at
+    type: timestamp(0) without time zone
+  foreign_keys:
+  - columns:
+    - property_id
+    references: public.properties
+    referenced_columns:
+    - id
+  - columns:
+    - view_id
+    references: public.views
+    referenced_columns:
+    - id
+  qualified_name: public.property_view
+- name: nearby_locations
+  description: 'The 14 kinds of nearby place a listing can advertise: metro station, airport, mosque,
+    park, hospital, mall, lagoon, college, school, university, restaurant, cafe, coffee shop, bus stop.
+    Match title_en (lower case). It is a tag list, not a map of places.'
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Nearby-place kind identifier
+  - name: title_en
+    type: character varying(255)
+    meaning: Kind in English, lower case
+  - name: title_ar
+    type: character varying(255)
+    meaning: Kind in Arabic
+  - name: created_at
+    type: timestamp(0) without time zone
+  - name: updated_at
+    type: timestamp(0) without time zone
+  qualified_name: public.nearby_locations
+- name: nearby_location_property
+  description: 'Junction: which nearby-place kinds a listing advertises (for example a metro station).
+    Filter with EXISTS on property_id = p.id and nearby_location_id. It holds no distances.'
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: property_id
+    type: bigint
+    meaning: public.properties id
+  - name: nearby_location_id
+    type: bigint
+    meaning: public.nearby_locations id
+  - name: created_at
+    type: timestamp(0) without time zone
+  - name: updated_at
+    type: timestamp(0) without time zone
+  foreign_keys:
+  - columns:
+    - property_id
+    references: public.properties
+    referenced_columns:
+    - id
+  - columns:
+    - nearby_location_id
+    references: public.nearby_locations
+    referenced_columns:
+    - id
+  qualified_name: public.nearby_location_property
 - name: building_property_records
   description: Dubai Land Department building and property project records
   segments: [property_sub_type_en, rooms_en]

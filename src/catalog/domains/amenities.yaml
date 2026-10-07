@@ -22,7 +22,7 @@ joins:
   - longitude
   - area_id
 pitfalls:
-- public.amenities is the amenity name list (pool, gym, spa). Match title_en. It does not say which building has it.
+- The amenity name list (public.amenities) and which listing has which amenity (amenity_property) are in the listings pack. Questions such as listings with a pool are listings questions.
 - reelly_project_amenities links an off-plan project to amenity_name via reelly_project_id.
 - Nearby parks, malls, and clinics per community are in public.community_info (locations), not in these tables.
 - sheryan_health_facilities is DHA licensed facilities, not a distance-to-listing index.
@@ -387,26 +387,6 @@ tables:
     - AL BARSHA FIRST
     - Al Manara
   qualified_name: chatbot_ai.sheryan_facility_detail
-- name: amenities
-  description: Amenity names used on buildings and projects. One row is one amenity, not a place.
-  primary_key:
-  - id
-  columns:
-  - name: id
-    type: bigint
-    meaning: Amenity identifier
-  - name: title_en
-    type: character varying
-    meaning: Amenity name in English
-    examples:
-    - Swimming Pool
-    - Gym
-    - Yoga Studio / Meditation Room
-    - Kids Play Area
-  - name: title_ar
-    type: character varying
-    meaning: Amenity name in Arabic
-  qualified_name: public.amenities
 - name: reelly_project_amenities
   description: Amenities attached to an off-plan project.
   primary_key:
