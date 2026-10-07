@@ -1,8 +1,9 @@
 id: locations
 name: Communities, areas, and geo hierarchy
 schema: chatbot_ai
-description: Dubai communities, subcommunities, Makani entrances, population, and area insights. This
-  is the usual join bridge for other domains.
+description: Dubai communities, the location tree (public.locations_v2 and public.locations), Makani entrances,
+  population, community editorial profiles (area_insights_communities and mv_community_landing_metrics),
+  and catalogs of points of interest and roads. This is the usual join bridge for other domains.
 synonyms:
 - community
 - area
@@ -34,6 +35,39 @@ pitfalls:
 - public.community_info is one JSON payload per master project and data_type. Filter data_type, then read data.
 - public.locations type is building, project, or master_project. parent_id points at the parent location.
 - Qualify public tables as public.<table>.
+- 'Cue to table: where is X, which community is X in, or the hierarchy of a place -> public.locations_v2
+  (title_en, parent_id) or public.locations (name_en, parent_id). Buildings in an area -> public.locations
+  (type = ''building'') or locations_v2 (type = ''Building''). What a community is like, its schools,
+  parks, healthcare, or who lives there -> chatbot_ai.area_insights_communities, with mv_community_landing_metrics
+  for counts and nationalities. Which kinds of places or roads exist near an area -> public.nlp_search_pois,
+  public.nlp_search_roads. A coordinate for a named landmark -> public.places. Resolving a typed place
+  name -> public.nlp_search_locations.'
+- 'area_insights_communities: never SELECT *; list the columns you need. description is always empty,
+  so do not select it. Match title_en exact first (title_en = ''Business Bay''), then ILIKE only if nothing
+  matches. schools, universities, nurseries, parks, healthcare, metro, restaurants and the other lists
+  are JSON arrays; read them with jsonb_array_elements and LIMIT the result.'
+- 'Community overview: join area_insights_communities to public.mv_community_landing_metrics by lower(title_en)
+  = lower(community_name) (the name match finds every community that has insights; the key area_insights_id is mostly empty, so never join on it).
+  Add the DLD yield and growth figures from public.mv_community_dld_market_metrics (market pack) by the
+  same lower-case name match, and quote them only when their *_data_quality flag is ''ok''.'
+- total_listings in mv_community_landing_metrics is what is on the market now. properties_sold and total_transactions_all_time
+  are registered history. Never present one as the other.
+- 'Never JOIN public.locations.area_id to real_estate_dld_areas.area_id: they are different id systems.
+  To reach registered sales or rents for a place, filter the transactions pack tables on area_name_en
+  or master_project_en, or on the DLD area name.'
+- 'Names: JVC is ''Jumeirah Village Circle (JVC)'' in area_insights_communities and locations_v2, and
+  master project ''Jumeirah Village Circle'' in public.locations and DLD. JVT is ''Jumeirah Village Triangle
+  (JVT)''. JGE is ''Jumeirah Golf Estates''. MBR City is ''Mohammed Bin Rashid City''. BB is ''Business
+  Bay''. Creek Harbour is ''Dubai Creek Harbour''. Prefer the stored value the grounding supplies.'
+- 'False friends: Business Bay is not Marasi Business Bay (a separate neighbourhood). Dubai Marina is
+  not Dubai Marina Mall (a building) or Dubai Marina Towers. Match the exact stored name before using
+  ILIKE. DLD calls the Dubai Marina area Marsa Dubai.'
+- 'Time: these tables are reference data. Use created_at or updated_at only when the user clearly asks
+  when a row was added.'
+- 'Not in this pack: sold prices and rents (transactions); community average prices, yields, and indices
+  (market); live metro, tram, bus, parking, and Salik (rta); school fees and ratings (schools); asking-price
+  listings (listings). ''What is Business Bay like'' loads this pack, and market only for its yield and
+  growth figures; it never loads transactions.'
 tables:
 - name: dubai_community_areas
   description: DLD lookup of Dubai community areas
@@ -63,7 +97,7 @@ tables:
     - '126'
   qualified_name: chatbot_ai.dubai_community_areas
 - name: area_insights_communities
-  description: Area insights communities
+  description: Editorial community profiles (172 communities) as JSON lists of schools, parks, healthcare, metro, restaurants and more, plus nationalities and tags. Use it for what a community is like. Select named columns only.
   primary_key:
   - id
   columns:
@@ -766,7 +800,7 @@ tables:
     meaning: Payload keyed by the same topic as data_type. Places usually include name and distance_km.
   qualified_name: public.community_info
 - name: locations
-  description: Location tree of master projects, projects, and buildings.
+  description: Older location tree of master projects (about 235), projects, and buildings (about 15,700). parent_id is a self-join to the parent. Kept for the legacy listing columns (location_master_project_id, location_project_id, location_building_id). For communities and neighbourhoods prefer public.locations_v2.
   primary_key:
   - id
   columns:
@@ -801,6 +835,9 @@ tables:
   - name: area_id
     type: bigint
     meaning: DLD area identifier
+  - name: aliases_en
+    type: jsonb
+    meaning: Other spellings as a JSON array of text; match with aliases_en::text ILIKE. Buildings carry their marketing name here.
   - name: slug_en
     type: character varying(191)
     meaning: English slug
@@ -808,6 +845,340 @@ tables:
     type: boolean
     meaning: True when the location is a free zone
   qualified_name: public.locations
+- name: locations_v2
+  description: The current location tree and the shared place dimension for other packs. One row per emirate,
+    neighbourhood (community), cluster or building. Match title_en (exact first, then ILIKE). parent_id
+    is a self-join to the parent; level is the depth. public.properties.location_v2_id points here.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Location identifier; properties.location_v2_id and area_insights_communities.location_id
+      reference it
+  - name: type
+    type: character varying(191)
+    meaning: Level kind
+    examples:
+    - Neighbourhood
+    - Building
+    - Cluster
+    - Emirate
+  - name: title_en
+    type: character varying(191)
+    meaning: Name in English, for example Business Bay or Jumeirah Village Circle (JVC)
+  - name: title_ar
+    type: character varying(191)
+    meaning: Name in Arabic
+  - name: parent_id
+    type: bigint
+    meaning: Parent location in this table (self-join)
+  - name: level
+    type: smallint
+    meaning: Depth in the tree; a lower number is broader
+  - name: lat
+    type: numeric
+    meaning: Latitude
+  - name: lng
+    type: numeric
+    meaning: Longitude
+  - name: aliases_en
+    type: jsonb
+    meaning: Other spellings as a JSON array; match with aliases_en::text ILIKE
+  - name: address_en
+    type: text
+    meaning: Address in English
+  - name: slug_en
+    type: character varying(255)
+    meaning: English slug
+  - name: city
+    type: character varying(191)
+    meaning: City
+  - name: is_free_zone
+    type: boolean
+    meaning: True when the location is a free zone
+  qualified_name: public.locations_v2
+- name: nlp_search_locations
+  description: Search index of place names with their parent ids, used to resolve a typed place to an
+    area, master project, or project. One row per place (about 20,000). Use it only to resolve a name;
+    for the tree use public.locations_v2 or public.locations.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: type
+    type: text
+    meaning: Place kind
+    examples:
+    - building
+    - project
+    - area
+    - master_project
+    - sector
+    - city
+  - name: name_en
+    type: text
+    meaning: Name in English
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: aliases
+    type: text[]
+    meaning: Other spellings
+  - name: geo_resolved
+    type: boolean
+    meaning: True when the place has a geometry
+  - name: area_id
+    type: bigint[]
+    meaning: Containing area ids
+  - name: master_project_id
+    type: bigint[]
+    meaning: Containing master project ids
+  - name: project_id
+    type: bigint[]
+    meaning: Containing project ids
+  - name: sector_id
+    type: bigint[]
+    meaning: Containing sector ids
+  - name: city_id
+    type: bigint[]
+    meaning: Containing city ids
+  qualified_name: public.nlp_search_locations
+- name: nlp_search_pois
+  description: Catalog of points of interest (restaurants, parks, parking, supermarkets, bus stops, hotels,
+    swimming pools and more; about 40,000), each with category, subcategory and containing area ids. Use
+    it for what kinds of places exist in or near an area. It has no ratings or opening hours, and it is
+    not the live RTA network.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: name_en
+    type: text
+    meaning: Name in English
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: aliases
+    type: text[]
+    meaning: Other spellings
+  - name: category
+    type: text
+    meaning: Kind of place
+    examples:
+    - restaurant
+    - parking
+    - garden
+    - swimming_pool
+    - bus stop
+    - supermarket
+    - cafe
+    - hotel
+  - name: subcategory
+    type: text
+    meaning: Finer kind
+  - name: area_id
+    type: bigint[]
+    meaning: Containing area ids
+  - name: master_project_id
+    type: bigint[]
+    meaning: Containing master project ids
+  - name: project_id
+    type: bigint[]
+    meaning: Containing project ids
+  - name: source
+    type: text
+    meaning: Where the row came from
+  qualified_name: public.nlp_search_pois
+- name: nlp_search_roads
+  description: Catalog of named roads (about 25,000) with road_type and containing area ids. Use it for
+    which roads or highways serve an area. Major-road lengths and classes are in the rta pack.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: name_en
+    type: text
+    meaning: Road name in English
+  - name: slug_en
+    type: text
+    meaning: English slug
+  - name: aliases
+    type: text[]
+    meaning: Other spellings
+  - name: road_type
+    type: text
+    meaning: OpenStreetMap class
+    examples:
+    - residential
+    - tertiary
+    - secondary
+    - primary
+    - motorway
+    - trunk
+  - name: area_id
+    type: bigint[]
+    meaning: Containing area ids
+  - name: master_project_id
+    type: bigint[]
+    meaning: Containing master project ids
+  - name: project_id
+    type: bigint[]
+    meaning: Containing project ids
+  qualified_name: public.nlp_search_roads
+- name: places
+  description: 'Named places with plain latitude and longitude: malls, bus stops, coffee shops, parks,
+    cafes, restaurants, hospitals, metro stations (about 1,100 rows). Use it when only a coordinate for
+    a named landmark is needed.'
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: name_en
+    type: character varying(255)
+    meaning: Name in English
+  - name: name_ar
+    type: character varying(255)
+    meaning: Name in Arabic
+  - name: latitude
+    type: numeric(10,8)
+    meaning: Latitude
+  - name: longitude
+    type: numeric(11,8)
+    meaning: Longitude
+  - name: type
+    type: character varying(255)
+    meaning: Kind of place
+    examples:
+    - malls
+    - bus_stops
+    - coffee_shops
+    - parks
+    - cafes
+    - restaurants
+    - hospitals
+    - metro_stations
+  qualified_name: public.places
+- name: mv_community_landing_metrics
+  description: 'Materialized view with one row per community (183): live listing count, properties sold,
+    rental contracts signed, all-time transactions, and nationality mix. Join area_insights_communities
+    by lower(title_en) = lower(community_name); area_insights_id is empty for most rows, so never join on it. total_listings is what is for
+    sale or rent now; properties_sold and total_transactions_all_time are registered history; they are
+    different figures.'
+  primary_key: []
+  columns:
+  - name: community_name
+    type: text
+    meaning: Community name, spelled like area_insights_communities.title_en
+  - name: total_listings
+    type: bigint
+    meaning: Listings on the market now
+  - name: properties_sold
+    type: bigint
+    meaning: Registered sales in the community
+  - name: rental_contracts_signed
+    type: bigint
+    meaning: Registered rent contracts
+  - name: total_transactions_all_time
+    type: bigint
+    meaning: All registered transactions to date
+  - name: top_nationality_name
+    type: text
+    meaning: Most common nationality among residents or buyers
+  - name: top_nationality_pct
+    type: numeric
+    meaning: Share of the top nationality, percent
+  - name: nationalities_sorted
+    type: jsonb
+    meaning: All nationalities with shares, largest first
+  - name: area_insights_id
+    type: bigint
+    meaning: area_insights_communities.id; empty for about 60% of rows, so do not join on it
+  - name: location_id
+    type: bigint
+    meaning: public.locations_v2 id
+  - name: metrics_as_of_date
+    type: date
+    meaning: Date the figures were computed
+  qualified_name: public.mv_community_landing_metrics
+- name: bayut_locations
+  description: EXTENDED. Bayut place names with a breadcrumb path (about 15,000). Use it only to reconcile
+    a name spelled the Bayut way; for the tree use public.locations_v2.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Row identifier
+  - name: title
+    type: text
+    meaning: Place name
+  - name: type_en
+    type: text
+    meaning: Kind
+    examples:
+    - Building
+    - Neighbourhood
+    - Cluster
+    - Emirate
+  - name: breadcrumb_0
+    type: text
+    meaning: Top of the path (emirate or country)
+  - name: breadcrumb_1
+    type: text
+    meaning: Second level
+  - name: breadcrumb_2
+    type: text
+    meaning: Third level
+  - name: breadcrumb_3
+    type: text
+    meaning: Fourth level
+  - name: latitude
+    type: double precision
+    meaning: Latitude
+  - name: longitude
+    type: double precision
+    meaning: Longitude
+  qualified_name: public.bayut_locations
+- name: countries
+  description: EXTENDED. Countries (250 rows) with codes, region, phone code, and coordinates. Use for
+    a country name or code lookup, for example a nationality's country.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: Country identifier
+  - name: common_name
+    type: character varying(191)
+    meaning: Common English name
+  - name: official_name
+    type: character varying(191)
+    meaning: Official name
+  - name: alpha_2_code
+    type: character varying(2)
+    meaning: ISO 3166 alpha-2 code
+  - name: alpha_3_code
+    type: character varying(3)
+    meaning: ISO 3166 alpha-3 code
+  - name: region
+    type: character varying(191)
+    meaning: Region
+  - name: subregion
+    type: character varying(191)
+    meaning: Sub region
+  - name: capital
+    type: character varying(191)
+    meaning: Capital city
+  qualified_name: public.countries
 - name: dld_community_lookup
   description: Alternate names for a community (area name and master project).
   primary_key:
@@ -842,3 +1213,6 @@ named_values:
 - table: chatbot_ai.dubai_community_areas
   column: name_en
   kind: area
+- table: chatbot_ai.area_insights_communities
+  column: title_en
+  kind: community
