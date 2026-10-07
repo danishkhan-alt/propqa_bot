@@ -1,0 +1,58 @@
+%% Market Intel bridge dataflow — profile inject + join-chain + sold-most.
+%% Companion note: market_intel.md
+flowchart TB
+    subgraph Slots
+        S1[area_phrase]
+        S2[year_metric_reg_type]
+        S3[listing_filters]
+        S4[market_topic_rent_or_sale]
+    end
+
+    subgraph ProfileInject
+        S1 --> SEL[select_tables_for_query]
+        S4 --> SEL
+        SEL --> FMT[format_profile_block]
+        FMT --> CTX[state_dld_table_context]
+        CTX --> USER[user_message_inject_market_agent]
+    end
+
+    subgraph AreaRewrite
+        S1 --> ALIAS[dld_area_aliases_sql_guard]
+        ALIAS --> SQL[market_intel_sql_db_query]
+    end
+
+    subgraph MarketReAct
+        USER --> SQL
+        S4 --> SQL
+        SQL --> TX[(real_estate_dld_transactions)]
+        SQL --> RN[(real_estate_dld_rent_contracts)]
+        SQL --> AVG[(dld_community_avg_sale_price)]
+        SQL --> REG[(areas_projects_buildings_developers)]
+        SQL --> TREND[(price_trend_buy_rent_fact)]
+        SQL --> LOC[(locations)]
+        SQL --> A1[answer_volumes_prices_YoY_yield_bands]
+    end
+
+    subgraph OffplanMarket
+        S2 --> OMB[offplan_market_bridge]
+        OMB --> DLD[(dld_transactions_Off_Plan_Properties)]
+        OMB --> CAT[(offplan_projects_fuzzy)]
+        OMB --> A2[answer_sold_most_ranked]
+        OMB --> SK1[state_offplan_bridge_context]
+    end
+
+    subgraph DldListings
+        S1 --> DJC[dld_join_chain]
+        S3 --> DJC
+        DJC --> DLD2[(DLD_aggregates)]
+        DJC --> LOCI[(locations)]
+        DJC --> PROP[(properties_cards)]
+        DJC --> A3[answer_stats_plus_listing_cards]
+        DJC --> SK2[state_dld_context]
+    end
+
+    subgraph CardEnrich
+        A1 --> INV[investment_intel_optional_ROI]
+        PROP --> INV
+        INV --> SK3[card_investment_metrics]
+    end

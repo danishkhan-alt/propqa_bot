@@ -1,0 +1,32 @@
+%% Property Search end-to-end — think → enhance → classify → dual executor → PG.
+%% Companion note: property_search.md
+flowchart TD
+    Q[UserQuery] --> Cog[cognitive_pipeline]
+    Cog --> Think[think_node_intent]
+    Think --> Enhance[enhance_node_FilterSpec]
+    Enhance --> Core[propqa_core_agent_py]
+    Core --> Scope[check_mvp_scope]
+    Scope -->|AppendixC or schema probe| Refuse[fixed_scope_or_schema_reply]
+    Scope -->|ok| Classify[classify_query]
+    Classify --> Attach[attach_table_context]
+    Attach --> Route[route_to_agents_Send]
+    Route --> PsNode[property_search_node]
+
+    PsNode --> HasSpec{"FilterSpec has_concrete_filter?"}
+    HasSpec -->|yes| Fast[run_property_search]
+    HasSpec -->|no| ReAct[ReAct_sql_db_query]
+
+    Fast --> Empty{"rows empty?"}
+    Empty -->|yes| Repair[self_verify_then_reflexion]
+    Repair --> Fast
+    Empty -->|no| Cards[listing_cards]
+
+    ReAct --> Guard[sql_guard_validate_sql]
+    Guard -->|block| AgentRetry[agent_sees_policy_error]
+    AgentRetry --> Guard
+    Guard -->|pass| PG[(PostgreSQL_RDS)]
+    Fast --> PG
+    Cards --> Synth[synthesize_results]
+    PG --> Synth
+    Refuse --> EndNode[END]
+    Synth --> EndNode

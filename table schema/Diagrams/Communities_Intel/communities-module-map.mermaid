@@ -1,0 +1,105 @@
+%% Communities Intel module map — files that classify, hint, execute, and test.
+%% Companion note: communities_intel.md
+flowchart TB
+    subgraph Entry
+        SSE[sse_bridge]
+        COG[cognitive_pipeline]
+        THINK[nodes_think]
+        ENH[nodes_enhance]
+        INTENT[intent_classifier_llm]
+        REASON[nodes_reason]
+        RESULT[nodes_result]
+        FLOW[flow_router]
+        SSE --> COG
+        COG --> THINK
+        COG --> ENH
+        COG --> REASON
+        COG --> RESULT
+        COG --> FLOW
+        THINK --> INTENT
+    end
+
+    subgraph ClassifyLayer
+        QC[query_classifier]
+        PERC[perception_prepass]
+        PLAN[query_planner]
+        MIO[multi_intent_orchestrator]
+        PERSONA[persona_intent_domain_map]
+        PIH[persona_intent_handler]
+        QG[query_quality_gate_faq]
+        PERC --> QC
+        QC --> PLAN
+        MIO -.-> QC
+        PERSONA -.-> MIO
+        PIH -.-> PERSONA
+        QG -.-> QC
+    end
+
+    subgraph CatalogHints
+        VAL[catalog_value_index]
+        RES[catalog_resolution]
+        DC[catalog_domain_context]
+        PROF[communities_intel_profiles_v1]
+        PAGE[communities_page_schema]
+        VAL --> RES
+        VAL --> DC
+        PROF --> DC
+        PAGE --> DC
+    end
+
+    subgraph RouterLayer
+        AGENT[agent_py]
+        FLAGS[ops_feature_flags]
+        AGENT --> FLAGS
+    end
+
+    subgraph AgentBuild
+        DA[domain_agents]
+        SKILL[sql_agent_skills_COMMUNITIES]
+        REG[agent_registry]
+        MVP[mvp_scope_guard]
+        SQLG[sql_guard]
+        ADAPT[adaptive_sql_recovery]
+        COMP[answer_completeness]
+        DA --> SKILL
+        DA --> MVP
+        DA --> SQLG
+        DA --> PAGE
+        REG -.-> DA
+        AGENT --> COMP
+        AGENT --> ADAPT
+    end
+
+    subgraph EnrichLayer
+        CCR[community_content_resolver]
+        CS[community_signals]
+        BUY[buyer_intel]
+        REN[renter_intel]
+        IINV[investor_intel]
+        CCR --> CS
+    end
+
+    subgraph Verify
+        T1[test_communities_intel]
+        T2[test_communities_intel_catalog]
+        T3[test_persona_pipeline_fix]
+        T4[test_intel_family_routing]
+        T5[test_domain_context]
+        T6[test_schema_disclosure_guard]
+    end
+
+    COG --> QC
+    QC --> VAL
+    QC --> AGENT
+    AGENT --> DA
+    AGENT --> DC
+    RESULT --> BUY
+    RESULT --> REN
+    RESULT --> IINV
+    DA --> CCR
+    DA --> T1
+    PAGE --> T2
+    PERSONA --> T3
+    QC --> T4
+    DC --> T5
+    SKILL --> T6

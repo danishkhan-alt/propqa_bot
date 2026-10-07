@@ -1,0 +1,45 @@
+%% Offplan Projects bridge dataflow — market + geo + readiness table hits.
+%% Companion note: offplan_projects.md
+flowchart TB
+    subgraph Slots
+        S1[project_name_or_developer]
+        S2[station_phrase_plus_mode]
+        S3[year_metric_reg_type]
+        S4[area_name]
+    end
+
+    subgraph MarketBridge
+        S3 --> OMB[offplan_market_bridge]
+        OMB --> DLD[(PROD_real_estate_dld_transactions)]
+        OMB --> DLDProj[(PROD_dld_projects_developers)]
+        OMB --> CAT[(PROD_offplan_projects_fuzzy_match)]
+        OMB --> A1[answer_ranked_sold_projects]
+        OMB --> SK1[state_offplan_bridge_context]
+        SK1 --> Inject[depends_on_inject_to_catalog_agent]
+    end
+
+    subgraph OffplanGeo
+        S2 --> OPG[offplan_geo_bridge_via_rta_intel]
+        OPG --> ANCHOR[(AUDIT_metro_or_bus_stop)]
+        OPG --> OP[(PROD_offplan_projects_haversine)]
+        OPG --> A2[answer_ranked_projects_km]
+        OPG --> SK2[state_offplan_geo_result]
+    end
+
+    subgraph Readiness
+        S1 --> RDY[readiness_bridge]
+        RDY --> OPC[(PROD_offplan_projects)]
+        RDY --> PROP[(PROD_properties_completion_status)]
+        RDY --> A3[answer_ready_off_plan_mixed_unknown]
+        RDY --> SK3[state_readiness_verdict]
+    end
+
+    subgraph CatalogReAct
+        S1 --> SQL[offplan_projects_sql_db_query]
+        S4 --> SQL
+        SQL --> T1[(offplan_projects)]
+        SQL --> T2[(offplan_files_OffplanProject)]
+        SQL --> T3[(locations)]
+        SQL --> A4[answer_brochure_payment_handover]
+        Inject --> SQL
+    end

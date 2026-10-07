@@ -1,0 +1,48 @@
+%% RTA Intel hybrid fan-out — exclusive, multi_intel_hybrid, recommend_hybrid.
+%% Companion note: rta_intel.md
+flowchart TD
+    Q[UserQuery] --> Path{hybrid_path}
+
+    Path -->|"pure mobility no companions"| Pure[exclusive_Send_rta_intel]
+    Path -->|"offplan details near station or area"| Multi[multi_intel_hybrid]
+    Path -->|"recommend 2BHK after station context"| Rec[recommend_hybrid]
+    Path -->|"CI gap metro bus salik"| CiGap[communities_plus_rta_companion]
+    Path -->|"planner already 2+ domains"| Keep[preserve_multi_classifications]
+    Path -->|"listing inventory"| Strip[strip_rta_property_search_only]
+
+    Multi --> M1[rta_intel_mobility_route]
+    Multi --> M2[offplan_projects_catalog]
+    Multi --> M3[market_intel_area_market]
+    Multi --> M4[location_intel_spatial]
+    Multi --> M5[communities_intel_lifestyle]
+
+    Rec --> R1[offplan_projects_recommend]
+    Rec --> R2[rta_intel_offplan_geo]
+    Rec --> R3[property_search_listings]
+
+    CiGap --> C1[communities_intel]
+    CiGap --> C2[rta_intel_live_network]
+
+    Keep --> K1[as_planned_domains]
+
+    M1 --> Parallel[LangGraph_parallel_Sends]
+    M2 --> Parallel
+    M3 --> Parallel
+    M4 --> Parallel
+    M5 --> Parallel
+    R1 --> Parallel
+    R2 --> Parallel
+    R3 --> Parallel
+    C1 --> Parallel
+    C2 --> Parallel
+    K1 --> Parallel
+    Pure --> Single[single_rta_intel_Send]
+    Strip --> PsOnly[single_property_search_Send]
+
+    Parallel --> Results[operator_add_results]
+    Single --> Results
+    PsOnly --> Results
+
+    Results --> Synth{domain_count}
+    Synth -->|1| Direct[scrubbed_final_answer]
+    Synth -->|"2+"| Merge[router_model_synthesize_rule_22]

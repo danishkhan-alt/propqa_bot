@@ -1,0 +1,41 @@
+%% Property Search disambiguation vs market / offplan / RTA / location.
+%% Companion note: property_search.md
+flowchart TD
+    Q[UserQuery] --> Listing{"LISTING_SIGNAL_RE hit?"}
+
+    Listing -->|yes| Count{"inventory count plus DLD volume?"}
+    Count -->|yes| Hybrid["property_search + market_intel"]
+    Count -->|no| Offplan{"offplan catalog cues brochure payment handover?"}
+    Offplan -->|yes| Both["property_search + offplan_projects"]
+    Offplan -->|no| Cards{"DLD stats PLUS listing cards?"}
+    Cards -->|yes| DldBridge["dld_bridge not parallel MI+PS"]
+    Cards -->|no| Area{"explicit area ranking or narrative?"}
+    Area -->|yes| LocFan["location_intel + property_search"]
+    Area -->|no| PsOnly[property_search_only]
+
+    Listing -->|no| Market{"DLD sold Ejari yield valuation?"}
+    Market -->|yes| MI[market_intel]
+    Market -->|no| Catalog{"named project brochure or payment plan?"}
+    Catalog -->|yes| OP[offplan_projects]
+    Catalog -->|no| Rank{"area ranking or best neighbourhood?"}
+    Rank -->|yes| LI[location_intel]
+    Rank -->|no| Rta{"metro bus Salik network no listing noun?"}
+    Rta -->|yes| RTA[rta_intel]
+    Rta -->|no| LLM[structured_ClassificationResult]
+    LLM --> Coerce[unknown_domain_to_property_search]
+
+    Hybrid --> Route[route_to_agents]
+    Both --> Route
+    DldBridge --> Route
+    LocFan --> Route
+    PsOnly --> Route
+    MI --> Route
+    OP --> Route
+    LI --> Route
+    RTA --> Route
+    Coerce --> Route
+
+    Route --> Strip{"listing inventory post-guards?"}
+    Strip -->|strip rta_intel| Exec[property_search_node]
+    Strip -->|strip catalog offplan| Exec
+    Strip -->|keep companions| Exec

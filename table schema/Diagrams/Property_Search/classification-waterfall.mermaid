@@ -1,0 +1,22 @@
+%% Query → domain waterfall. _try_fast_classify is retired (always None).
+%% Companion notes: ../routing-and-flow.md, ../table-routing.md
+flowchart TD
+    Input["User query + session state"] --> SkipCheck{"skip_sql_agents already set?"}
+    SkipCheck -->|yes| Skip["Skip domain classification"]
+    SkipCheck -->|no| Retired["_try_fast_classify always None"]
+
+    Retired --> Perceive["perception_prepass / infer_intel_families"]
+    Perceive --> Planner{"query planner enabled?"}
+    Planner -->|yes| Plan["_safe_build_plan QueryPlan"]
+    Planner -->|no| ConvCheck
+    Plan --> ConvCheck["classify_intent_llm Haiku gate"]
+
+    ConvCheck -->|"conversational"| Direct["direct_chat / skip SQL"]
+    ConvCheck -->|"needs data"| Struct["Structured LLM ClassificationResult"]
+
+    Struct --> Coerce["unknown domain coerced to property_search"]
+    Coerce --> Guards["strip rta_intel / catalog offplan on listing inventory"]
+    Guards --> Domains["domains + sub_query per domain"]
+    Domains --> FanOut["route_to_agents"]
+    Skip --> FanOut
+    Direct --> EndNode["END conversational path"]

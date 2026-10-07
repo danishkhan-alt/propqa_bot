@@ -1,0 +1,58 @@
+%% Market Intel hybrid fan-out — pure / persona / bridge / multi-intel.
+%% Companion note: market_intel.md
+flowchart TD
+    Q[UserQuery] --> Path{hybrid_path}
+
+    Path -->|"pure market or valuation"| Pure[exclusive_Send_market_intel]
+    Path -->|"investor_intelligence"| Inv[market_intel_plus_location_intel]
+    Path -->|"rental_intel"| Rent[location_plus_market_plus_property_search]
+    Path -->|"DLD plus cards"| Dld[dld_listings_pipeline]
+    Path -->|"sold most plus catalog"| OpB[offplan_market_bridge_plus_offplan_projects]
+    Path -->|"mobility multi_intel cues"| Multi[rta_plus_inferred_companions]
+    Path -->|"listing count plus volume"| Both[property_search_plus_market_intel]
+    Path -->|"planner already 2+ domains"| Keep[preserve_plan_steps_domains]
+
+    Inv --> I1[market_intel]
+    Inv --> I2[location_intel]
+
+    Rent --> R1[location_intel]
+    Rent --> R2[market_intel]
+    Rent --> R3[property_search]
+
+    Multi --> M1[rta_intel]
+    Multi --> M2[market_intel_when_cue]
+    Multi --> M3[location_intel_when_cue]
+    Multi --> M4[offplan_projects_when_cue]
+
+    OpB --> O1[offplan_market_bridge]
+    OpB --> O2[offplan_projects]
+
+    Both --> P1[property_search]
+    Both --> P2[market_intel]
+
+    Keep --> K1[as_planned_domains]
+
+    I1 --> Parallel[LangGraph_parallel_Sends]
+    I2 --> Parallel
+    R1 --> Parallel
+    R2 --> Parallel
+    R3 --> Parallel
+    M1 --> Parallel
+    M2 --> Parallel
+    M3 --> Parallel
+    M4 --> Parallel
+    O1 --> Parallel
+    O2 --> Parallel
+    P1 --> Parallel
+    P2 --> Parallel
+    K1 --> Parallel
+    Pure --> Single[single_market_intel_Send]
+    Dld --> Bridge[deterministic_dld_bridge_node]
+
+    Parallel --> Results[operator_add_results]
+    Single --> Results
+    Bridge --> Results
+
+    Results --> Synth{domain_count}
+    Synth -->|1| Direct[scrubbed_final_answer_no_cards]
+    Synth -->|2+| Merge[router_model_synthesize]

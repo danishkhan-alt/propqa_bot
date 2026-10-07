@@ -1,0 +1,80 @@
+%% Offplan Projects architecture — catalog ReAct + bridges + dual DB + three worlds.
+%% Companion note: offplan_projects.md
+flowchart TB
+    subgraph Input
+        U[UserQuery]
+    end
+
+    subgraph Classification
+        TH[think_node]
+        QC[query_classifier]
+        PLAN[query_planner]
+        MIL[mobility_intent_llm]
+        U --> TH --> QC
+        QC --> PLAN
+        QC --> MIL
+    end
+
+    subgraph State
+        CL[classifications]
+        FLAGS[multi_intel_recommend_flags]
+        MR[mobility_route]
+        MS[mobility_slots]
+        WIN[resolved_windows_handover_launch]
+        QC --> CL
+        QC --> FLAGS
+        MIL --> MR
+        MIL --> MS
+        TH --> WIN
+    end
+
+    subgraph DualDB
+        PROD[(Production_DB_star)]
+        AUDIT[(Staging_AUDIT_DB_chatbot_ai)]
+    end
+
+    subgraph CatalogAgent
+        BDA[build_domain_agents]
+        SKILL[OFFPLAN_SKILL]
+        PROMPT[domain_prompt_offplan_projects]
+        TOOL[guarded_sql_db_query]
+        BDA --> PROD
+        SKILL --> TOOL
+        PROMPT --> TOOL
+        TOOL --> PROD
+    end
+
+    subgraph Bridges
+        OMB[offplan_market_bridge]
+        OPG[offplan_geo_bridge]
+        RDY[readiness_resolver]
+        RBT[rta_bridge_tools]
+        OMB --> PROD
+        OPG --> AUDIT
+        OPG --> PROD
+        RDY --> PROD
+        RBT --> OPG
+        RBT --> RDY
+    end
+
+    subgraph ThreeWorlds
+        T1[(offplan_projects)]
+        T2[(offplan_files)]
+        T3[(locations)]
+        T4[(real_estate_dld_transactions)]
+        T5[(metro_or_bus_stations)]
+        T6[(properties_off_plan)]
+        TOOL --> T1
+        TOOL --> T2
+        TOOL --> T3
+        OMB --> T4
+        OMB --> T1
+        OPG --> T5
+        OPG --> T1
+        RDY --> T1
+        RDY --> T6
+    end
+
+    CL --> CatalogAgent
+    FLAGS --> Bridges
+    MR --> Bridges

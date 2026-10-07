@@ -1,0 +1,54 @@
+%% Property Search table targeting — query cues → hints + deterministic joins.
+%% Companion note: property_search.md
+%% Shared four-layer view: ../diagrams/table-routing.mermaid
+flowchart TD
+    subgraph layer2 [Startup_hard_whitelist]
+        Map[PROPERTY_SEARCH_TABLES] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Include --> Ext[EXTENDED_name_hints_still_queryable]
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Q[UserQuery] --> Sel[select_tables_for_query]
+        Sel --> Always[properties_locations_v2_locations]
+        Sel -->|always| Cats[categories_category_property]
+        Sel -->|view cue| Views[views_property_view]
+        Sel -->|near metro mall POI| Nearby[nearby_locations_bridge]
+        Sel -->|amenity gym pool furnished| Amen[amenities_amenity_property]
+        Always --> Block[property_search_table_context]
+        Cats --> Block
+        Views --> Block
+        Nearby --> Block
+        Amen --> Block
+        ValIdx[value_index_scan_query] --> Pins[value_index_pins]
+        Pins --> Msg[inject_into_agent_user_message]
+        Block --> Msg
+    end
+
+    subgraph pathA [PathA_deterministic_SQL]
+        Spec[FilterSpec] --> Base[FROM_properties_LEFT_JOIN_locations]
+        Base --> Loc{"location_id set?"}
+        Loc -->|yes| V2["p.location_v2_id = ANY v2_ids"]
+        Loc -->|v2 NULL rows| Legacy["legacy 4-FK on locations"]
+        Spec -->|type| Cp[EXISTS_category_property]
+        Spec -->|amenity| Ap[EXISTS_amenity_property]
+        Spec -->|view or nearby| Pv[EXISTS_property_view_or_nearby]
+        Spec -->|agent or agency| Users[JOIN_users_user_sub_roles]
+    end
+
+    subgraph pathB [PathB_ReAct_fallback]
+        Msg --> Agent[ReAct_writes_SQL]
+        Include -.-> Agent
+        Core -.-> Agent
+        Agent --> Guard[sql_guard]
+        Guard --> PG[(PostgreSQL_RDS)]
+    end
+
+    V2 --> PG
+    Legacy --> PG
+    Cp --> PG
+    Ap --> PG
+    Pv --> PG
+    Users --> PG

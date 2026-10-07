@@ -1,0 +1,44 @@
+%% RTA Intel routing decisions — listing strip, mobility routes, exclusive vs hybrid.
+%% Companion note: rta_intel.md
+flowchart TD
+    Q[UserQuery] --> List{query_has_listing_signals}
+    List -->|yes| Strip[strip_rta_intel_keep_property_search]
+    List -->|no| Rec{recommend_hybrid_after_station_context}
+
+    Rec -->|yes| RecFan[Send_offplan_rta_offplan_geo_property_search]
+    Rec -->|no| Mob{mobility_intent_llm_route}
+
+    Mob -->|none| Planner[query_planner_or_structured_classify]
+    Mob -->|"bridge route conf greater than or equal 0.55"| Comp{infer_companion_intel_domains}
+
+    Comp -->|"companions non-empty"| Multi[multi_intel_hybrid_rta_plus_companions]
+    Comp -->|"empty pure mobility"| Excl[_rta_mobility_send_exclusive]
+
+    Planner --> ThinkLock{think_intent_equals_rta_intel}
+    ThinkLock -->|"yes AND flag on"| Excl
+    ThinkLock -->|no| PlanOut[plan_classifications_as_is]
+
+    Multi --> Route[route_to_agents]
+    Excl --> Route
+    RecFan --> Route
+    PlanOut --> Route
+    Strip --> Route
+
+    Route --> Gate{multi_fanout_OR_merged_greater_than_1}
+    Gate -->|yes| Fan[parallel_domain_Sends]
+    Gate -->|no| Regex{regex_fallbacks}
+
+    Regex -->|readiness| ExRead[exclusive_readiness]
+    Regex -->|offplan_near_station| ForceMulti[force_multi_intel_companions]
+    Regex -->|bus_OD| ExBus[exclusive_bus_corridor]
+    Regex -->|marina| ExMar[exclusive_marina_metro_corridor]
+    Regex -->|building_metro| ExBld[exclusive_building_metro_proximity]
+    Regex -->|none| DomainLoop[normal_classification_loop]
+
+    Fan --> RtaNode[rta_intel_node]
+    ExRead --> RtaNode
+    ForceMulti --> RtaNode
+    ExBus --> RtaNode
+    ExMar --> RtaNode
+    ExBld --> RtaNode
+    DomainLoop --> RtaNode

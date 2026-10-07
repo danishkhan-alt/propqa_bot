@@ -1,0 +1,39 @@
+%% Market Intel disambiguation — offplan / sold-most / cards / think lock / persona.
+%% Companion note: market_intel.md
+flowchart TD
+    Q[UserQuery] --> Named{"named offplan project trends brochure?"}
+    Named -->|yes| OffCatalog[offplan_projects_not_market_intel]
+    Named -->|no| Sold{"sold most offplan sales volume?"}
+
+    Sold -->|yes| OpBridge[offplan_market_bridge]
+    Sold -->|no| Cards{"need DLD stats PLUS listing cards?"}
+
+    Cards -->|yes| DldBridge[dld_bridge_dld_listings_pipeline]
+    Cards -->|no| Think{"think.intent market_intel or valuation?"}
+
+    Think -->|yes| Lock[think_lock_market_intel_skip_sql_false]
+    Think -->|no| Persona{"investor_intelligence or rental_intel?"}
+
+    Persona -->|investor| InvFan[market_intel_plus_location_intel]
+    Persona -->|rental| RentFan[location_plus_market_plus_property_search]
+    Persona -->|no| Cue{"market cue regex or planner?"}
+
+    Cue -->|yes| MI[market_intel_classifications]
+    Cue -->|hybrid mobility| Multi[multi_intel_hybrid_companions]
+    Cue -->|listings only| PS[property_search]
+    Cue -->|listing count plus volume| Both[property_search_plus_market_intel]
+
+    OffCatalog --> Route[route_to_agents]
+    OpBridge --> Route
+    DldBridge --> Route
+    Lock --> Route
+    InvFan --> Route
+    RentFan --> Route
+    MI --> Route
+    Multi --> Route
+    PS --> Route
+    Both --> Route
+
+    Route --> ResultGate{"pure market or valuation?"}
+    ResultGate -->|yes| NoCards[result_node_clear_listing_cards]
+    ResultGate -->|no| KeepCards[preserve_companion_cards]

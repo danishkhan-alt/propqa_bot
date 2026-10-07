@@ -1,0 +1,57 @@
+%% Communities Intel end-to-end — chat → think → classify → Sends → ranking hold → synth.
+%% Companion note: communities_intel.md
+flowchart TD
+    Chat["POST /api/chat SSE"] --> Boot[boot_node_hydrate_session]
+    Boot --> Think[think_node_intent_communities_intel]
+    Think --> Enhance[enhance_node_skip_FilterSpec_persona_slots]
+    Enhance --> RAE{route_after_enhance}
+
+    RAE -->|"communities_intel analytical"| Core[propqa_core_node_skip_sql_false]
+    RAE -->|"research flag on"| Research[research_branch_optional]
+    RAE -->|"other clear intents"| Core
+    RAE -->|"ambiguous"| Reason[reason_resolve_community_editorial_guide]
+    Reason --> Core
+    Research --> Core
+
+    Core --> Legacy[agent_get_workflow]
+    Legacy --> Scope[check_mvp_scope]
+    Scope -->|blocked| ScopeEnd[scope_or_schema_reply]
+    Scope -->|ok| Classify[classify_query_or_planner]
+
+    Classify --> C1{classify_paths}
+    C1 -->|"pure lifestyle schools what is X like"| CI[communities_intel_only]
+    C1 -->|"neighbourhoods near salvage"| CiNear[communities_intel_LI_suppressed]
+    C1 -->|"buyer_fit persona"| Buyer[communities_intel_plus_property_search]
+    C1 -->|"investor persona"| Inv[market_intel_plus_communities_intel]
+    C1 -->|"rental persona"| Rent[CI_plus_MI_plus_property_search]
+    C1 -->|"CI plus offplan gap"| CiOp[communities_intel_plus_offplan]
+    C1 -->|"CI plus market gap"| CiMi[communities_intel_plus_market_intel]
+    C1 -->|"CI plus POI-rank gap"| CiLi[communities_intel_plus_location_intel]
+    C1 -->|"CI plus listing filters"| CiPs[communities_intel_plus_property_search]
+    C1 -->|"mobility plus lifestyle cue"| Multi[multi_intel_hybrid_incl_CI]
+
+    CI --> Route[route_to_agents]
+    CiNear --> Route
+    Buyer --> Route
+    Inv --> Route
+    Rent --> Route
+    CiOp --> Route
+    CiMi --> Route
+    CiLi --> Route
+    CiPs --> Route
+    Multi --> Route
+
+    Route --> Nodes{domain_Sends}
+    Nodes --> CiNode[communities_intel_ReAct_staging]
+    Nodes --> Companions[market_intel_property_search_location_intel_rta_intel]
+
+    CiNode --> Completeness[answer_completeness_ranking_hold]
+    Completeness --> Synth[synthesize_results]
+    Companions --> Synth
+
+    Synth -->|"1 domain"| FinalDirect[final_answer_scrubbed]
+    Synth -->|"2+ domains"| FinalMerge[router_model_merge_stream]
+    FinalDirect --> Result[result_node_persona_overlay]
+    FinalMerge --> Result
+    ScopeEnd --> EndNode[END]
+    Result --> EndNode

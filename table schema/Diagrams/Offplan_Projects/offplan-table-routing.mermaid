@@ -1,0 +1,81 @@
+%% Offplan Projects table targeting — query cues → 3-table whitelist + value-index hints + bridges.
+%% Companion note: offplan_projects.md
+%% Shared four-layer view: ../Property_Search/table-routing.mermaid
+flowchart TD
+    subgraph layer1 [Layer1_query_to_domain]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Families[infer_intel_families]
+        Families --> Strip{listing_inventory_without_catalog_cues?}
+        Strip -->|yes| PsOnly[strip_to_property_search]
+        Strip -->|no| Classify[classifications_domain_list]
+    end
+
+    subgraph layer2 [Startup_hard_whitelist]
+        Map[OFFPLAN_TABLES_equals_OFFPLAN_CORE] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Core --> W1[(offplan_projects)]
+        Core --> W2[(offplan_files)]
+        Core --> W3[(locations)]
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Classify --> Sel[catalog_domain_context_select_tables_for_query]
+        Sel -->|value-index phrase hits| Rank[score_tables_by_phrase]
+        Sel -->|no hits| Size[largest_by_approx_rows]
+        Rank --> Block[generic_profile_block]
+        Size --> Block
+        ValIdx[value_index_scan_query] --> Pins[value_index_pins]
+        Pins --> Msg[inject_into_agent_user_message]
+        Block --> Msg
+        Win[resolved_windows_handover_or_launch] --> Msg
+        Skill[OFFPLAN_SKILL_column_recipes] --> Msg
+    end
+
+    subgraph skillJoins [Skill_preferred_joins]
+        Msg -->|project developer price payment handover| CatalogCols[FROM_offplan_projects_ILIKE]
+        Msg -->|brochure PDF floor plan media| FilesJoin["JOIN offplan_files fileable_type OffplanProject"]
+        Msg -->|community-level area follow-up| LocJoin[JOIN_locations_alias_lo]
+        Msg -->|default area| LocIlike[ILIKE_offplan_projects_location]
+    end
+
+    subgraph layer4 [Layer4_sql_guard_and_bridges]
+        Classify -->|offplan_projects| Agent[ReAct_writes_SQL]
+        Include -.-> Agent
+        Core -.-> Agent
+        CatalogCols --> Agent
+        FilesJoin --> Agent
+        LocJoin --> Agent
+        LocIlike --> Agent
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| PG[(PostgreSQL_RDS_PROD)]
+
+        Classify -->|offplan_market_bridge| Omb[offplan_market_pipeline]
+        Omb --> DldTx[(real_estate_dld_transactions)]
+        Omb --> DldDim[(real_estate_dld_projects_developers)]
+        Omb --> Fuzzy[(offplan_projects_fuzzy_match)]
+        DldTx --> PG
+        DldDim --> PG
+        Fuzzy --> PG
+
+        Classify -->|offplan_geo| Geo[rta_intel_offplan_geo]
+        Geo --> Audit[(AUDIT_metro_or_bus_stations)]
+        Geo --> Hav[(PROD_offplan_projects_haversine)]
+        Hav --> PG
+
+        Classify -->|readiness| Rdy[readiness_resolver]
+        Rdy --> CatReady[(offplan_projects)]
+        Rdy --> Props[(properties_completion_status)]
+        CatReady --> PG
+        Props --> PG
+
+        Classify -->|property_search| Ps[listings_off_plan]
+        Ps --> Props
+        PsOnly --> Ps
+    end
+
+    PG --> Synth[synthesize_results]

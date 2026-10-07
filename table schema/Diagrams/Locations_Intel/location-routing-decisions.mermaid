@@ -1,0 +1,43 @@
+%% Location Intel disambiguation — listings / RTA / offplan / DLD / CI lifestyle / persona / Think lock.
+%% Companion note: location_intel.md
+flowchart TD
+    Q[UserQuery] --> List{"listing filters beds price show me?"}
+    List -->|yes pure inventory| PS[property_search_only]
+    List -->|no| Mob{"station route ridership Salik NOL?"}
+
+    Mob -->|yes| RTA[rta_intel_not_location_intel]
+    Mob -->|no| Off{"named developer project inventory?"}
+
+    Off -->|yes| OP[offplan_projects]
+    Off -->|no| Dld{"historical prices volumes ROI?"}
+
+    Dld -->|yes pure market| MI[market_intel]
+    Dld -->|no| Life{"lifestyle schools what is X like?"}
+
+    Life -->|yes| Neigh{"which neighbourhoods are near?"}
+    Neigh -->|yes or lifestyle| CI[communities_intel_not_location_intel]
+    Life -->|no| Persona{"persona alias intent?"}
+
+    Persona -->|buyer_fit| Buyer[communities_intel_plus_property_search]
+    Persona -->|investor_intelligence| Inv[market_intel_plus_communities_intel]
+    Persona -->|rental_intel| Rent[CI_plus_MI_plus_property_search]
+    Persona -->|no| Think{"think.intent == location_intel?"}
+
+    Think -->|yes| Guard[skip_sql_agents_must_be_false]
+    Guard --> LI[location_intel_ReAct]
+    Think -->|CI ask plus POI-rank lat lng| CiGap[communities_intel_plus_location_intel]
+    Think -->|hybrid mobility cue| Multi[multi_intel_hybrid_add_LI]
+    Think -->|area plus listings signal| Fan[location_intel_plus_property_search]
+
+    PS --> Route[route_to_agents]
+    RTA --> Route
+    OP --> Route
+    MI --> Route
+    CI --> Route
+    Buyer --> Route
+    Inv --> Route
+    Rent --> Route
+    LI --> Route
+    CiGap --> Route
+    Multi --> Route
+    Fan --> Route

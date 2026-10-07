@@ -1,0 +1,78 @@
+%% Communities Intel hybrid fan-out — exclusive CI vs persona vs gap companions.
+%% Companion note: communities_intel.md
+flowchart TD
+    Q[UserQuery] --> Path{hybrid_path}
+
+    Path -->|"pure lifestyle schools what is X like"| Pure[exclusive_Send_communities_intel]
+    Path -->|"neighbourhoods near salvage"| Near[exclusive_Send_CI_LI_suppressed]
+    Path -->|"buyer_fit with persona"| Buyer[communities_intel_plus_property_search]
+    Path -->|"investor_intelligence"| Inv[market_intel_plus_communities_intel]
+    Path -->|"rental_intel"| Rent[CI_plus_market_plus_property_search]
+    Path -->|"CI plus developer payment-plan gap"| CiOp[communities_intel_plus_offplan]
+    Path -->|"CI plus yield DLD volume gap"| CiMi[communities_intel_plus_market_intel]
+    Path -->|"CI plus POI-rank lat lng gap"| CiLi[communities_intel_plus_location_intel]
+    Path -->|"CI plus listing filters"| CiPs[communities_intel_plus_property_search]
+    Path -->|"mobility multi_intel plus lifestyle"| Multi[rta_plus_inferred_companions]
+    Path -->|"planner already 2+ domains"| Keep[preserve_plan_steps_domains]
+
+    Buyer --> B1[communities_intel]
+    Buyer --> B2[property_search]
+
+    Inv --> I1[market_intel]
+    Inv --> I2[communities_intel]
+
+    Rent --> R1[communities_intel]
+    Rent --> R2[market_intel]
+    Rent --> R3[property_search]
+
+    CiOp --> O1[communities_intel]
+    CiOp --> O2[offplan_projects]
+
+    CiMi --> Mkt1[communities_intel]
+    CiMi --> Mkt2[market_intel]
+
+    CiLi --> L1[communities_intel]
+    CiLi --> L2[location_intel]
+
+    CiPs --> P1[communities_intel]
+    CiPs --> P2[property_search]
+
+    Multi --> M1[rta_intel]
+    Multi --> M2[communities_intel_when_lifestyle]
+    Multi --> M3[market_intel_when_cue]
+    Multi --> M4[location_intel_when_cue]
+    Multi --> M5[offplan_projects_when_cue]
+
+    Keep --> K1[as_planned_domains]
+
+    B1 --> Parallel[LangGraph_parallel_Sends]
+    B2 --> Parallel
+    I1 --> Parallel
+    I2 --> Parallel
+    R1 --> Parallel
+    R2 --> Parallel
+    R3 --> Parallel
+    O1 --> Parallel
+    O2 --> Parallel
+    Mkt1 --> Parallel
+    Mkt2 --> Parallel
+    L1 --> Parallel
+    L2 --> Parallel
+    P1 --> Parallel
+    P2 --> Parallel
+    M1 --> Parallel
+    M2 --> Parallel
+    M3 --> Parallel
+    M4 --> Parallel
+    M5 --> Parallel
+    K1 --> Parallel
+    Pure --> Single[single_communities_intel_Send]
+    Near --> CiSingle[single_communities_intel_Send]
+
+    Parallel --> Results[operator_add_results]
+    Single --> Results
+    CiSingle --> Results
+
+    Results --> Synth{domain_count}
+    Synth -->|1| Direct[scrubbed_final_answer]
+    Synth -->|2+| Merge[router_model_synthesize]

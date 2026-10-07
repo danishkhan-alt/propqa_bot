@@ -1,0 +1,82 @@
+%% Property Search module map — files that classify, hint, and execute listings.
+%% Companion note: property_search.md
+flowchart TB
+    subgraph Entry
+        SSE[sse_bridge]
+        COG[cognitive_pipeline]
+        THINK[nodes_think]
+        ENH[nodes_enhance]
+        INTENT[intent_classifier_llm]
+        SSE --> COG
+        COG --> THINK
+        COG --> ENH
+        THINK --> INTENT
+    end
+
+    subgraph ClassifyLayer
+        SIG[listing_signals]
+        QC[query_classifier]
+        PERC[perception_prepass]
+        PLAN[query_planner]
+        SIG --> QC
+        PERC --> QC
+        QC --> PLAN
+    end
+
+    subgraph PsPkg
+        PSP[property_search_pkg]
+        PROF[table_profiles]
+        SV[self_verify]
+        PSP --> PROF
+        PSP --> SV
+    end
+
+    subgraph FastPath
+        PF[property_filters]
+        LOCI[locations_index]
+        LPP[listings_prompt_parser]
+        PF --> LOCI
+        LPP --> PF
+    end
+
+    subgraph RouterLayer
+        AGENT[agent_py]
+        DA[domain_agents]
+        SKILL[sql_agent_skills_PROPERTY_SEARCH]
+        MVP[mvp_scope_guard]
+        SQLG[sql_guard]
+        AGENT --> DA
+        DA --> SKILL
+        DA --> MVP
+        DA --> SQLG
+    end
+
+    subgraph Catalog
+        VAL[catalog_value_index]
+        RES[catalog_resolution]
+        VAL --> RES
+    end
+
+    subgraph Verify
+        T1[test_property_search_profiles]
+        T2[test_property_search_trust_forwarded_spec]
+        T3[test_fallback_policy]
+        T4[test_property_search_self_verify]
+        T5[test_property_search_v2_skill_contract]
+    end
+
+    THINK --> PROF
+    ENH --> PROF
+    ENH --> PF
+    COG --> QC
+    QC --> PROF
+    QC --> VAL
+    QC --> AGENT
+    AGENT --> PF
+    AGENT --> SV
+    AGENT --> LPP
+    PROF --> T1
+    AGENT --> T2
+    PF --> T3
+    SV --> T4
+    SKILL --> T5

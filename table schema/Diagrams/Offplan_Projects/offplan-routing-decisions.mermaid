@@ -1,0 +1,37 @@
+%% Offplan Projects disambiguation — sold-most / geo / readiness / listings / catalog.
+%% Companion note: offplan_projects.md
+flowchart TD
+    Q[UserQuery] --> Sold{"sold most OR sales volume offplan?"}
+    Sold -->|yes| Bridge[offplan_market_bridge_never_solo_catalog]
+    Sold -->|no| Geo{"near named station OR metro?"}
+
+    Geo -->|yes| Detail{"details prices payment lifestyle?"}
+    Detail -->|yes| Multi[multi_intel_hybrid_rta_offplan_market_location]
+    Detail -->|no| GeoOnly[rta_intel_mobility_route_offplan_geo]
+
+    Geo -->|no| Ready{"is ready OR why offplan?"}
+    Ready -->|yes| Readiness[rta_intel_readiness_bridge]
+    Ready -->|no| List{"unit filters beds price listing?"}
+
+    List -->|yes| FanPS[offplan_projects_plus_property_search]
+    List -->|no| Broch{"brochure PDF payment handover developer?"}
+
+    Broch -->|yes| Catalog[offplan_projects_catalog_only]
+    Broch -->|no| Rec{"recommend_hybrid after prior geo context?"}
+
+    Rec -->|yes| RecFan[offplan_projects_plus_rta_intel_plus_property_search]
+    Rec -->|no| Planner[query_planner_or_LLM_classify]
+
+    Bridge --> Route[route_to_agents]
+    Multi --> Route
+    GeoOnly --> Route
+    Readiness --> Route
+    FanPS --> Route
+    Catalog --> Route
+    RecFan --> Route
+    Planner --> Route
+
+    Route --> Gate{"depends_on market bridge?"}
+    Gate -->|yes| Inject[inject_offplan_bridge_context_into_catalog]
+    Gate -->|no| Nodes[parallel_or_single_domain_Sends]
+    Inject --> Nodes

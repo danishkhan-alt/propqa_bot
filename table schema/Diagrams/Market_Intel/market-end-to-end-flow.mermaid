@@ -1,0 +1,49 @@
+%% Market Intel end-to-end — chat → think → classify → Sends → synth.
+%% Companion note: market_intel.md
+flowchart TD
+    Chat["POST /api/chat SSE"] --> Boot[boot_node_hydrate_session]
+    Boot --> Think[think_node_intent_plus_dld_tables]
+    Think --> Enhance[enhance_node_skip_FilterSpec_inject_profiles]
+    Enhance --> RAE{route_after_enhance}
+
+    RAE -->|"market_intel valuation persona"| Core[propqa_core_node_skip_sql_false]
+    RAE -->|"other clear intents"| Core
+    RAE -->|"ambiguous"| Reason[reason_rebuild_suggest_HITL]
+    Reason --> Core
+
+    Core --> Legacy[agent_get_workflow]
+    Legacy --> Scope[check_mvp_scope]
+    Scope -->|blocked| ScopeEnd[scope_or_schema_reply]
+    Scope -->|ok| Classify[classify_query_or_planner]
+
+    Classify --> C1{classify_paths}
+    C1 -->|"think lock market or valuation"| MI[market_intel_only]
+    C1 -->|"DLD stats plus listing cards"| DldBridge[dld_listings_pipeline]
+    C1 -->|"sold most offplan"| OpMkt[offplan_market_bridge]
+    C1 -->|"investor rental persona"| PersonaFan[persona_multi_domain]
+    C1 -->|"mobility companions"| Multi[multi_intel_hybrid_incl_market]
+    C1 -->|"listing count plus volume"| Both[property_search_plus_market_intel]
+
+    MI --> Route[route_to_agents]
+    DldBridge --> Route
+    OpMkt --> Route
+    PersonaFan --> Route
+    Multi --> Route
+    Both --> Route
+
+    Route --> Nodes{domain_Sends}
+    Nodes --> MiNode[market_intel_ReAct_prod]
+    Nodes --> BridgeNodes[dld_or_offplan_market_bridges]
+    Nodes --> Companions[location_intel_property_search_rta_intel]
+
+    MiNode --> Completeness[answer_completeness_currency_hold]
+    Completeness --> Synth[synthesize_results]
+    BridgeNodes --> Synth
+    Companions --> Synth
+
+    Synth -->|"1 domain"| FinalDirect[final_answer_scrubbed_no_cards]
+    Synth -->|"2+ domains"| FinalMerge[router_model_merge_stream]
+    FinalDirect --> Result[result_node_clear_cards_for_pure_MI]
+    FinalMerge --> Result
+    ScopeEnd --> EndNode[END]
+    Result --> EndNode

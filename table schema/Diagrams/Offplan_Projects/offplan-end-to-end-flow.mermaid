@@ -1,0 +1,50 @@
+%% Offplan Projects end-to-end — chat → think → classify → Sends → synth.
+%% Companion note: offplan_projects.md
+flowchart TD
+    Chat["POST /api/chat SSE"] --> Boot[boot_node_hydrate_session]
+    Boot --> Think[think_node_intent]
+    Think --> Enhance[enhance_node_windows_persona]
+    Enhance --> RAE{route_after_enhance}
+
+    RAE -->|"offplan near station mobility"| Core[propqa_core_node]
+    RAE -->|"clear catalog or analytical"| Core
+    RAE -->|"ambiguous"| Reason[reason_rebuild_suggest_HITL]
+    Reason --> Core
+
+    Core --> Legacy[agent_get_workflow]
+    Legacy --> Scope[check_mvp_scope]
+    Scope -->|blocked| ScopeEnd[scope_or_schema_reply]
+    Scope -->|ok| Classify[classify_query_or_planner]
+
+    Classify --> C1{classify_early_paths}
+    C1 -->|"sold most sales volume"| MktBridge[offplan_market_bridge]
+    C1 -->|"brochure payment handover"| Catalog[offplan_projects]
+    C1 -->|"near station plus details"| GeoHy[multi_intel_hybrid]
+    C1 -->|"recommend after geo context"| RecHy[recommend_hybrid]
+    C1 -->|"is X ready why offplan"| Ready[readiness_via_rta_intel]
+    C1 -->|"project plus unit filters"| FanPS[offplan_plus_property_search]
+
+    MktBridge --> Route[route_to_agents]
+    Catalog --> Route
+    GeoHy --> Route
+    RecHy --> Route
+    Ready --> Route
+    FanPS --> Route
+
+    Route --> Nodes{domain_Sends}
+    Nodes --> OpNode[offplan_projects_ReAct_prod]
+    Nodes --> BridgeNode[offplan_market_pipeline]
+    Nodes --> RtaNode[rta_intel_offplan_geo_or_readiness]
+    Nodes --> Companions[market_intel_location_intel_property_search]
+
+    BridgeNode -->|"depends_on inject"| OpNode
+    OpNode --> Synth[synthesize_results]
+    RtaNode --> Synth
+    Companions --> Synth
+
+    Synth -->|"1 domain"| FinalDirect[final_answer_scrubbed]
+    Synth -->|"2+ domains"| FinalMerge[router_model_merge_stream]
+    FinalDirect --> Result[result_node_commit]
+    FinalMerge --> Result
+    ScopeEnd --> EndNode[END]
+    Result --> EndNode

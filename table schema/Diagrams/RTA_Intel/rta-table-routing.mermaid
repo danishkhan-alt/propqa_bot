@@ -1,0 +1,110 @@
+%% RTA Intel table targeting — query cues → dual-DB whitelist + value-index hints + bridges.
+%% Companion note: rta_intel.md
+%% Shared four-layer view: ../Property_Search/table-routing.mermaid
+flowchart TD
+    subgraph layer1 [Layer1_query_to_domain]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Families[infer_intel_families]
+        Families --> Strip{listing_inventory_signals?}
+        Strip -->|yes| PsOnly[strip_rta_intel_keep_property_search]
+        Strip -->|no| Mob[mobility_intent_llm]
+        Mob -->|none| Classify[classifications_domain_list]
+        Mob -->|bridge_or_generic| Classify
+        ThinkLock[think_lock_rta_intel] --> Families
+        CueRe["_COMMUNITIES_GAP_RTA_RE metro tram bus salik nol rta"] --> Families
+    end
+
+    subgraph layer2 [Startup_hard_whitelist_AUDIT]
+        Map[RTA_INTEL_TABLES] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Include --> Ext[EXTENDED_name_hints_still_queryable]
+        Core --> W1[(metro_lines_stations)]
+        Core --> W2[(tram_lines_stations_gis)]
+        Core --> W3[(bus_stops_gis_routes_stops)]
+        Core --> W4[(marine_stations_gis_lines)]
+        Core --> W5[(nol_salik_taxi_rail_parking)]
+        Core --> W6[(monthly_passengers_trips_four_modes)]
+        Core --> W7[(bus_coverage_parking_spaces_rates)]
+        Ext --> E1[(raw_ridership_four_modes)]
+        Ext --> E2[(bus_speed_stop_details)]
+        Ext --> E3[(taxi_fleets_roads_bicycle)]
+        Ext --> E4[(marine_fleet_capacity_school_buses)]
+        Ban[no_empty_hub_no_corrupt_trips_no_KML_GTFS] -.-> Mvp
+        Flag[RTA_INTEL_ENABLED_plus_AUDIT_DB] -.-> Intersect
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Classify --> Sel[catalog_domain_context_select_tables_for_query]
+        Sel -->|value-index phrase hits| Rank[score_tables_by_phrase]
+        Sel -->|no hits| Size[largest_by_approx_rows]
+        Rank --> Cap[cap_DOMAIN_CONTEXT_MAX_TABLES_default_3]
+        Size --> Cap
+        Cap --> Block[generic_profile_block]
+        ValIdx[catalog_value_index_scan_query] --> Pins[value_index_pins]
+        Pins --> Msg[inject_into_agent_user_message]
+        Block --> Msg
+        Win[resolved_windows_year_plus_month_name] --> Msg
+        Skill[RTA_INTEL_SKILL_column_recipes] --> Msg
+        Pre[preflight_ground_truth_plus_tool_hint] --> Msg
+    end
+
+    subgraph skillJoins [Skill_preferred_tables]
+        Msg -->|Red Line station list| MetroJoin["FROM metro_stations location_name or line_name"]
+        Msg -->|Marina JLT nearest metro| CorridorJoin[section_6b_DAMAC_Sobha_plus_DMCC]
+        Msg -->|tram stops or trips| TramJoin[tram_stations_or_monthly]
+        Msg -->|bus routes at named stop| BusJoin["bus_stops_gis JOIN routes_stops on 6digit stop_id"]
+        Msg -->|monthly ridership| MonthJoin[passengers_trips_monthly_UNION]
+        Msg -->|parking spaces community| ParkJoin["coverage JOIN parking_spaces on community_num"]
+        Msg -->|parking tariff bands| RateJoin[FROM_parking_rates_no_zone_join]
+        Msg -->|NOL Salik taxi| AmenJoin[nol_machines_salik_gates_taxi_stands]
+        Msg -->|marine| MarineJoin["marine_stations JOIN gis on station_id"]
+        Msg -->|lifestyle schools| HandOff[not_this_whitelist_CI_or_LI]
+        Msg -->|"2bed rent near metro"| ListHand[not_this_whitelist_property_search]
+    end
+
+    subgraph layer4 [Layer4_bridges_and_sql_guard]
+        Classify -->|marina_metro_corridor| Mar[marina_metro_corridor_bridge]
+        Classify -->|building_metro_proximity| Bld[building_metro_proximity_bridge]
+        Classify -->|bus_corridor| Bus[bus_corridor_bridge]
+        Classify -->|offplan_geo| Geo[offplan_geo_bridge]
+        Classify -->|readiness| Rdy[readiness_bridge]
+        Classify -->|rta_intel_generic| Agent[ReAct_writes_SQL]
+        Classify -->|listing_strip| Ps[property_search_only]
+
+        Include -.-> Agent
+        Core -.-> Agent
+        MetroJoin --> Agent
+        CorridorJoin --> Agent
+        TramJoin --> Agent
+        BusJoin --> Agent
+        MonthJoin --> Agent
+        ParkJoin --> Agent
+        RateJoin --> Agent
+        AmenJoin --> Agent
+        MarineJoin --> Agent
+
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| Audit[(Staging_AUDIT_DB_chatbot_ai)]
+
+        Mar --> Audit
+        Bld --> Audit
+        Bld --> Prod[(PostgreSQL_RDS_PROD)]
+        Bus --> Audit
+        Geo --> Audit
+        Geo --> Prod
+        Rdy --> Prod
+        Ps --> Prod
+        PsOnly --> Ps
+        ListHand --> Ps
+        HandOff --> Ci[communities_or_location_intel]
+    end
+
+    Audit --> Synth[synthesize_results]
+    Prod --> Synth
+    Ci --> Synth
+    Synth --> Completeness[answer_completeness_ranking_hold]

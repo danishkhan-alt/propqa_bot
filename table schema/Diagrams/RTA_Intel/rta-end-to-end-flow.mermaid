@@ -1,0 +1,51 @@
+%% RTA Intel end-to-end — chat → think → classify → exclusive or hybrid Sends → synth.
+%% Companion note: rta_intel.md
+flowchart TD
+    Chat["POST /api/chat SSE"] --> Boot[boot_node_hydrate_session]
+    Boot --> Think[think_node_intent]
+    Think --> Enhance[enhance_node_FilterSpec_suppress]
+    Enhance --> RAE{route_after_enhance}
+
+    RAE -->|"intent rta_intel OR mobility AND NOT listing"| Core[propqa_core_node]
+    RAE -->|"other clear intents"| Core
+    RAE -->|"ambiguous"| Reason[reason_rebuild_suggest_HITL]
+    Reason --> Core
+
+    Core --> Legacy[agent_get_workflow]
+    Legacy --> Scope[check_mvp_scope]
+    Scope -->|blocked| ScopeEnd[scope_or_schema_reply]
+    Scope -->|ok| Classify[classify_query]
+
+    Classify --> C1{classify_early_exits}
+    C1 -->|recommend_hybrid| HyRec[offplan_plus_rta_plus_property_search]
+    C1 -->|"mobility plus companions"| HyMulti[multi_intel_hybrid_payload]
+    C1 -->|"mobility no companions"| RtaOnly[rta_intel_only]
+    C1 -->|"think lock rta_intel"| RtaOnly
+    C1 -->|"listing signals"| PsOnly[strip_rta_keep_property_search]
+    C1 -->|planner_or_LLM| Plan[plan_classifications]
+
+    HyRec --> Route[route_to_agents]
+    HyMulti --> Route
+    RtaOnly --> Route
+    PsOnly --> Route
+    Plan --> Route
+
+    Route --> R2{route_to_agents_gates}
+    R2 -->|"exclusive bridge AND NOT multi_fanout"| ExSend[_rta_mobility_send_one_Send]
+    R2 -->|"recommend OR multi_intel OR merged greater than 1"| Fan[multi_Send_fanout]
+
+    ExSend --> RtaNode[rta_intel_node_fn]
+    Fan --> RtaNode
+    Fan --> Companions[offplan_market_location_communities_property_search]
+
+    RtaNode --> Preflight[dispatch_mobility_bridge_preflight]
+    Preflight --> React[ReAct_AUDIT_DB_plus_bridge_tools]
+    React --> Synth[synthesize_results]
+    Companions --> Synth
+
+    Synth -->|"1 domain"| FinalDirect[final_answer_scrubbed]
+    Synth -->|"2+ domains"| FinalMerge[router_model_merge_stream]
+    FinalDirect --> Result[result_node_commit]
+    FinalMerge --> Result
+    ScopeEnd --> EndNode[END]
+    Result --> EndNode

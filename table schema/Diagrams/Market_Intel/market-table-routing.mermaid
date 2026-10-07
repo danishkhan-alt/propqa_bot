@@ -1,0 +1,108 @@
+%% Market Intel table targeting — query cues → DLD whitelist + regex hints + bridges.
+%% Companion note: market_intel.md
+%% Shared four-layer view: ../Property_Search/table-routing.mermaid
+flowchart TD
+    subgraph layer1 [Layer1_query_to_domain]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Families[infer_intel_families]
+        Families --> Classify[classifications_domain_list]
+        ThinkLock[think_lock_market_or_valuation] --> Families
+        CueRe["_MARKET_INTEL_CUE_RE or DLD aggregate"] --> Families
+    end
+
+    subgraph layer2 [Startup_hard_whitelist]
+        Map[MARKET_INTEL_TABLES] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Include --> Ext[EXTENDED_name_hints_still_queryable]
+        Core --> W1[(real_estate_dld_transactions)]
+        Core --> W2[(real_estate_dld_rent_contracts)]
+        Core --> W3[(dld_community_avg_sale_price)]
+        Core --> W4[(real_estate_dld_areas)]
+        Core --> W5[(projects_buildings_developers)]
+        Core --> W6[(price_trend_buy_rent_fact)]
+        Core --> W7[(rental_contract_summary)]
+        Core --> W8[(locations)]
+        Ext --> E1[(real_estate_dld_units)]
+        Ext --> E2[(real_estate_dld_land_registry)]
+        Allowed[MARKET_INTEL_DLD_ALLOWED_9_tables] -.-> Mvp
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Classify --> Sel[dld_table_profiles_select_tables_for_query]
+        Sel --> Waterfall{first_regex_match_wins}
+
+        Waterfall -->|yield ROI| YieldPick[rent_contracts_plus_transactions_plus_areas]
+        Waterfall -->|rent Ejari| RentPick[rent_contracts_plus_areas]
+        RentPick -->|also sale cue| RentSale[plus_transactions]
+        Waterfall -->|"avg price and no sale"| AvgPick[community_avg_plus_areas]
+        Waterfall -->|developer project registry| DevPick[projects_developers_areas]
+        Waterfall -->|rent trend| TrendRent[price_trend_rent_fact_plus_areas]
+        Waterfall -->|buy trend AED per sqft| TrendBuy[price_trend_buy_fact_plus_areas]
+        Waterfall -->|sale or intent valuation| SalePick[transactions_plus_areas]
+        Waterfall -->|else default| DefaultPick[transactions_rent_contracts_areas]
+
+        YieldPick --> Cap[cap_DLD_CONTEXT_MAX_TABLES_default_3]
+        RentPick --> Cap
+        RentSale --> Cap
+        AvgPick --> Cap
+        DevPick --> Cap
+        TrendRent --> Cap
+        TrendBuy --> Cap
+        SalePick --> Cap
+        DefaultPick --> Cap
+
+        Cap --> Block[dld_table_context_markdown]
+        Alias[dld_area_aliases_sector_rewrite] --> Block
+        Joins[relationship_block_join_edges] --> Block
+        Forbid[forbidden_sale_cols_on_rent_tables] --> Block
+        Win[resolved_windows_instance_or_contract_start] --> Msg[inject_into_agent_user_message]
+        Topic[session_market_topic_plus_dld_area_phrase] --> Sel
+        Block --> Msg
+    end
+
+    subgraph skillJoins [Skill_preferred_joins]
+        Msg -->|sale YoY valuation| TxJoin["FROM transactions JOIN areas ON area_id"]
+        Msg -->|Ejari rent| RentJoin["FROM rent_contracts JOIN areas ON area_id"]
+        Msg -->|yield ROI two CTE| YieldJoin[rent_contracts_AND_transactions]
+        Msg -->|developer stock| ProjJoin["projects JOIN developers ON developer_id"]
+        Msg -->|building or unit| BldJoin["buildings_or_units JOIN projects ON project_id"]
+        Msg -->|area follow-up| LocJoin[locations_alias_index]
+    end
+
+    subgraph layer4 [Layer4_sql_guard_and_bridges]
+        Classify -->|market_intel or valuation| Agent[ReAct_writes_SQL]
+        Include -.-> Agent
+        Core -.-> Agent
+        TxJoin --> Agent
+        RentJoin --> Agent
+        YieldJoin --> Agent
+        ProjJoin --> Agent
+        BldJoin --> Agent
+        LocJoin --> Agent
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| PG[(PostgreSQL_RDS_PROD)]
+
+        Classify -->|dld_bridge| DldPipe[dld_listings_pipeline]
+        DldPipe --> DldAgg[(DLD_aggregates)]
+        DldPipe --> LocDim[(locations)]
+        DldPipe --> Props[(properties_cards)]
+        DldAgg --> PG
+        LocDim --> PG
+        Props --> PG
+
+        Classify -->|offplan_market_bridge| Omb[offplan_market_pipeline]
+        Omb --> DldTx[(real_estate_dld_transactions)]
+        Omb --> Fuzzy[(offplan_projects_fuzzy_match)]
+        DldTx --> PG
+        Fuzzy --> PG
+    end
+
+    PG --> Synth[synthesize_results]
+    Synth --> Result{pure_market_or_valuation?}
+    Result -->|yes| NoCards[result_node_clear_listing_cards]
+    Result -->|no| KeepCards[preserve_companion_cards]

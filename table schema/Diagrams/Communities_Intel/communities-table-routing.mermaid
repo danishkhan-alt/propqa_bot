@@ -1,0 +1,87 @@
+%% Communities Intel table targeting — query cues → staging page whitelist + value-index + skill recipes.
+%% Companion note: communities_intel.md
+%% Shared four-layer view: ../Property_Search/table-routing.mermaid
+flowchart TD
+    subgraph layer1 [Layer1_query_to_domain]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Families[infer_intel_families]
+        Families --> Classify[classifications_domain_list]
+        ThinkLock[think_lock_communities_intel] --> Families
+        FamilyCue["_COMMUNITIES_FAMILY_CUE_RE lifestyle schools commute"] --> Families
+        Salvage["_COMMUNITIES_SALVAGE_RE whats_X_like living_in"] --> Families
+        FaqAsk[is_community_faq_ask] --> Families
+        Neigh["_COMMUNITIES_NEIGHBOURHOODS_NEAR_RE"] --> SuppressLi[suppress_LI_keep_communities_intel]
+        Neigh --> Families
+    end
+
+    subgraph layer2 [Startup_hard_whitelist_staging]
+        Flag{COMMUNITIES_AREA_INSIGHTS}
+        Flag -->|default 1| Map[COMMUNITIES_INTEL_TABLES]
+        Flag -->|0 emergency| Legacy[ps_communities_plus_seven]
+        Map --> Intersect[intersect_staging_available_tables]
+        Legacy --> Intersect
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Core --> W1[(area_insights_communities)]
+        Schema[communities_page_schema_FQN] --> Mv1[(public_mv_community_landing_metrics)]
+        Schema --> Mv2[(public_mv_community_dld_market_metrics)]
+        Ban[no_prod_DB_no_chatbot_communities_dubai_no_listings_no_raw_DLD] -.-> Mvp
+        Staging[AUDIT_DB_chatbot_ai] --> Intersect
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Classify --> Sel[catalog_domain_context_select_tables_for_query]
+        Sel -->|value-index phrase hits| Rank[score_tables_by_phrase]
+        Sel -->|no hits| Size[largest_by_approx_rows]
+        Rank --> Cap[cap_DOMAIN_CONTEXT_MAX_TABLES_default_3]
+        Size --> Cap
+        Cap --> Block[generic_profile_block]
+        ValIdx[catalog_value_index_scan_query] --> Pins[value_index_pins]
+        Pins --> Msg[inject_into_agent_user_message]
+        Block --> Msg
+        Skill[COMMUNITIES_INTEL_SKILL_column_recipes] --> Msg
+        Prof[communities_intel_profiles_v1] --> Sel
+    end
+
+    subgraph skillJoins [Skill_preferred_objects]
+        Msg -->|whats_X_like overview| CardJoin["insights LEFT JOIN landing LEFT JOIN DLD_MV"]
+        Msg -->|schools nurseries universities| SchJoin["jsonb_array_elements schools LIMIT 15"]
+        Msg -->|who lives here nationalities| NatJoin[landing_nationalities_sorted_else_insights]
+        Msg -->|catalog metro drive destinations| MetroJoin[insights_metro_whats_within_reach]
+        Msg -->|page yield growth median| MktJoin["DLD_MV quality_ok LIMIT 1"]
+        Msg -->|best yield fastest growth| RankJoin["DLD_MV WHERE quality_ok ORDER LIMIT 10"]
+        Msg -->|most listings vs all-time sales| LandJoin[landing_total_listings_vs_properties_sold]
+        Msg -->|subcommunities building URL brunch| NotAvail[Not_available_on_page_model]
+        Msg -->|live metro Salik| HandRta[not_this_whitelist_rta_intel]
+        Msg -->|production DLD txn yields| HandMi[not_this_whitelist_market_intel]
+    end
+
+    subgraph layer4 [Layer4_sql_guard]
+        Classify -->|communities_intel| Agent[ReAct_writes_SQL]
+        Include -.-> Agent
+        Core -.-> Agent
+        Schema -.-> Agent
+        CardJoin --> Agent
+        SchJoin --> Agent
+        NatJoin --> Agent
+        MetroJoin --> Agent
+        MktJoin --> Agent
+        RankJoin --> Agent
+        LandJoin --> Agent
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| PG[(PostgreSQL_RDS_AUDIT_DB)]
+        SuppressLi --> CI[communities_intel_ReAct]
+        HandRta --> RTA[rta_intel_companion]
+        HandMi --> MI[market_intel_companion]
+        NotAvail --> Synth[synthesize_results]
+    end
+
+    PG --> Synth
+    CI --> Synth
+    RTA --> Synth
+    MI --> Synth
+    Synth --> Completeness[answer_completeness_ranking_hold]

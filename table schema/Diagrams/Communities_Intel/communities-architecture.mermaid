@@ -1,0 +1,89 @@
+%% Communities Intel architecture — think/classify → staging bake → ReAct + matview FQNs + LI carve-out.
+%% Companion note: communities_intel.md
+flowchart TB
+    subgraph Input
+        U[UserQuery]
+    end
+
+    subgraph Classification
+        TH[think_node]
+        QC[query_classifier]
+        PLAN[query_planner]
+        PERC[perception_prepass]
+        U --> TH --> QC
+        QC --> PLAN
+        TH --> PERC
+    end
+
+    subgraph State
+        CL[classifications]
+        PINS[value_index_pins]
+        SKIP[skip_sql_agents_must_stay_false]
+        HYB[multi_intel_hybrid]
+        QC --> CL
+        QC --> PINS
+        TH --> SKIP
+        QC --> HYB
+    end
+
+    subgraph ContextInject
+        VAL[catalog_value_index]
+        DC[catalog_domain_context]
+        PROF[communities_intel_profiles_v1]
+        SKILL[COMMUNITIES_INTEL_SKILL]
+        VAL --> DC
+        PROF --> DC
+        PINS --> DC
+        DC --> CTX[generic_profile_block]
+    end
+
+    subgraph StagingDB
+        STG[(AUDIT_DB_chatbot_ai)]
+    end
+
+    subgraph CommunitiesAgent
+        BDA[build_communities_intel_agent]
+        PROMPT[domain_prompt_communities_intel]
+        SCHEMA[communities_page_schema_FQN]
+        TOOL[guarded_sql_db_query]
+        BDA --> STG
+        SKILL --> TOOL
+        PROMPT --> TOOL
+        SCHEMA --> TOOL
+        CTX --> USERMSG[user_message_schema_context]
+        USERMSG --> TOOL
+        TOOL --> STG
+    end
+
+    subgraph CoreTables
+        T1[(area_insights_communities)]
+        TOOL --> T1
+    end
+
+    subgraph Matviews
+        M1[(public_mv_community_landing_metrics)]
+        M2[(public_mv_community_dld_market_metrics)]
+        TOOL -.-> M1
+        TOOL -.-> M2
+    end
+
+    subgraph CarvedOut
+        LI[location_intel]
+        T2[(locations_buildings_pois)]
+        LI --> T2
+    end
+
+    subgraph Enrichment
+        CCR[community_content_resolver]
+        CS[community_signals]
+        BUY[buyer_intel]
+        REN[renter_intel]
+        CCR --> CS
+        CS --> BUY
+        CS --> REN
+    end
+
+    CL --> CommunitiesAgent
+    CommunitiesAgent --> Enrichment
+    PERC -->|"spatial POI catalog ranking"| LI
+    NeighLock["_COMMUNITIES_NEIGHBOURHOODS_NEAR_RE"] -.->|"suppress LI"| QC

@@ -1,0 +1,47 @@
+%% Location Intel enrichment — index / resolver / signals after SQL (not table pickers).
+%% Companion note: location_intel.md
+flowchart TB
+    subgraph Slots
+        S1[area_or_community_phrase]
+        S2[persona_slots_family_schools]
+        S3[ranking_metric_cue]
+    end
+
+    subgraph Resolve
+        S1 --> IDX[locations_index]
+        IDX --> CCR[community_content_resolver]
+        CCR --> LOC[(locations_aliases)]
+        CCR --> SK1[resolved_community_soft_scores]
+        CCR -.->|"editorial_owned_by_CI"| CI[communities_intel]
+    end
+
+    subgraph ReAct
+        S1 --> SQL[location_intel_sql_db_query]
+        S3 --> SQL
+        SQL --> T1[(locations_buildings)]
+        SQL --> T2[(nlp_search_pois_roads)]
+        SQL --> T3[(nearby_locations_bridges)]
+        SQL --> T4[(pf_locations_places)]
+        SQL --> A1[answer_catalog_ranking_POI]
+    end
+
+    subgraph Signals
+        SK1 --> CS[community_signals]
+        CS --> Scores[schools_metro_lifestyle_scores]
+    end
+
+    subgraph PersonaEnrich
+        S2 --> BUY[buyer_intel_enrich]
+        S2 --> REN[renter_intel_enrich]
+        Scores --> BUY
+        Scores --> REN
+        A1 --> BUY
+        A1 --> REN
+        BUY --> SK2[buyer_fit_overlay]
+        REN --> SK3[renter_overlay]
+    end
+
+    subgraph Completeness
+        A1 --> COMP[answer_completeness_ranking_repair]
+        COMP --> HOLD[streaming_hold_until_metric_present]
+    end

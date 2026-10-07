@@ -1,0 +1,51 @@
+%% Communities Intel disambiguation — listings / RTA / offplan / DLD / LI spatial / persona / Think lock.
+%% Companion note: communities_intel.md
+flowchart TD
+    Q[UserQuery] --> List{"listing filters beds price show me?"}
+    List -->|yes pure inventory| PS[property_search_only]
+    List -->|no| Mob{"station route ridership Salik NOL?"}
+
+    Mob -->|yes live network| RTA[rta_intel_not_communities_intel]
+    Mob -->|no| Off{"named developer project brochure handover?"}
+
+    Off -->|yes catalog only| OP[offplan_projects]
+    Off -->|no| Dld{"historical prices volumes raw DLD txn?"}
+
+    Dld -->|yes pure market| MI[market_intel]
+    Dld -->|no| Spatial{"POI rank lat lng buildings catalog?"}
+
+    Spatial -->|yes spatial only| LI[location_intel_not_communities_intel]
+    Spatial -->|no| Life{"lifestyle schools what is X like who lives here?"}
+
+    Life -->|yes| Neigh{"which neighbourhoods are near?"}
+    Neigh -->|yes or lifestyle| CI[communities_intel]
+    Life -->|no| Persona{"persona alias intent?"}
+
+    Persona -->|buyer_fit| Buyer[communities_intel_plus_property_search]
+    Persona -->|investor_intelligence| Inv[market_intel_plus_communities_intel]
+    Persona -->|rental_intel| Rent[CI_plus_MI_plus_property_search]
+    Persona -->|no| Think{"think.intent == communities_intel?"}
+
+    Think -->|yes exclusive| Guard[skip_sql_agents_must_be_false]
+    Guard --> CiOnly[communities_intel_ReAct]
+    Think -->|CI plus developer payment-plan gap| CiOp[communities_intel_plus_offplan]
+    Think -->|CI plus yield DLD volume gap| CiMi[communities_intel_plus_market_intel]
+    Think -->|CI plus POI-rank lat lng gap| CiLi[communities_intel_plus_location_intel]
+    Think -->|CI plus listing filters| CiPs[communities_intel_plus_property_search]
+    Think -->|hybrid mobility plus lifestyle| Multi[multi_intel_hybrid_add_CI]
+
+    PS --> Route[route_to_agents]
+    RTA --> Route
+    OP --> Route
+    MI --> Route
+    LI --> Route
+    CI --> Route
+    Buyer --> Route
+    Inv --> Route
+    Rent --> Route
+    CiOnly --> Route
+    CiOp --> Route
+    CiMi --> Route
+    CiLi --> Route
+    CiPs --> Route
+    Multi --> Route

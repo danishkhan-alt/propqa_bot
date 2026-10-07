@@ -1,0 +1,136 @@
+flowchart TB
+  Browser[Browser]
+
+  subgraph clients [Clients]
+    Vite["Vite React SPA dev proxy /api"]
+    Nginx["Docker nginx SPA proxies /api with SSE buffering off"]
+  end
+
+  Browser --> Vite
+  Browser --> Nginx
+
+  subgraph http [FastAPI src/app.py]
+    Cors[CORS]
+    ReqId[Request id]
+    Jwt[Optional Bearer JWT]
+    CallerMw[Registered user or visitor]
+    RateMw["Rate limit fails open if cache is down"]
+    ChatPost["POST /api/chat"]
+    StreamTurn["stream_turn custom SSE"]
+    OtherApi["Auth sessions leads and user memory"]
+  end
+
+  Vite --> Cors
+  Nginx --> Cors
+  Cors --> ReqId --> Jwt --> CallerMw --> RateMw
+  RateMw --> ChatPost
+  RateMw --> OtherApi
+  ChatPost --> StreamTurn
+
+  StreamTurn --> StartNode([START])
+
+  subgraph turn [LangGraph chat turn]
+    StartNode --> LoadSession[load_session_context]
+    LoadSession -->|"focused listing ids"| LoadFocus[load_focused_listings]
+    LoadSession -->|"otherwise"| Recall[recall_long_term_memories]
+    LoadFocus --> WriteReply[write_reply]
+    Recall --> ForgetCheck[check_forget_request]
+    ForgetCheck -->|"pending forget"| AskForget[ask_before_forgetting_memory]
+    AskForget --> EndHitl([END interrupt])
+    ForgetCheck -->|"continue in parallel"| ChooseRoute[choose_query_route]
+    ForgetCheck -->|"continue in parallel"| UpdateFrame[update_search_frame]
+    UpdateFrame --> EndFrame([END frame branch])
+    ChooseRoute -->|"direct answer or out of scope"| WriteReply
+    ChooseRoute -->|"NEED_DB"| ChooseDomains[choose_data_domains]
+    ChooseDomains -->|"no domains"| WriteReply
+    ChooseDomains -->|"domain ids"| Personalize[personalize_search_frame]
+    Personalize --> LoadCatalog[load_domain_catalog]
+    LoadCatalog --> GroundNames[resolve_mentioned_names]
+    GroundNames --> WarehouseLookup[run_warehouse_lookup]
+    WarehouseLookup --> WriteReply
+    WriteReply --> QueueMem[queue_memory_extraction]
+    QueueMem --> TurnEnd[record_search_and_clear_turn_state]
+    TurnEnd --> EndTurn([END])
+  end
+
+  subgraph lookupTech [Three lookup techniques inside run_warehouse_lookup]
+    WarehouseLookup --> LookupChoice{Which lookup}
+    LookupChoice -->|"LIST or RANK plus listing filters"| ListingSql["Code-built listing SQL"]
+    ListingSql --> Relax["Relaxation waterfall widens filters"]
+    LookupChoice -->|"recipe parameters bind"| RecipeSql["Fixed SQL from recipes.yaml"]
+    LookupChoice -->|"any other database question"| DraftSql["Model drafts one SELECT from the loaded catalog"]
+    DraftSql --> Guard["sqlglot guard allowed tables and row cap"]
+    Guard --> Retry["Second attempt on error or empty rows"]
+    Relax --> WarehouseDb[("Warehouse Postgres")]
+    RecipeSql --> WarehouseDb
+    Retry --> WarehouseDb
+    WarehouseDb --> Cards["Listing cards when the result is property ids"]
+  end
+
+  Cards --> SseListings["SSE event listings"]
+  WriteReply --> SseReply["SSE events text and reply"]
+  StreamTurn --> SseDone["SSE events error and done"]
+
+  subgraph routingTech [Routing techniques]
+    QueryRouter["Structured query router sets route intent and filters"]
+    RefineReuse["REFINE reuses the previous domain ids"]
+    JevFanout["Jev asks lead combines place subject and recipe in parallel"]
+    LlmDomain["Structured LLM DomainRoute if Jev is off or fails"]
+    Sanitize["sanitize_query_route and sanitize_domain_route"]
+  end
+
+  ChooseRoute -.-> QueryRouter
+  ChooseDomains -.-> RefineReuse
+  ChooseDomains -.-> JevFanout
+  JevFanout -.-> LlmDomain
+  QueryRouter -.-> Sanitize
+  JevFanout -.-> Sanitize
+
+  subgraph packs [Catalog packs loaded only after routing]
+    PackList["listings transactions locations developers schools rta amenities agencies regulations market"]
+    RecipesFile["recipes.yaml"]
+    PlaceJoin["locations is the usual place join"]
+  end
+
+  LoadCatalog --> PackList
+  RecipeSql --> RecipesFile
+  JevFanout --> PlaceJoin
+
+  subgraph memoryTech [Memory]
+    WorkingMem["Redis working memory wm thread"]
+    Checkpoint["Redis checkpoint 24h thread id is session id"]
+    Memq["Redis stream memq"]
+    Worker["python -m agent.memory.worker"]
+    Ltm["Long-term memory pgvector"]
+    ProfileCache["Redis profile cache"]
+  end
+
+  LoadSession --> WorkingMem
+  LoadSession --> ProfileCache
+  Recall --> Ltm
+  TurnEnd --> WorkingMem
+  TurnEnd --> Checkpoint
+  QueueMem --> Memq
+  Memq --> Worker
+  Worker --> Ltm
+
+  subgraph processAndExternal [Process memory and external services]
+    GroundingIdx["In-process grounding index"]
+    GroundingWarm["Startup thread loads names from the warehouse"]
+    LlmProvider["LLM Anthropic or OpenAI"]
+    LangfuseOpt["Langfuse traces optional"]
+    ChatDb[("Chat Postgres users tokens and memory")]
+  end
+
+  GroundNames --> GroundingIdx
+  GroundingWarm --> GroundingIdx
+  GroundingWarm --> WarehouseDb
+  QueryRouter --> LlmProvider
+  LlmDomain --> LlmProvider
+  DraftSql --> LlmProvider
+  WriteReply --> LlmProvider
+  StreamTurn --> LangfuseOpt
+  OtherApi --> ChatDb
+  Worker --> ChatDb
+  Ltm --> ChatDb
+  Jwt --> ChatDb

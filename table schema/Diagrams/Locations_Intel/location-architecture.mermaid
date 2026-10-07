@@ -1,0 +1,98 @@
+%% Location Intel architecture — think/classify → value-index inject → ReAct + CI carve-out.
+%% Companion note: location_intel.md
+flowchart TB
+    subgraph Input
+        U[UserQuery]
+    end
+
+    subgraph Classification
+        TH[think_node]
+        QC[query_classifier]
+        PLAN[query_planner]
+        PERC[perception_prepass]
+        U --> TH --> QC
+        QC --> PLAN
+        TH --> PERC
+    end
+
+    subgraph State
+        CL[classifications]
+        PINS[value_index_pins]
+        WIN[resolved_windows_created_at]
+        SKIP[skip_sql_agents_must_stay_false]
+        QC --> CL
+        QC --> PINS
+        TH --> WIN
+        TH --> SKIP
+    end
+
+    subgraph ContextInject
+        VAL[catalog_value_index]
+        DC[catalog_domain_context]
+        PROF[location_intel_profiles_v1]
+        VAL --> DC
+        PROF --> DC
+        PINS --> DC
+        DC --> CTX[generic_profile_block]
+    end
+
+    subgraph ProdDB
+        PROD[(Production_DB_star)]
+    end
+
+    subgraph LocationAgent
+        BDA[build_domain_agents]
+        SKILL[LOCATION_INTEL_SKILL]
+        PROMPT[domain_prompt_location_intel]
+        TOOL[guarded_sql_db_query]
+        BDA --> PROD
+        SKILL --> TOOL
+        PROMPT --> TOOL
+        CTX --> USERMSG[user_message_schema_context]
+        USERMSG --> TOOL
+        TOOL --> PROD
+    end
+
+    subgraph CoreTables
+        T1[(locations)]
+        T2[(buildings)]
+        T3[(nlp_search_locations_pois_roads)]
+        T4[(nearby_locations_bridges)]
+        T5[(pf_locations_places)]
+        TOOL --> T1
+        TOOL --> T2
+        TOOL --> T3
+        TOOL --> T4
+        TOOL --> T5
+    end
+
+    subgraph Extended
+        E1[(countries_PostGIS_meta)]
+        E2[(bayut_locations)]
+        E3[(nlp_search_location_sources)]
+        TOOL -.-> E1
+        TOOL -.-> E2
+        TOOL -.-> E3
+    end
+
+    subgraph CarvedOut
+        CI[communities_intel]
+        T6[(area_insights_or_ps_pages)]
+        CI --> T6
+    end
+
+    subgraph Enrichment
+        IDX[locations_index]
+        CCR[community_content_resolver]
+        CS[community_signals]
+        BUY[buyer_intel]
+        REN[renter_intel]
+        IDX --> CCR
+        CCR --> CS
+        CS --> BUY
+        CS --> REN
+    end
+
+    CL --> LocationAgent
+    LocationAgent --> Enrichment
+    PERC -->|"lifestyle what is X like"| CI

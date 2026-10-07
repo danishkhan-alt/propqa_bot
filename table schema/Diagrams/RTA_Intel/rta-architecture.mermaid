@@ -1,0 +1,131 @@
+%% RTA Intel architecture — think/classify/mobility → dual-DB + bridge tools + ReAct.
+%% Companion note: rta_intel.md
+flowchart TB
+    subgraph Input
+        U[UserQuery]
+    end
+
+    subgraph Classification
+        TH[think_node]
+        QC[query_classifier]
+        MIL[mobility_intent_llm]
+        STRIP[strip_rta_on_listing]
+        U --> TH --> QC
+        QC --> MIL
+        QC --> STRIP
+    end
+
+    subgraph State
+        MR[mobility_route]
+        MS[mobility_slots]
+        CL[classifications_rta_intel]
+        FLAGS[multi_intel_or_recommend_flags]
+        PINS[value_index_pins]
+        WIN[resolved_windows_year_month]
+        MIL --> MR
+        MIL --> MS
+        STRIP --> CL
+        QC --> FLAGS
+        QC --> PINS
+        TH --> WIN
+    end
+
+    subgraph ContextInject
+        VAL[catalog_value_index]
+        DC[catalog_domain_context]
+        PROF[rta_intel_profiles_v1]
+        VAL --> DC
+        PROF --> DC
+        PINS --> DC
+        DC --> CTX[generic_profile_block]
+        WIN --> CTX
+    end
+
+    subgraph DualDB
+        PROD[(Production_DB_star)]
+        AUDIT[(Staging_AUDIT_DB_chatbot_ai)]
+    end
+
+    subgraph Bootstrap
+        BDA[build_domain_agents_exclude_rta]
+        RTE[_build_rta_staging_engine]
+        BRT[build_rta_bridge_tools]
+        BRI[build_rta_intel_agent]
+        BDA --> PROD
+        RTE --> AUDIT
+        BRT --> BRI
+        PROD -.-> BRT
+        AUDIT --> BRI
+    end
+
+    subgraph Preflight
+        DMB[dispatch_mobility_bridge]
+        GTB[ground_truth_block_plus_tool_hint]
+        MR --> DMB
+        MS --> DMB
+        DMB --> GTB
+    end
+
+    subgraph Bridges
+        MAR[rta_answer_validator]
+        BLD[building_station_bridge]
+        BUS[bus_corridor_bridge]
+        OPG[offplan_geo_bridge]
+        RDY[readiness_resolver]
+        DMB --> MAR
+        DMB --> BLD
+        DMB --> BUS
+        DMB --> OPG
+        DMB --> RDY
+        MAR --> AUDIT
+        BLD --> PROD
+        BLD --> AUDIT
+        BUS --> AUDIT
+        OPG --> PROD
+        OPG --> AUDIT
+        RDY --> PROD
+    end
+
+    subgraph RTAAgent
+        SKILL[RTA_INTEL_SKILL]
+        PROMPT[domain_prompt_rta_intel]
+        TOOLS[five_bridge_tools_plus_sql_db_query]
+        GTB --> TOOLS
+        SKILL --> TOOLS
+        PROMPT --> TOOLS
+        CTX --> USERMSG[user_message_schema_context]
+        USERMSG --> TOOLS
+        BRI --> TOOLS
+        TOOLS --> AUDIT
+    end
+
+    subgraph CoreTables
+        T1[(metro_lines_stations)]
+        T2[(tram_bus_marine_stops)]
+        T3[(monthly_passengers_trips)]
+        T4[(nol_salik_taxi_parking)]
+        TOOLS --> T1
+        TOOLS --> T2
+        TOOLS --> T3
+        TOOLS --> T4
+        T1 --> AUDIT
+        T2 --> AUDIT
+        T3 --> AUDIT
+        T4 --> AUDIT
+    end
+
+    subgraph Extended
+        E1[(raw_ridership)]
+        E2[(roads_fleets_capacity)]
+        TOOLS -.-> E1
+        TOOLS -.-> E2
+    end
+
+    subgraph Output
+        ANS[formatted_answer]
+        TOOLS --> ANS
+    end
+
+    CL --> Preflight
+    FLAGS --> Preflight
+    Preflight --> RTAAgent

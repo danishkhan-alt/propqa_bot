@@ -1,0 +1,87 @@
+%% Location Intel table targeting — query cues → spatial whitelist + value-index hints.
+%% Companion note: location_intel.md
+%% Shared four-layer view: ../Property_Search/table-routing.mermaid
+flowchart TD
+    subgraph layer1 [Layer1_query_to_domain]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Families[infer_intel_families]
+        Families --> Neigh{"neighbourhoods_near_cue?"}
+        Neigh -->|yes| CiOnly[suppress_LI_keep_communities_intel]
+        Neigh -->|no| Classify[classifications_domain_list]
+        ThinkLock[think_lock_location_intel] --> Families
+        CueRe["_LOCATION_INTEL_CUE_RE poi building nearby spatial lat lng"] --> Families
+    end
+
+    subgraph layer2 [Startup_hard_whitelist]
+        Map[LOCATION_INTEL_TABLES] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Include --> Ext[EXTENDED_name_hints_still_queryable]
+        Core --> W1[(locations)]
+        Core --> W2[(buildings)]
+        Core --> W3[(nlp_search_locations)]
+        Core --> W4[(nlp_search_pois)]
+        Core --> W5[(nlp_search_roads)]
+        Core --> W6[(nearby_locations_plus_bridge)]
+        Core --> W7[(pf_locations)]
+        Core --> W8[(places)]
+        Ext --> E1[(countries)]
+        Ext --> E2[(bayut_locations)]
+        Ext --> E3[(nlp_search_location_sources)]
+        Ext --> E4[(PostGIS_spatial_ref_geometry_geography)]
+        Ban[no_dld_no_properties_no_community_pages] -.-> Mvp
+    end
+
+    subgraph layer3 [Runtime_hints_do_not_shrink_whitelist]
+        Classify --> Sel[catalog_domain_context_select_tables_for_query]
+        Sel -->|value-index phrase hits| Rank[score_tables_by_phrase]
+        Sel -->|no hits| Size[largest_by_approx_rows]
+        Rank --> Cap[cap_DOMAIN_CONTEXT_MAX_TABLES_default_3]
+        Size --> Cap
+        Cap --> Block[generic_profile_block]
+        ValIdx[catalog_value_index_scan_query] --> Pins[value_index_pins]
+        Pins --> Msg[inject_into_agent_user_message]
+        Block --> Msg
+        Win[resolved_windows_created_at_only_if_temporal] --> Msg
+        Skill[LOCATION_INTEL_SKILL_column_recipes] --> Msg
+    end
+
+    subgraph skillJoins [Skill_preferred_tables]
+        Msg -->|area alias hierarchy JVC| LocJoin["FROM locations aliases_en jsonb OR name_en ILIKE"]
+        Msg -->|buildings in area| BldJoin["FROM buildings OR locations type building"]
+        Msg -->|POI school mall hospital catalog| PoiJoin["FROM nlp_search_pois category ILIKE"]
+        Msg -->|roads highways| RoadJoin[FROM_nlp_search_roads]
+        Msg -->|NLP geocoding| NlpJoin[FROM_nlp_search_locations]
+        Msg -->|named anchor Metro Station| NearJoin["nearby_locations JOIN nearby_location_property"]
+        Msg -->|PF or Bayut spelling| ExtJoin[pf_locations_or_bayut_locations]
+        Msg -->|generic lat lng| PlaceJoin[FROM_places]
+        Msg -->|most villas catalog rank| RankJoin[aggregate_locations_or_buildings]
+        Msg -->|lifestyle schools narrative| HandOff[not_this_whitelist_communities_intel]
+    end
+
+    subgraph layer4 [Layer4_sql_guard]
+        Classify -->|location_intel| Agent[ReAct_writes_SQL]
+        Include -.-> Agent
+        Core -.-> Agent
+        LocJoin --> Agent
+        BldJoin --> Agent
+        PoiJoin --> Agent
+        RoadJoin --> Agent
+        NlpJoin --> Agent
+        NearJoin --> Agent
+        ExtJoin --> Agent
+        PlaceJoin --> Agent
+        RankJoin --> Agent
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| PG[(PostgreSQL_RDS_PROD)]
+        CiOnly --> CI[communities_intel_ReAct]
+        HandOff --> CI
+    end
+
+    PG --> Synth[synthesize_results]
+    CI --> Synth
+    Synth --> Completeness[answer_completeness_ranking_hold]

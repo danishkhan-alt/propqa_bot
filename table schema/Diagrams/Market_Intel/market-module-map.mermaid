@@ -1,0 +1,84 @@
+%% Market Intel module map — files that classify, hint, execute, and test.
+%% Companion note: market_intel.md
+flowchart TB
+    subgraph Entry
+        SSE[sse_bridge]
+        COG[cognitive_pipeline]
+        THINK[nodes_think]
+        ENH[nodes_enhance]
+        INTENT[intent_classifier_llm]
+        RESULT[nodes_result]
+        SSE --> COG
+        COG --> THINK
+        COG --> ENH
+        COG --> RESULT
+        THINK --> INTENT
+    end
+
+    subgraph ClassifyLayer
+        QC[query_classifier]
+        PLAN[query_planner]
+        MIO[multi_intent_orchestrator]
+        PERSONA[persona_intent_domain_map]
+        TW[time_windows_recipes]
+        QC --> PLAN
+        MIO -.-> QC
+        PERSONA -.-> MIO
+        ENH --> TW
+    end
+
+    subgraph MarketPkg
+        MI[market_intel_pkg]
+        PROF[dld_table_profiles]
+        ALIAS[dld_area_aliases]
+        MI --> PROF
+        MI --> ALIAS
+    end
+
+    subgraph RouterLayer
+        AGENT[agent_py]
+        FLAGS[ops_feature_flags]
+        AGENT --> FLAGS
+    end
+
+    subgraph AgentBuild
+        DA[domain_agents]
+        SKILL[sql_agent_skills_MARKET]
+        REG[agent_registry]
+        MVP[mvp_scope_guard]
+        SQLG[sql_guard]
+        DA --> SKILL
+        DA --> MVP
+        DA --> SQLG
+        REG -.-> DA
+    end
+
+    subgraph BridgeLayer
+        OMB[offplan_market_bridge]
+        DJC[dld_join_chain]
+        INV[services_investment_intel]
+        IINV[services_investor_intel]
+    end
+
+    subgraph Verify
+        T1[test_dld_table_profiles]
+        T2[test_dld_count_intent_routing]
+        T3[test_offplan_market_bridge]
+        T4[test_answer_completeness]
+        GOLD[example_golden_json]
+    end
+
+    THINK --> MI
+    ENH --> MI
+    COG --> QC
+    QC --> AGENT
+    AGENT --> DA
+    AGENT --> OMB
+    AGENT --> DJC
+    RESULT --> INV
+    RESULT --> IINV
+    PROF --> T1
+    AGENT --> T2
+    OMB --> T3
+    AGENT --> T4
+    GOLD -.-> T2

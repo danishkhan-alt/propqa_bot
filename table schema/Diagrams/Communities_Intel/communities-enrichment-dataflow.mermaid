@@ -1,0 +1,46 @@
+%% Communities Intel enrichment — resolver / signals after SQL (not table pickers).
+%% Companion note: communities_intel.md
+flowchart TB
+    subgraph Slots
+        S1[community_name_or_page_alias]
+        S2[persona_slots_family_schools]
+        S3[page_KPI_or_ranking_cue]
+    end
+
+    subgraph Resolve
+        S1 --> CCR[community_content_resolver]
+        CCR -->|"live_SELECT_first"| INS[(area_insights_communities)]
+        CCR -->|"fallback"| LOC[(locations_index)]
+        CCR --> SK1[resolved_community_soft_scores]
+    end
+
+    subgraph ReAct
+        S1 --> SQL[communities_intel_sql_db_query]
+        S3 --> SQL
+        SQL --> T1[(area_insights_communities)]
+        SQL --> T2[(mv_community_landing_metrics)]
+        SQL --> T3[(mv_community_dld_market_metrics)]
+        SQL --> A1[answer_page_card_or_KPI]
+    end
+
+    subgraph Signals
+        SK1 --> CS[community_signals]
+        INS --> CS
+        CS --> Scores[schools_metro_lifestyle_scores]
+    end
+
+    subgraph PersonaEnrich
+        S2 --> BUY[buyer_intel_enrich]
+        S2 --> REN[renter_intel_enrich]
+        Scores --> BUY
+        Scores --> REN
+        A1 --> BUY
+        A1 --> REN
+        BUY --> SK2[buyer_fit_overlay]
+        REN --> SK3[renter_overlay]
+    end
+
+    subgraph Completeness
+        A1 --> COMP[answer_completeness_ranking_repair]
+        COMP --> HOLD[streaming_hold_until_metric_present]
+    end

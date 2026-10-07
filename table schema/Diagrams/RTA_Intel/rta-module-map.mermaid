@@ -1,0 +1,73 @@
+%% RTA Intel module map — files that build and attach to rta_intel.
+%% Companion note: rta_intel.md
+flowchart TB
+    subgraph Entry
+        SSE[sse_bridge]
+        COG[cognitive_pipeline]
+        THINK[nodes_think]
+        ENH[nodes_enhance]
+        INTENT[intent_classifier_llm]
+        SSE --> COG
+        COG --> THINK
+        COG --> ENH
+        THINK --> INTENT
+    end
+
+    subgraph ClassifyLayer
+        QC[query_classifier]
+        MIL[mobility_intent_llm]
+        PLAN[query_planner]
+        MIO[multi_intent_orchestrator]
+        CAM[context_aware_mobility]
+        QC --> MIL
+        QC --> PLAN
+        QC --> CAM
+        MIO -.-> QC
+    end
+
+    subgraph RouterLayer
+        AGENT[agent_py]
+        FLAGS[ops_feature_flags]
+        AGENT --> FLAGS
+    end
+
+    subgraph AgentBuild
+        DA[domain_agents]
+        SKILL[sql_agent_skills]
+        REG[agent_registry]
+        PROF[profile_registry]
+        DC[catalog_domain_context]
+        DA --> SKILL
+        REG -.-> DA
+        PROF -.-> DA
+        DC -.-> DA
+    end
+
+    subgraph BridgeLayer
+        RBT[rta_bridge_tools]
+        RAV[rta_answer_validator]
+        BSB[building_station_bridge]
+        BCB[bus_corridor_bridge]
+        OGB[offplan_geo_bridge]
+        RDY[readiness_resolver]
+        RBT --> RAV
+        RBT --> BSB
+        RBT --> BCB
+        RBT --> OGB
+        RBT --> RDY
+    end
+
+    subgraph Verify
+        T1[test_rta_intel_routing]
+        T2[test_rta_offplan_bridges]
+        GOLD[rta_offplan_golden_json]
+    end
+
+    COG --> QC
+    QC --> AGENT
+    AGENT --> DA
+    AGENT --> RBT
+    DA --> RBT
+    AGENT --> T1
+    RBT --> T2
+    GOLD -.-> T2

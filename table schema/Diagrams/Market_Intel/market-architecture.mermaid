@@ -1,0 +1,86 @@
+%% Market Intel architecture — think/classify → profile inject → ReAct + bridges.
+%% Companion note: market_intel.md
+flowchart TB
+    subgraph Input
+        U[UserQuery]
+    end
+
+    subgraph Classification
+        TH[think_node]
+        QC[query_classifier]
+        PLAN[query_planner]
+        U --> TH --> QC
+        QC --> PLAN
+    end
+
+    subgraph State
+        CL[classifications]
+        DLDT[think_dld_tables]
+        CTX[dld_table_context]
+        WIN[resolved_windows]
+        AREA[session_dld_area_phrase_market_topic]
+        TH --> DLDT
+        QC --> CL
+        TH --> WIN
+        TH --> AREA
+    end
+
+    subgraph ContextInject
+        PROF[dld_table_profiles]
+        ALIAS[dld_area_aliases]
+        DLDT --> PROF
+        PROF --> CTX
+        ALIAS --> CTX
+        WIN --> CTX
+        AREA --> PROF
+    end
+
+    subgraph ProdDB
+        PROD[(Production_DB_star)]
+    end
+
+    subgraph MarketAgent
+        BDA[build_domain_agents]
+        SKILL[MARKET_INTEL_SKILL]
+        PROMPT[domain_prompt_market_intel]
+        TOOL[guarded_sql_db_query]
+        GUARD[mvp_scope_MARKET_INTEL_DLD_ALLOWED]
+        BDA --> PROD
+        SKILL --> TOOL
+        PROMPT --> TOOL
+        GUARD --> TOOL
+        CTX --> USERMSG[user_message_dld_table_context]
+        USERMSG --> TOOL
+        TOOL --> PROD
+    end
+
+    subgraph Bridges
+        OMB[offplan_market_bridge]
+        DJC[dld_join_chain]
+        INV[investment_intel_cards]
+        OMB --> PROD
+        DJC --> PROD
+        INV --> PROD
+    end
+
+    subgraph Whitelist
+        T1[(real_estate_dld_transactions)]
+        T2[(real_estate_dld_rent_contracts)]
+        T3[(dld_community_avg_sale_price)]
+        T4[(areas_projects_buildings_developers)]
+        T5[(price_trend_facts)]
+        T6[(rental_contract_summary)]
+        T7[(locations)]
+        T8[(units_land_registry_EXTENDED)]
+        TOOL --> T1
+        TOOL --> T2
+        TOOL --> T3
+        TOOL --> T4
+        TOOL --> T5
+        TOOL --> T6
+        TOOL --> T7
+        TOOL --> T8
+    end
+
+    CL --> MarketAgent
+    CL --> Bridges

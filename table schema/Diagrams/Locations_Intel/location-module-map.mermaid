@@ -1,0 +1,104 @@
+%% Location Intel module map — files that classify, hint, execute, and test.
+%% Companion note: location_intel.md
+flowchart TB
+    subgraph Entry
+        SSE[sse_bridge]
+        COG[cognitive_pipeline]
+        THINK[nodes_think]
+        ENH[nodes_enhance]
+        INTENT[intent_classifier_llm]
+        REASON[nodes_reason]
+        RESULT[nodes_result]
+        FLOW[flow_router]
+        SSE --> COG
+        COG --> THINK
+        COG --> ENH
+        COG --> REASON
+        COG --> RESULT
+        COG --> FLOW
+        THINK --> INTENT
+    end
+
+    subgraph ClassifyLayer
+        QC[query_classifier]
+        PERC[perception_prepass]
+        PLAN[query_planner]
+        MIO[multi_intent_orchestrator]
+        PERSONA[persona_intent_domain_map]
+        PIH[persona_intent_handler]
+        TW[time_windows_recipes]
+        PERC --> QC
+        QC --> PLAN
+        MIO -.-> QC
+        PERSONA -.-> MIO
+        PIH -.-> PERSONA
+        ENH --> TW
+    end
+
+    subgraph CatalogHints
+        VAL[catalog_value_index]
+        RES[catalog_resolution]
+        DC[catalog_domain_context]
+        PROF[location_intel_profiles_v1]
+        VAL --> RES
+        VAL --> DC
+        PROF --> DC
+    end
+
+    subgraph RouterLayer
+        AGENT[agent_py]
+        FLAGS[ops_feature_flags]
+        AGENT --> FLAGS
+    end
+
+    subgraph AgentBuild
+        DA[domain_agents]
+        SKILL[sql_agent_skills_LOCATION]
+        REG[agent_registry]
+        PROFREG[profile_registry]
+        MVP[mvp_scope_guard]
+        SQLG[sql_guard]
+        COMP[answer_completeness]
+        DA --> SKILL
+        DA --> MVP
+        DA --> SQLG
+        REG -.-> DA
+        PROFREG -.-> DA
+        AGENT --> COMP
+    end
+
+    subgraph EnrichLayer
+        IDX[locations_index]
+        CCR[community_content_resolver]
+        CS[community_signals]
+        BUY[buyer_intel]
+        REN[renter_intel]
+        IINV[investor_intel]
+        IDX --> CCR
+        CCR --> CS
+    end
+
+    subgraph Verify
+        T1[test_area_ranking_routing]
+        T2[test_cognitive_pipeline]
+        T3[test_answer_completeness]
+        T4[test_persona_pipeline_fix]
+        T5[test_intel_family_routing]
+        T6[test_domain_context]
+    end
+
+    COG --> QC
+    QC --> VAL
+    QC --> AGENT
+    AGENT --> DA
+    AGENT --> DC
+    RESULT --> BUY
+    RESULT --> REN
+    RESULT --> IINV
+    DA --> CCR
+    AGENT --> T1
+    COG --> T2
+    COMP --> T3
+    PERSONA --> T4
+    QC --> T5
+    DC --> T6

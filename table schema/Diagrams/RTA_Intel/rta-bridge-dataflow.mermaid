@@ -1,0 +1,56 @@
+%% RTA Intel bridge dataflow — slots → tools → concrete AUDIT / PROD tables.
+%% Companion note: rta_intel.md
+flowchart TB
+    subgraph Slots
+        S1[building_name]
+        S2[station_phrase_plus_mode]
+        S3[origin_destination]
+        S4[project_name]
+        S5[area_name_marina]
+    end
+
+    subgraph Marina
+        S5 --> MAR[marina_metro_corridor_bridge]
+        MAR --> MT[(AUDIT_metro_stations)]
+        MAR --> TR[(AUDIT_tram_stations)]
+        MAR --> RID[(AUDIT_metro_passengers_monthly)]
+        MAR --> A1[answer_Sobha_plus_DMCC_co_primary]
+    end
+
+    subgraph Building
+        S1 --> BLD[building_metro_proximity_bridge]
+        BLD --> LOC[(PROD_locations_lat_lng)]
+        BLD --> MS[(AUDIT_metro_stations_haversine)]
+        BLD --> A2[answer_top3_stations_km]
+        BLD --> SK1[state_building_station_result]
+    end
+
+    subgraph Bus
+        S3 --> BUS[bus_corridor_bridge]
+        BUS --> BS[(AUDIT_bus_stops_gis)]
+        BUS --> RS[(AUDIT_public_transportation_routes_stops)]
+        BUS --> A3[answer_common_routes_honest_two_end]
+        BUS --> SK2[state_bus_corridor_result]
+    end
+
+    subgraph OffplanGeo
+        S2 --> OPG[offplan_geo_bridge]
+        OPG --> ANCHOR[(AUDIT_metro_or_bus_stop)]
+        OPG --> OP[(PROD_offplan_projects_haversine)]
+        OPG --> A4[answer_ranked_projects_km]
+        OPG --> SK3[state_offplan_geo_result]
+    end
+
+    subgraph Readiness
+        S4 --> RDY[readiness_bridge]
+        RDY --> OPC[(PROD_offplan_projects)]
+        RDY --> PROP[(PROD_properties_completion_status)]
+        RDY --> A5[answer_ready_off_plan_mixed_unknown]
+        RDY --> SK4[state_readiness_verdict]
+    end
+
+    subgraph Generic
+        GEN[rta_intel_generic_sql_db_query]
+        GEN --> CORE[(AUDIT_RTA_INTEL_CORE_tables)]
+        GEN --> A6[answer_ridership_Salik_NOL_catalogue]
+    end

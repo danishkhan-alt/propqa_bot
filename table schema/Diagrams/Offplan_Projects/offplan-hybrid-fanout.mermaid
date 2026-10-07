@@ -1,0 +1,49 @@
+%% Offplan Projects hybrid fan-out — pure / bridge-depends / multi-intel / recommend.
+%% Companion note: offplan_projects.md
+flowchart TD
+    Q[UserQuery] --> Path{hybrid_path}
+
+    Path -->|"pure brochure payment media"| Pure[exclusive_Send_offplan_projects]
+    Path -->|"sold most plus payment plan"| BridgeDep[offplan_market_bridge_then_catalog]
+    Path -->|"details near station"| Multi[multi_intel_hybrid]
+    Path -->|"recommend after station geo"| Rec[recommend_hybrid]
+    Path -->|"project plus listings"| FanPS[offplan_plus_property_search]
+    Path -->|"planner already 2+ domains"| Keep[preserve_multi_classifications]
+
+    Multi --> M1[rta_intel_mobility_route_offplan_geo]
+    Multi --> M2[offplan_projects_catalog]
+    Multi --> M3[market_intel_area_market]
+    Multi --> M4[location_intel_lifestyle]
+
+    Rec --> R1[offplan_projects_recommend]
+    Rec --> R2[rta_intel_offplan_geo_proximity]
+    Rec --> R3[property_search_listings]
+
+    BridgeDep --> B1[offplan_market_pipeline]
+    BridgeDep --> B2[offplan_projects_with_bridge_context]
+
+    FanPS --> F1[offplan_projects]
+    FanPS --> F2[property_search]
+
+    Keep --> K1[as_planned_domains]
+
+    M1 --> Parallel[LangGraph_parallel_Sends]
+    M2 --> Parallel
+    M3 --> Parallel
+    M4 --> Parallel
+    R1 --> Parallel
+    R2 --> Parallel
+    R3 --> Parallel
+    B1 --> Parallel
+    B2 --> Parallel
+    F1 --> Parallel
+    F2 --> Parallel
+    K1 --> Parallel
+    Pure --> Single[single_offplan_projects_Send]
+
+    Parallel --> Results[operator_add_results]
+    Single --> Results
+
+    Results --> Synth{domain_count}
+    Synth -->|1| Direct[scrubbed_final_answer]
+    Synth -->|2+| Merge[router_model_synthesize_multi_intel]

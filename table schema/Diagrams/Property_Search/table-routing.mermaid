@@ -1,0 +1,65 @@
+%% PropQA table routing — query → domain → whitelist → hints → SQL guard.
+%% Companion note: ../table-routing.md
+%% Listings-specific cue → table view: ../Property_Search/property-search-table-routing.mermaid
+flowchart TD
+    subgraph layer0 [Layer0_scope]
+        Q[UserQuery] --> Scope[check_mvp_scope]
+        Scope -->|AppendixC or schema probe| Refuse[fixed_scope_or_schema_reply]
+    end
+
+    subgraph layer1 [Layer1_query_to_domain]
+        Scope -->|ok| Think[think_intent_optional]
+        Think --> Perceive[perception_prepass]
+        Perceive --> Families[infer_intel_families]
+        ThinkLock[think.intent_locks] --> Families
+        Advisory[advisory_signals] --> Families
+        Families --> Planner[QueryPlan_optional]
+        Planner --> Haiku[conversational_skip_check]
+        Haiku -->|off_topic or chat| SkipSQL[skip_sql_agents]
+        Haiku -->|searchish| LLM[structured_ClassificationResult]
+        LLM --> Coerce[unknown_domain_to_property_search]
+        Coerce --> Classify[classifications_domain_list]
+        SkipSQL --> Chat[direct_chat]
+        Classify --> Attach[attach_table_context]
+        Attach --> Route[route_to_agents]
+    end
+
+    subgraph layer2 [Layer2_hard_whitelist_startup]
+        DomainMap[DOMAIN_TABLE_MAP] --> Intersect[intersect_available_tables]
+        Intersect --> Mvp[filter_mvp_table_names]
+        Mvp --> Include[SQLDatabase_include_tables]
+        Include --> Core[CORE_schema_in_system_prompt]
+        Include --> Ext[EXTENDED_name_hints_still_queryable]
+    end
+
+    subgraph layer3 [Layer3_runtime_hints]
+        Route -->|market_intel| DldRegex[dld_table_profiles.select_tables_for_query]
+        Route -->|property_search| PsRegex[property_search.table_profiles.select_tables_for_query]
+        Route -->|CI_offplan_location_RTA| ValSel[catalog.domain_context.select_tables_for_query]
+        Route -->|dld_bridge| DldPipe[dld_listings_pipeline]
+        Route -->|offplan_market_bridge| OmbPipe[offplan_market_pipeline]
+        Route -->|domain agent| Agent[ReAct_sql_db_query]
+
+        DldRegex --> Msg[inject_into_agent_user_message]
+        PsRegex --> Msg
+        ValSel --> Msg
+        ValIdx[catalog.value_index.scan_query] --> Pins[value_index_pins]
+        Pins --> Msg
+        Msg --> Agent
+    end
+
+    subgraph layer4 [Layer4_sql_guard]
+        Agent --> Guard[sql_guard_validate_sql]
+        Guard -->|block| AgentRetry[agent_sees_policy_error]
+        AgentRetry --> Guard
+        Guard -->|pass| PG[(PostgreSQL_RDS)]
+        DldPipe --> PG
+        OmbPipe --> PG
+    end
+
+    Include -.-> Agent
+    Core -.-> Agent
+    PG --> Synth[synthesize_results]
+    Chat --> Synth
+    Refuse --> EndNode[END]
+    Synth --> EndNode
