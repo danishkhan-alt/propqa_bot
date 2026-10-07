@@ -23,7 +23,7 @@ joins:
   - area_id
 pitfalls:
 - The amenity name list (public.amenities) and which listing has which amenity (amenity_property) are in the listings pack. Questions such as listings with a pool are listings questions.
-- reelly_project_amenities links an off-plan project to amenity_name via reelly_project_id.
+- "reelly_project_amenities links an off-plan project to amenity_name. Join to the developers pack card on public.offplan_projects_new.external_id = reelly_project_amenities.reelly_project_id::text (external_id is text). Never join on offplan_projects_new.id; that matches by coincidence."
 - Nearby parks, malls, and clinics per community are in public.community_info (locations), not in these tables.
 - sheryan_health_facilities is DHA licensed facilities, not a distance-to-listing index.
 - Qualify public tables as public.<table>.
@@ -397,7 +397,7 @@ tables:
   columns:
   - name: reelly_project_id
     type: bigint
-    meaning: Off-plan project identifier
+    meaning: Off-plan project identifier; equals public.offplan_projects_new.external_id (text) after a cast
   - name: project_amenity_id
     type: bigint
     meaning: Project amenity row identifier
@@ -416,9 +416,9 @@ tables:
   foreign_keys:
   - columns:
     - reelly_project_id
-    references: public.reelly_projects
+    references: public.offplan_projects_new
     referenced_columns:
-    - reelly_project_id
+    - external_id
   qualified_name: public.reelly_project_amenities
 
 # Columns whose values are names users type. Grounding loads their stored spellings,

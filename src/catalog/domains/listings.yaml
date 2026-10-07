@@ -242,12 +242,9 @@ tables:
   - name: floors
     type: character varying(191)
     meaning: Floor
-  - name: no_of_parkings
-    type: integer
-    meaning: Parking spaces
-  - name: property_age
-    type: integer
-    meaning: Property age in years
+  - name: is_parking_available
+    type: boolean
+    meaning: Whether the listing has parking (true for about 1 in 19 rows). There is no parking-space count or property-age column.
   - name: lat
     type: character varying(255)
     meaning: Latitude
