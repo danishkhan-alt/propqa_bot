@@ -1,6 +1,6 @@
 id: transactions
 name: Sales, rents, and valuations
-schema: chatbot_ai
+schema: public
 description: DLD registered sales and other procedures (real_estate_dld_transactions), Ejari rent contracts
   (real_estate_dld_rent_contracts), the DLD area, project, developer, building, unit and land registers,
   official valuations, and the residential sale index. Use for transacted prices, volumes, and registered
@@ -61,6 +61,12 @@ pitfalls:
 - 'Place filter: a community is either a DLD area (area_name_en, for example ''Burj Khalifa'') or a master
   project (master_project_en, for example ''DownTown Dubai''). They overlap but count different rows.
   Filter on one of them, never OR them together; when both are plausible say which one the figure uses.'
+- An average or median sale price for a place is one overall figure over trans_group_en = 'Sales'. Do
+  not GROUP BY property type or sub type unless the user asks for a split; one row with a NULL sub type
+  can hold a whole-building sale worth hundreds of millions.
+- 'Schemas: every table here is in public (write public.real_estate_dld_transactions, public.real_estate_dld_rent_contracts)
+  except chatbot_ai.property_valuation_records and chatbot_ai.residential_sale_index. There is no chatbot_ai.real_estate_dld_*
+  table.'
 tables:
 - name: real_estate_dld_transactions
   description: >-
