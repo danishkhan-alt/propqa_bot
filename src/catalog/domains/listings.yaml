@@ -33,65 +33,65 @@ joins:
 enums:
 - name: PropertyCategory
   source: public.categories
-  note: Closed set of active property types. properties.type is empty. Join category_property on these ids. Do not query public.categories.
+  note: Closed set of active property types, with the ids stored in the production public.categories (category_property.category_id uses them). properties.type is empty. Join category_property on these ids. Do not query public.categories.
   values:
-  - id: 1
+  - id: 16
     slug: residential
     name: Residential
     parent: null
-  - id: 50
-    slug: apartments
-    name: Apartment
+  - id: 17
+    slug: villa-compound
+    name: Villa Compound
     parent: residential
-  - id: 3
-    slug: villas
-    name: Villa
+  - id: 20
+    slug: hotel-apartments
+    name: Hotel Apartment
     parent: residential
-  - id: 24
+  - id: 21
     slug: townhouses
     name: Townhouse
     parent: residential
   - id: 22
-    slug: hotel-apartments
-    name: Hotel Apartment
-    parent: residential
-  - id: 33
     slug: penthouse
     name: Penthouse
     parent: residential
-  - id: 19
-    slug: villa-compound
-    name: Villa Compound
+  - id: 24
+    slug: villas
+    name: Villa
     parent: residential
-  - id: 4
+  - id: 25
+    slug: apartments
+    name: Apartment
+    parent: residential
+  - id: 1
     slug: commercial
     name: Commercial
     parent: null
-  - id: 5
-    slug: offices
-    name: Office
-    parent: commercial
-  - id: 10
-    slug: shops
-    name: Shop
-    parent: commercial
-  - id: 13
+  - id: 2
     slug: warehouses
     name: Warehouse
     parent: commercial
-  - id: 8
+  - id: 5
     slug: commercial-plots
     name: Plot
     parent: commercial
-  - id: 37
+  - id: 12
     slug: labour-camps
     name: Labour Camp
     parent: commercial
-  - id: 76
+  - id: 14
+    slug: shops
+    name: Shop
+    parent: commercial
+  - id: 15
+    slug: offices
+    name: Office
+    parent: commercial
+  - id: 26
     slug: business-centers
     name: Business Center
     parent: commercial
-  - id: 77
+  - id: 27
     slug: co-working-spaces
     name: Co-working Space
     parent: commercial

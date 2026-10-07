@@ -29,11 +29,11 @@ cases:
     place: [jumeirah village circle, jumeirah village circle (jvc)]
     where: >-
       p.purpose = 'for_sale' AND p.rooms = 2
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
       AND COALESCE(p.price_max, p.price_min) <= 1500000
     relaxed_where: >-
       p.purpose = 'for_sale' AND p.rooms = 2
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: dubai_hills_villas_rent
   message: villas for rent in Dubai Hills
@@ -41,13 +41,13 @@ cases:
     place: [dubai hills, dubai hills estate]
     where: >-
       p.purpose = 'for_rent'
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 3)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 24)
 
 - id: palm_penthouses
   message: cheapest penthouse in Palm Jumeirah
   listings:
     place: [palm jumeirah]
-    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 33)
+    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 22)
 
 - id: building_listings
   message: properties in Binghatti Lavender
@@ -60,7 +60,7 @@ cases:
     place: [downtown dubai, burj khalifa]
     where: >-
       p.purpose = 'for_rent'
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: business_bay_offices
   message: offices for sale in Business Bay
@@ -68,13 +68,13 @@ cases:
     place: [business bay]
     where: >-
       p.purpose = 'for_sale'
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 5)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 15)
 
 - id: jlt_flats
   message: flats in JLT
   listings:
     place: [jumeirah lake towers, jumeirah lake towers (jlt)]
-    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+    where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: developer_listings
   message: show me properties by Emaar
@@ -89,7 +89,7 @@ cases:
     place: [jumeirah village circle, jumeirah village circle (jvc)]
     where: >-
       p.rooms = 2
-      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 50)
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: marina_average_sale_price
   message: average sale price in Dubai Marina last 12 months
