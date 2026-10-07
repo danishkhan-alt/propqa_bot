@@ -32,11 +32,7 @@ pitfalls:
   ST_DistanceSphere to it. A station's name says nothing about where the place is; never find the nearest
   one by matching the place name against station names.
 - Parking zone names and community numbers may not match DLD area names exactly.
-- 'Cue to table: metro stations or lines -> metro_stations / metro_stations_gis; tram -> tram_stations,
-  tram_stations_gis; bus routes at a named stop -> bus_stops_gis joined to public_transportation_routes_stops;
-  bus coverage of a community -> bus_network_coverage; parking tariff -> parking_rates; parking spaces
-  in a community -> bus_network_coverage joined to number_of_parking_spaces_per_zone; ferry, abra, water
-  bus -> marine_stations or marine_stations_gis; Salik tariff -> salik_tariff, gate locations -> salik_tolling_gates_location.'
+- "Cue to table: metro stations or lines -> metro_stations / metro_stations_gis; tram -> tram_stations, tram_stations_gis; bus routes at a named stop -> bus_stops_gis.routes (comma-separated route numbers, filled for every stop); join public_transportation_routes_stops on bus_stop_id = stop_id only for route direction or stop order; bus coverage of a community -> bus_network_coverage; parking tariff -> parking_rates; parking spaces in a community -> bus_network_coverage joined to number_of_parking_spaces_per_zone; ferry, abra, water bus -> marine_stations or marine_stations_gis; Salik tariff -> salik_tariff, gate locations -> salik_tolling_gates_location."
 - 'Bus join: bus_stops_gis.bus_stop_id (6-digit text) = public_transportation_routes_stops.stop_id. Never
   use bus_stop_details.stop_id for this join; it is a different numbering. bus_routes has no stop id and
   joins by name or stop_number only.'
@@ -107,7 +103,7 @@ tables:
     - YYYY-MM-DD
   qualified_name: chatbot_ai.metro_stations
 - name: metro_stations_gis
-  description: "Metro stations with community_name and coordinates stored as text (cast latitude and longitude to numeric); use for the stations in a community and for nearest-station distance"
+  description: "Metro stations with community_name and coordinates stored as text (cast latitude and longitude to numeric). community_name is empty for 13 of 56 stations, including Business Bay station, so find the stations in or near a place by distance from its coordinates, not by community_name"
   primary_key:
   - id
   columns:
