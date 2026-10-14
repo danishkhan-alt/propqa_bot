@@ -16,14 +16,14 @@ from agent.graph.workflow import build_chat_graph
 from agent.grounding import GroundingIndex
 from agent.grounding.places import build_place_directory
 from agent.grounding.stored_values import StoredValueIndex
-from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding
+from agent.schemas.grounding import GroundedName, GroundedPlace, Grounding, StoredMatch
 from agent.schemas.grounding_index import ListingCountsByPlaceLink, LocationNode, StoredValue
 from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters, NameMention
-from agent.schemas.listing_search import ListingSearch
+from agent.schemas.listing_search import BrandPlace, ListingSearch
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.schemas.sql import SqlDraft, SqlPage
 from agent.sql.listing_search import build_listing_query, resolve_category_ids, search_listings
-from agent.sql.lookup import ALL_ZERO_ROW_RETRY_REASON, run_sql_lookup
+from agent.sql.lookup import ALL_ZERO_ROW_RETRY_REASON, _build_listing_search, run_sql_lookup
 
 MARINA = GroundedPlace(
     title="Dubai Marina",
@@ -462,3 +462,130 @@ def test_a_search_with_no_station_filter_looks_up_no_stations():
         ),
     )
     assert state["map_pins"] == []
+
+
+def test_an_agency_an_agent_and_a_verified_agent_are_filtered_in_sql():
+    query = build_listing_query(
+        ListingSearch(
+            filters=ListingFilters(verified_agent=True),
+            agency_ids=[4, 9],
+            agent_ids=[15],
+            agency_patterns=["Betterhomes LLC"],
+            agent_patterns=["John Smith"],
+        ),
+        limit=10,
+        offset=0,
+    )
+    assert "(p.agency_id = ANY(%(agency_ids)s) OR p.user_id = ANY(%(agency_ids)s))" in query.sql
+    assert query.params["agency_ids"] == [4, 9]
+    assert "p.user_id = ANY(%(agent_ids)s)" in query.sql
+    assert query.params["agent_ids"] == [15]
+    assert "au.company_name ILIKE ANY(%(agency_patterns)s)" in query.sql
+    assert query.params["agency_patterns"] == ["%betterhomes%"]
+    assert "ag.name_en ILIKE ANY(%(agent_patterns)s)" in query.sql
+    assert query.params["agent_patterns"] == ["%john smith%"]
+    assert "vu.verification_status = 'approved'" in query.sql
+    assert "is_active" not in query.sql
+
+
+def test_an_unresolved_developer_is_a_brand_pattern_not_dropped():
+    query = build_listing_query(
+        ListingSearch(filters=ListingFilters(), developer_patterns=["Emaar Properties"]),
+        limit=10,
+        offset=0,
+    )
+    assert "p.developer ILIKE ANY(%(developer_patterns)s)" in query.sql
+    assert query.params["developer_patterns"] == ["%emaar%"]
+    assert "developers" not in query.params
+
+
+def test_a_name_that_is_a_place_and_a_developer_matches_either():
+    query = build_listing_query(
+        ListingSearch(
+            filters=ListingFilters(bedrooms_min=2, bedrooms_max=2),
+            brand_places=[BrandPlace(place=MARINA, developers=["DAMAC"])],
+        ),
+        limit=10,
+        offset=0,
+    )
+    assert "p.rooms >= %(bedrooms_min)s" in query.sql
+    assert "p.location_v2_id = ANY(%(brand_0_v2_ids)s)" in query.sql
+    assert "p.developer = ANY(%(brand_0_developers)s)" in query.sql
+    assert query.params["brand_0_v2_ids"] == [10, 11]
+    assert query.params["brand_0_developers"] == ["DAMAC"]
+    joined = query.sql.split("AND", 1)[-1]
+    assert " OR " in joined
+
+
+def test_agency_and_developer_filters_are_never_relaxed():
+    runner = _CountingRunner(totals=[0, 3], ids=[7])
+    search = ListingSearch(
+        filters=ListingFilters(price_max=100),
+        agency_ids=[9],
+        developers=["Emaar"],
+    )
+    result = search_listings(search, runner, limit=10, offset=0)
+    assert result.total == 3
+    assert all(params.get("agency_ids") == [9] and params.get("developers") == ["Emaar"] for _, params in runner.calls)
+    assert "price" in result.notes[0]
+
+
+def test_a_place_tagged_agency_is_not_searched_as_an_address():
+    from agent.sql.lookup import _stated_listing_filters
+
+    grounding = Grounding(
+        names=[
+            GroundedName(
+                text="Betterhomes",
+                kind=MentionKind.PLACE,
+                agency_ids=[9],
+                entity_titles=["Betterhomes"],
+            ),
+            GroundedName(text="Emaar Properties", kind=MentionKind.DEVELOPER),
+            GroundedName(
+                text="Damac",
+                kind=MentionKind.PLACE,
+                place=MARINA,
+                stored=[
+                    StoredMatch(table="public.properties", column="developer", value="DAMAC", kind="developer")
+                ],
+            ),
+        ]
+    )
+    search = _build_listing_search(None, grounding)
+    assert search.unmatched_places == []
+    assert search.places == []
+    assert search.agency_ids == [9]
+    assert search.developer_patterns == ["Emaar Properties"]
+    assert search.brand_places[0].developers == ["DAMAC"]
+    stated = _stated_listing_filters(search)
+    assert "agency: Betterhomes" in stated
+    assert "developer: Emaar Properties" in stated
+    assert any(item.startswith("place or developer: Dubai Marina") for item in stated)
+
+
+class _CountModels(_ListingModels):
+    def route_query(self, **kwargs) -> QueryRoute:
+        route = super().route_query(**kwargs)
+        return route.model_copy(update={"intent": Intent.AGGREGATE})
+
+
+def test_a_listing_count_uses_the_coded_search_and_reports_the_total():
+    models = _CountModels()
+    runner = _CountingRunner(totals=[8], ids=[101])
+    graph = build_chat_graph(InMemorySaver())
+    graph.invoke(
+        {"messages": [HumanMessage(content="how many 2 bed properties are for sale in marina")]},
+        config={"configurable": {"thread_id": "listing-count", "user_id": "user-1"}},
+        context=AgentContext(
+            user_id="user-1",
+            models=models,
+            sql_runner=runner,
+            listing_loader=lambda ids: [],
+            grounding=_index(),
+        ),
+    )
+    assert models.sql_drafts == 0
+    assert models.answers[0]["listing_count"] == 8
+    assert models.answers[0]["inventory_count"] is True
+    assert "SELECT count(*)" in runner.calls[0][0]

@@ -59,6 +59,10 @@ class Config:
     # Place names are matched inside this region of the location tree.
     GROUNDING_REGION = os.getenv("GROUNDING_REGION", "Dubai")
     GROUNDING_REFRESH_SECONDS = _env_int("GROUNDING_REFRESH_SECONDS", 3600)
+    # Match leftover description phrases against public.properties.search_vector.
+    LISTING_TEXT_SEARCH_ENABLED = _env_bool("LISTING_TEXT_SEARCH_ENABLED", True)
+    LISTING_TEXT_MIN_WORD_CHARS = _env_int("LISTING_TEXT_MIN_WORD_CHARS", 3)
+    LISTING_TEXT_QUERY_MAX_CHARS = _env_int("LISTING_TEXT_QUERY_MAX_CHARS", 200)
 
     # Chatbot database on this machine's Postgres. The socket uses peer auth, so
     # the role matches the OS user and there is no password. Not the warehouse.

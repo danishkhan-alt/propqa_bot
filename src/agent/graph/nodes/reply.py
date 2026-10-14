@@ -7,7 +7,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
 from agent.context import AgentContext
-from agent.enums.routing import Route
+from agent.enums.routing import Intent, Route
 from agent.graph.nodes.runtime import models_for
 from agent.grounding import get_grounding_cache
 from agent.reply.building_pages import BuildingPage, pick_building_pages
@@ -134,6 +134,9 @@ def _reply_from_lookup_results(
     filters = [str(item) for item in (result.get("filters") or [])]
     coverage = list(result.get("coverage") or [])
     listing_count = int(result.get("total") or len(listing_ids))
+    inventory_count = bool(
+        query is not None and query.intent is Intent.AGGREGATE and query.listing_filters is not None
+    )
     # A listing turn's rows are units, not buildings: only a building the user named is linked.
     building_pages = _building_pages_for(state, runtime, [] if listing_ids else rows)
     question = None
@@ -153,6 +156,7 @@ def _reply_from_lookup_results(
             memory_block=state.get("memory_block") or "",
             listings=listings,
             listing_count=listing_count,
+            inventory_count=inventory_count,
             lookup_status=status,
             data_note=note,
             search_notes=search_notes,
@@ -181,6 +185,7 @@ def _reply_from_lookup_results(
             assumptions=assumptions.model_dump() if assumptions else None,
             memory_block=state.get("memory_block") or "",
             listing_count=listing_count if listing_ids else 0,
+            inventory_count=inventory_count,
             data_note=note,
             search_notes=search_notes,
             filters=filters,

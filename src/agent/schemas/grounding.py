@@ -36,10 +36,14 @@ class GroundedName(BaseModel):
     kind: MentionKind
     place: GroundedPlace | None = None
     stored: list[StoredMatch] = Field(default_factory=list)
+    # public.users ids for a brokerage or a listing agent, and the names those ids were matched as.
+    agency_ids: list[int] = Field(default_factory=list)
+    agent_ids: list[int] = Field(default_factory=list)
+    entity_titles: list[str] = Field(default_factory=list)
 
     @property
     def is_resolved(self) -> bool:
-        return self.place is not None or bool(self.stored)
+        return self.place is not None or bool(self.stored) or bool(self.agency_ids) or bool(self.agent_ids)
 
 
 class GroundedFeature(BaseModel):
@@ -91,6 +95,10 @@ class Grounding(BaseModel):
                     }
                     for match in name.stored
                 ]
+            if name.agency_ids:
+                entry["agency_user_ids"] = name.agency_ids
+            if name.agent_ids:
+                entry["agent_user_ids"] = name.agent_ids
             if not name.is_resolved:
                 entry["unresolved"] = True
             view.append(entry)

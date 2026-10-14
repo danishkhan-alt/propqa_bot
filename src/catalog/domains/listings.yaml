@@ -115,6 +115,10 @@ pitfalls:
 - 'Amenity, view, and nearby-place names are fixed lists: public.amenities.title_en (for example Shared
   Pool, Shared Gym, Furnished), public.views.title_en (for example Burj Khalifa View), public.nearby_locations.title_en
   (for example metro station). Match them by title_en.'
+- 'Agency and agent: p.agency_id and p.user_id reference public.users.id. An agency is users.company_name
+  or users.name_en. An agent is users.name_en on p.user_id. A verified agent is users.verification_status
+  = ''approved'' on p.user_id, with deleted_at null. Filter with an id list or EXISTS. Do not invent an agencies table.'
+- 'Words that are not an amenity or view title (high ceilings, large windows, natural light) match public.properties.search_vector with search_vector @@ websearch_to_tsquery(''english'', ...). Never ILIKE detail_en for that.'
 - '''2-bed rent near metro'' stays in this pack: filter public.properties with EXISTS on nearby_location_property
   for ''metro station''. Use the rta pack only when the user asks how far a named station is.'
 - Never join the DLD tables (real_estate_dld_*, building_property_records, land_registry) to public.properties.
@@ -137,6 +141,9 @@ tables:
   - name: title_en
     type: text
     meaning: Listing title in English
+  - name: search_vector
+    type: tsvector
+    meaning: Full-text index of the listing. Weight A is the title and the building, project, and master-project names. Weight B is the developer, address, and amenity, view, nearby, and category names. Weight C is detail_en, the description. Match it with search_vector @@ websearch_to_tsquery('english', ...). Do not scan detail_en with ILIKE.
   - name: ref_number
     type: character varying(191)
     meaning: Listing reference number
@@ -224,6 +231,12 @@ tables:
   - name: developer
     type: character varying(191)
     meaning: Developer name
+  - name: user_id
+    type: bigint
+    meaning: Listing agent. public.users.id
+  - name: agency_id
+    type: bigint
+    meaning: Listing agency. public.users.id
   - name: permit_number
     type: character varying(191)
     meaning: Trakheesi permit number
@@ -271,6 +284,16 @@ tables:
     meaning: True when the listing is a distress sale
   foreign_keys:
   - columns:
+    - user_id
+    references: public.users
+    referenced_columns:
+    - id
+  - columns:
+    - agency_id
+    references: public.users
+    referenced_columns:
+    - id
+  - columns:
     - location_master_project_id
     references: public.locations
     referenced_columns:
@@ -286,6 +309,29 @@ tables:
     referenced_columns:
     - id
   qualified_name: public.properties
+- name: users
+  description: Listing agents and agencies. A listing points at its agent with properties.user_id and at its agency with properties.agency_id.
+  primary_key:
+  - id
+  columns:
+  - name: id
+    type: bigint
+    meaning: User identifier
+  - name: name_en
+    type: character varying(191)
+    meaning: Person or account name in English
+  - name: company_name
+    type: character varying(191)
+    meaning: Agency name. Empty for an agent who has no company on the account.
+  - name: verification_status
+    type: character varying(191)
+    meaning: approved when the account is a verified agent
+    examples:
+    - approved
+  - name: deleted_at
+    type: timestamp(0) without time zone
+    meaning: Set when the account is deleted. Exclude these rows.
+  qualified_name: public.users
 - name: category_property
   description: Links a listing to a PropertyCategory id. properties.type is empty, so this is how to filter apartment, villa, or office.
   primary_key:
@@ -296,7 +342,7 @@ tables:
     meaning: Listing id on public.properties
   - name: category_id
     type: bigint
-    meaning: PropertyCategory id, such as 50 for apartments or 3 for villas
+    meaning: PropertyCategory id, such as 25 for apartments or 24 for villas
   foreign_keys:
   - columns:
     - property_id

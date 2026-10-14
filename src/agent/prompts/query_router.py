@@ -46,9 +46,9 @@ profile holds buyer facts this message states. Leave a field null unless this me
 - timeline: ready (move in now) or off_plan (willing to wait for handover). Asking for off-plan listings counts as off_plan.
 - family_size: people in the household, when they say it.
 
-names lists each place, building, project, community, or developer the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar"). kind is place or developer, or other for any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".
+names lists each place, building, project, community, developer, agency, or agent the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar", "Betterhomes"). kind is place, developer for a builder, agency for a brokerage ("Betterhomes", "Allsopp & Allsopp"), or agent for a person who lists. other is any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".
 
-listing_filters is set only when the user wants to see individual properties listed for sale or rent. Null for projects, developments, launches, handover dates, prices, trends, transactions, schools, and every other subject. "Off-plan projects by Emaar" asks for projects, so listing_filters is null.
+listing_filters is set only when the user wants individual properties listed for sale or rent, including how many such listings match ("how many 2-bedroom apartments are for rent in Dubai Marina"). Null for projects, developments, launches, handover dates, prices, trends, transactions, schools, averages, totals, and every other subject. "Off-plan projects by Emaar" asks for projects, so listing_filters is null. "How many sales in Downtown" asks for registered sales, not listings, so listing_filters is null.
 - purpose: sale or rent only when this message or the previous lookup says so ("to buy", "for rent", "monthly"). "Flats in JLT" or "properties in Marina" says neither, so purpose is any.
 - property_types: each type they named, written as the closest name from the property_types list in the payload ("flat" is apartment). Leave it empty when they named no type.
 - bedrooms_min and bedrooms_max: "2 bed" sets both to 2. "at least 3 beds" sets only bedrooms_min. A studio is 0.
@@ -59,6 +59,8 @@ listing_filters is set only when the user wants to see individual properties lis
 - station_within_km: the distance they gave, in km ("within 500 m" is 0.5, "10 minutes' walk" is 0.8). 0 when they gave none.
 - requirements: every other thing the property must have or be, one short noun phrase each in the user's words, without filler: "private gym", "elevator", "sea view", "maid's room", "near a mall", "high ceilings", "Trakheesi permit". Not a place, type, price, size, bedroom count, furnishing, completion, or station distance: those have their own fields. Empty when there is none. any_requirement is true when any one of them will do ("gym or pool"), false when all are wanted.
 - golden_visa: true when they want properties that qualify for the Golden Visa ("What properties qualify for the UAE Golden Visa?", "Golden Visa homes in Marina"). The route is need_db with intent list and listing_filters set. The product limits the search to properties for sale at the qualifying price, so set purpose and price_min only as the user said them. false otherwise.
+- verified_agent: true when they want a verified or approved agent ("verified", "verified agent", "approved agent"). false otherwise.
+- A count of listings ("how many", "how many apartments are for rent") is intent aggregate with listing_filters set. The product counts them. It is not a drafted total.
 - On a refine, start from last_need_db.result_meta.listing_filters and change only what this message changes. "Cheaper" sets sort to price_low and keeps the other filters. Going on from a search that found nothing follows the rules above instead.
 
 confidence is from 0 to 1.

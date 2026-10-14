@@ -5,9 +5,10 @@ of its three legacy location ids, or a part of its address, because many listing
 the address. When nothing matches, filters are loosened in a fixed order and every step is
 reported, so the reply can say what was relaxed.
 
-A requirement is filtered on only when it names amenities or views listings are tagged
-with. Any other requirement ("high ceilings") is reported as not checked, so the reply
-never presents results as having it.
+A requirement that names a stored amenity or view is filtered on that tag. The same
+requirement can also match the listing's own text. Anything the catalog does not name
+("high ceilings") is a required match on that text, and is never dropped so the search
+falls through to every listing of that type.
 """
 
 from __future__ import annotations
@@ -18,10 +19,17 @@ from functools import lru_cache
 from typing import Any
 
 from agent.enums.listing import Completion, Furnishing, ListingPurpose, ListingSort, NearStation
-from agent.grounding.name_matching import normalize_name
+from agent.grounding.name_matching import brand_stem, normalize_name
 from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED
 from agent.schemas.listing_search import ListingQuery, ListingResult, ListingSearch, Relaxation
-from agent.sql.listing_sql_fragments import ACTIVE_LISTING_CONDITION, ASKING_PRICE_SQL
+from agent.sql.listing_sql_fragments import (
+    ACTIVE_LISTING_CONDITION,
+    ASKING_PRICE_SQL,
+    TEXT_SEARCH_CONDITION,
+    TEXT_SEARCH_RANK,
+    VERIFIED_AGENT_CONDITION,
+)
+from agent.sql.listing_text_search import broaden_with_synonyms, build_text_query
 from agent.sql.transit import near_station_clause
 from catalog import load_domain
 
@@ -38,6 +46,11 @@ ListingRunner = Callable[[str, dict[str, Any]], Any]
 WIDER_STATION_KM = 2.0
 UNCHECKED_REQUIREMENT_NOTE = "The search could not check {requirement}, so these results may not have it."
 DROPPED_FEATURES_NOTE = "None of the otherwise matching listings has {features}, so these results ignore that."
+TEXT_SYNONYMS_NOTE = "No listing matched {text} exactly, so similar wording is included."
+TYPE_FAMILY_NOTE = "No {asked} mention {text}, so {added} are included."
+OTHER_TYPES_NOTE = "No {asked} mention {text}; these {count} other listings do."
+# Villa and villa compound are the same kind of home for a description search. Apartments are not.
+_VILLA_FAMILY = ("villa", "villa compound")
 
 
 RELAXATIONS: tuple[Relaxation, ...] = (
@@ -134,18 +147,35 @@ def build_listing_query(search: ListingSearch, *, limit: int, offset: int) -> Li
         params["completion"] = filters.completion.value
     if filters.near_station is not NearStation.ANY:
         clauses.append(near_station_clause(filters.near_station, filters.station_km, params))
-    if search.developers:
-        clauses.append("p.developer = ANY(%(developers)s)")
-        params["developers"] = list(search.developers)
+    developer_clause = _developer_clause(search, params)
+    if developer_clause:
+        clauses.append(developer_clause)
+    agency_clause = _agency_clause(search, params)
+    if agency_clause:
+        clauses.append(agency_clause)
+    agent_clause = _agent_clause(search, params)
+    if agent_clause:
+        clauses.append(agent_clause)
+    if filters.verified_agent:
+        clauses.append(VERIFIED_AGENT_CONDITION)
     feature_clause = _feature_clause(search, params)
     if feature_clause:
         clauses.append(feature_clause)
     place_clause = _place_clause(search, params)
     if place_clause:
         clauses.append(place_clause)
+    for index, brand in enumerate(search.brand_places):
+        brand_clause = _brand_clause(brand, index, params)
+        if brand_clause:
+            clauses.append(brand_clause)
+    if search.text_query:
+        clauses.append(TEXT_SEARCH_CONDITION.format(param="text_query"))
+        params["text_query"] = search.text_query
 
     where = "\n  AND ".join(clauses)
     order_by = _ORDER_BY[filters.sort]
+    if search.text_query and filters.sort is ListingSort.NEWEST:
+        order_by = f"{TEXT_SEARCH_RANK.format(param='text_query')} DESC, {order_by}"
     params.update(limit=limit, offset=offset)
     return ListingQuery(
         sql=(
@@ -163,6 +193,9 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
     current = search
     query = build_listing_query(current, limit=limit, offset=offset)
     total, duration_ms = _count_matching_listings(query, run)
+    if not total and current.text_query:
+        current, query, total, elapsed = _recover_listing_text(current, run, notes, limit=limit, offset=offset)
+        duration_ms += elapsed
     for relaxation in RELAXATIONS:
         if total:
             break
@@ -197,6 +230,112 @@ def search_listings(search: ListingSearch, run: ListingRunner, *, limit: int, of
     )
 
 
+def _recover_listing_text(
+    search: ListingSearch,
+    run: ListingRunner,
+    notes: list[str],
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[ListingSearch, ListingQuery, int, int]:
+    """Loosen a description match that found nothing. The text match itself stays required.
+
+    Similar wording, then villa with villa compound, then other property types when those
+    mention it. Price and bedroom loosening happens later and still keeps the text match.
+    """
+    current = search
+    query = build_listing_query(current, limit=limit, offset=offset)
+    total = 0
+    elapsed = 0
+    mentioned = _mentioned_text(search)
+
+    broadened = broaden_with_synonyms(current.text_requirements)
+    if broadened and broadened != current.text_query:
+        current = replace(current, text_query=broadened)
+        notes.append(TEXT_SYNONYMS_NOTE.format(text=mentioned))
+        query = build_listing_query(current, limit=limit, offset=offset)
+        total, step = _count_matching_listings(query, run)
+        elapsed += step
+        if total:
+            return current, query, total, elapsed
+
+    widened = _villa_family_types(current.filters.property_types)
+    if widened is not None:
+        added = [name for name in widened if name not in current.filters.property_types]
+        notes.append(
+            TYPE_FAMILY_NOTE.format(
+                asked=_type_phrase(current.filters.property_types),
+                added=_type_phrase(added),
+                text=mentioned,
+            )
+        )
+        current = replace(current, filters=current.filters.model_copy(update={"property_types": widened}))
+        query = build_listing_query(current, limit=limit, offset=offset)
+        total, step = _count_matching_listings(query, run)
+        elapsed += step
+        if total:
+            return current, query, total, elapsed
+
+    if current.filters.property_types:
+        loosened = replace(current, filters=current.filters.model_copy(update={"property_types": []}))
+        other_query = build_listing_query(loosened, limit=limit, offset=offset)
+        other_total, step = _count_matching_listings(other_query, run)
+        elapsed += step
+        if other_total:
+            notes.append(
+                OTHER_TYPES_NOTE.format(
+                    asked=_type_phrase(current.filters.property_types),
+                    text=mentioned,
+                    count=other_total,
+                )
+            )
+            return loosened, other_query, other_total, elapsed
+
+    return current, query, total, elapsed
+
+
+def _mentioned_text(search: ListingSearch) -> str:
+    if search.text_requirements:
+        return " and ".join(search.text_requirements)
+    return search.text_query or "that description"
+
+
+def _villa_family_types(property_types: list[str]) -> list[str] | None:
+    """The user's villa types plus the other villa type, or None when that widen does not apply."""
+    if not property_types:
+        return None
+    family_ids, unknown_family = resolve_category_ids(list(_VILLA_FAMILY))
+    if unknown_family or len(set(family_ids)) < 2:
+        return None
+    current_ids, unknown = resolve_category_ids(property_types)
+    if unknown or not current_ids:
+        return None
+    family = set(family_ids)
+    current = set(current_ids)
+    if not current <= family or current == family:
+        return None
+    name_by_id = dict(zip(family_ids, _VILLA_FAMILY, strict=True))
+    missing = [name_by_id[category_id] for category_id in family_ids if category_id not in current]
+    return [*property_types, *missing]
+
+
+def _type_phrase(property_types: list[str]) -> str:
+    labels = [_pluralize_type(name) for name in property_types]
+    if len(labels) <= 1:
+        return labels[0] if labels else "listings"
+    if len(labels) == 2:
+        return f"{labels[0]} or {labels[1]}"
+    return ", ".join(labels[:-1]) + f", or {labels[-1]}"
+
+
+def _pluralize_type(name: str) -> str:
+    words = name.split()
+    if not words or words[-1].endswith("s"):
+        return name
+    words[-1] = f"{words[-1]}s"
+    return " ".join(words)
+
+
 def _count_matching_listings(query: ListingQuery, run: ListingRunner) -> tuple[int, int]:
     page = run(query.count_sql, query.params)
     rows = list(getattr(page, "rows", []) or [])
@@ -220,30 +359,110 @@ def _add_range_filter(
         params[f"{name}_max"] = high
 
 
+def _developer_clause(search: ListingSearch, params: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if search.developers:
+        parts.append("p.developer = ANY(%(developers)s)")
+        params["developers"] = list(search.developers)
+    needles = _like_needles(search.developer_patterns)
+    if needles:
+        parts.append("p.developer ILIKE ANY(%(developer_patterns)s)")
+        params["developer_patterns"] = needles
+    return _or_group(parts)
+
+
+def _agency_clause(search: ListingSearch, params: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if search.agency_ids:
+        parts.append("(p.agency_id = ANY(%(agency_ids)s) OR p.user_id = ANY(%(agency_ids)s))")
+        params["agency_ids"] = list(search.agency_ids)
+    needles = _like_needles(search.agency_patterns)
+    if needles:
+        parts.append(
+            "EXISTS (SELECT 1 FROM public.users au "
+            "WHERE au.deleted_at IS NULL AND (au.id = p.agency_id OR au.id = p.user_id) "
+            "AND (au.company_name ILIKE ANY(%(agency_patterns)s) OR au.name_en ILIKE ANY(%(agency_patterns)s)))"
+        )
+        params["agency_patterns"] = needles
+    return _or_group(parts)
+
+
+def _agent_clause(search: ListingSearch, params: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if search.agent_ids:
+        parts.append("p.user_id = ANY(%(agent_ids)s)")
+        params["agent_ids"] = list(search.agent_ids)
+    needles = _like_needles(search.agent_patterns)
+    if needles:
+        parts.append(
+            "EXISTS (SELECT 1 FROM public.users ag "
+            "WHERE ag.deleted_at IS NULL AND ag.id = p.user_id AND ag.name_en ILIKE ANY(%(agent_patterns)s))"
+        )
+        params["agent_patterns"] = needles
+    return _or_group(parts)
+
+
+def _brand_clause(brand, index: int, params: dict[str, Any]) -> str:
+    place_sql = _places_sql([brand.place], [], params, f"brand_{index}")
+    if not brand.developers:
+        return place_sql
+    key = f"brand_{index}_developers"
+    developer_sql = f"p.developer = ANY(%({key})s)"
+    params[key] = list(brand.developers)
+    if not place_sql:
+        return developer_sql
+    return f"({place_sql} OR {developer_sql})"
+
+
 def _place_clause(search: ListingSearch, params: dict[str, Any]) -> str:
+    return _places_sql(search.places, search.unmatched_places, params, "place")
+
+
+def _places_sql(places, unmatched: list[str], params: dict[str, Any], prefix: str) -> str:
     links: list[str] = []
-    v2_ids = sorted({node_id for place in search.places for node_id in place.v2_ids})
-    legacy_ids = sorted({node_id for place in search.places for node_id in place.legacy_ids})
-    address_names = sorted({name for place in search.places for name in place.address_names})
+    v2_ids = sorted({node_id for place in places for node_id in place.v2_ids})
+    legacy_ids = sorted({node_id for place in places for node_id in place.legacy_ids})
+    address_names = sorted({name for place in places for name in place.address_names})
     if v2_ids:
-        links.append("p.location_v2_id = ANY(%(place_v2_ids)s)")
-        params["place_v2_ids"] = v2_ids
+        key = f"{prefix}_v2_ids"
+        links.append(f"p.location_v2_id = ANY(%({key})s)")
+        params[key] = v2_ids
     if legacy_ids:
+        key = f"{prefix}_legacy_ids"
         links.extend(
-            f"p.{column} = ANY(%(place_legacy_ids)s)"
+            f"p.{column} = ANY(%({key})s)"
             for column in ("location_master_project_id", "location_project_id", "location_building_id")
         )
-        params["place_legacy_ids"] = legacy_ids
+        params[key] = legacy_ids
     if address_names:
+        key = f"{prefix}_address_names"
         links.append(
             "EXISTS (SELECT 1 FROM unnest(string_to_array(lower(p.address_en), ',')) AS part "
-            "WHERE trim(part) = ANY(%(place_address_names)s))"
+            f"WHERE trim(part) = ANY(%({key})s))"
         )
-        params["place_address_names"] = address_names
-    if search.unmatched_places:
-        links.append("p.address_en ILIKE ANY(%(place_address_patterns)s)")
-        params["place_address_patterns"] = [f"%{_escape_like_pattern(text)}%" for text in search.unmatched_places]
-    return f"({' OR '.join(links)})" if links else ""
+        params[key] = address_names
+    if unmatched:
+        key = f"{prefix}_address_patterns"
+        links.append(f"p.address_en ILIKE ANY(%({key})s)")
+        params[key] = [f"%{_escape_like_pattern(text)}%" for text in unmatched]
+    return _or_group(links)
+
+
+def _or_group(parts: list[str]) -> str:
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return f"({' OR '.join(parts)})"
+
+
+def _like_needles(texts: list[str]) -> list[str]:
+    needles: list[str] = []
+    for text in texts:
+        needle = brand_stem(text) or normalize_name(text)
+        if needle and needle not in needles:
+            needles.append(f"%{_escape_like_pattern(needle)}%")
+    return needles
 
 
 def _feature_clause(search: ListingSearch, params: dict[str, Any]) -> str:
@@ -263,6 +482,11 @@ def _feature_clause(search: ListingSearch, params: dict[str, Any]) -> str:
                 f"WHERE pv.property_id = p.id AND pv.view_id = ANY(%(feature_{index}_view_ids)s))"
             )
             params[f"feature_{index}_view_ids"] = list(feature.view_ids)
+        if search.match_features_in_text:
+            quoted = build_text_query([feature.text])
+            if quoted:
+                links.append(TEXT_SEARCH_CONDITION.format(param=f"feature_{index}_text"))
+                params[f"feature_{index}_text"] = quoted
         if links:
             groups.append(f"({' OR '.join(links)})")
     if not groups:

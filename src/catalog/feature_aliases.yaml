@@ -19,3 +19,26 @@ water view:
 - Lake View
 - Canal View
 - Creek View
+# Parking, play, and service titles are the canonical amenity names. "parking included" reaches
+# these once filler words are dropped; a phrase whose words are not in the title needs an entry.
+parking:
+- Covered Parking
+- Parking Spaces
+- Valet Parking
+covered parking:
+- Covered Parking
+covered garage:
+- Covered Parking
+balcony:
+- Balcony or Terrace
+kids play area:
+- "Children's Play Area"
+playground:
+- "Children's Play Area"
+security:
+- Security Staff
+- CCTV Security
+concierge:
+- Concierge Service
+doorman:
+- Concierge Service

@@ -39,6 +39,7 @@ AMENITIES = [
     (9, "Elevator"),
     (10, "Flooring"),
     (11, "Children’s Play Area"),
+    (12, "Covered Parking"),
 ]
 VIEWS = [(101, "Burj Khalifa View"), (102, "City Skyline View"), (103, "Ocean View"), (104, "School View"), (105, "Pool View")]
 
@@ -70,6 +71,9 @@ def _titles(phrase: str) -> set[str]:
         ("pool", {"Shared Pool", "Private Pool"}),
         ("pool view", {"Pool View"}),
         ("children's play area", {"Children’s Play Area"}),
+        ("parking included", {"Covered Parking"}),
+        ("covered parking", {"Covered Parking"}),
+        ("kids play area", {"Children’s Play Area"}),
     ],
 )
 def test_a_requirement_matches_the_titles_that_hold_its_words(phrase, titles):
@@ -191,9 +195,12 @@ def test_a_turn_filters_on_matched_requirements_and_tells_the_reply_about_the_re
             user_id="user-1", models=models, sql_runner=runner, listing_loader=lambda ids: [], grounding=index
         ),
     )
-    _, params = runner.calls[0]
+    sql, params = runner.calls[0]
     assert params["feature_0_amenity_ids"] == [2]
     assert params["feature_1_view_ids"] == [101]
+    assert params["text_query"] == '"high ceilings"'
+    assert "high ceilings" not in sql
     answer = models.answers[0]
     assert "has: Private Gym; Burj Khalifa View" in answer["filters"]
-    assert any("high ceilings" in note for note in answer["search_notes"])
+    assert "listing text mentions: high ceilings" in answer["filters"]
+    assert not any("could not check" in note for note in answer["search_notes"])

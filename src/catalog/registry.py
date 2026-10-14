@@ -12,6 +12,7 @@ PROFILES_DIR = CATALOG_DIR / "profiles"
 INDEX_PATH = DOMAINS_DIR / "index.yaml"
 NAME_ALIASES_PATH = CATALOG_DIR / "name_aliases.yaml"
 FEATURE_ALIASES_PATH = CATALOG_DIR / "feature_aliases.yaml"
+LISTING_TEXT_SYNONYMS_PATH = CATALOG_DIR / "listing_text_synonyms.yaml"
 RECIPES_PATH = CATALOG_DIR / "recipes.yaml"
 
 # Keys the grounding code reads. The SQL model never sees them.
@@ -129,6 +130,14 @@ def load_name_aliases() -> dict[str, list[str]]:
 
 def load_feature_aliases() -> dict[str, list[str]]:
     return _load_aliases(FEATURE_ALIASES_PATH)
+
+
+def load_listing_text_synonyms() -> list[list[str]]:
+    """Groups of phrases that mean the same thing in listing title or description text."""
+    if not LISTING_TEXT_SYNONYMS_PATH.exists():
+        return []
+    groups = _read_yaml(LISTING_TEXT_SYNONYMS_PATH).get("groups") or []
+    return [[str(phrase) for phrase in group or []] for group in groups]
 
 
 def _load_aliases(path: Path) -> dict[str, list[str]]:

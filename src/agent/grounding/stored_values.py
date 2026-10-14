@@ -12,7 +12,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 
 from agent.enums.grounding import MatchTier
-from agent.grounding.name_matching import NameMatcher, normalize_name
+from agent.grounding.name_matching import NameMatcher, brand_stem, normalize_name
 from agent.schemas.grounding_index import NamedColumn, StoredValue
 
 MAX_MATCHES_PER_COLUMN = 10
@@ -26,6 +26,19 @@ PLACE_GROUP = "place"
 # contains the typed name is the same company. A place is different: "Dubai Marina Mall" is
 # not "Dubai Marina", so places keep the strongest match only.
 GROUPS_MATCHING_CONTAINING_NAMES = frozenset({"developer"})
+
+
+def developer_matches(index: "StoredValueIndex", text: str, tables: Iterable[str]) -> list[StoredValue]:
+    """Stored developer names for what the user typed, including the brand without its legal words.
+
+    "Emaar Properties" matches "Emaar" and "Emaar Properties (P.J.S.C)". A stem is only tried
+    when it still names a brand, so "Pathfinder Property Development" is not "ACES".
+    """
+    found = index.find([text], tables, {"developer"})
+    stem = brand_stem(text)
+    if not stem or stem == normalize_name(text):
+        return found
+    return _merge_stored_values(found, index.find([stem], tables, {"developer"}))
 
 
 def name_group_for_kind(kind: str) -> str:
@@ -148,6 +161,17 @@ def learn_same_place(
             same_place_as=f"{column.column} = '{name}'",
         )
     return learned
+
+
+def _merge_stored_values(primary: list[StoredValue], extra: list[StoredValue]) -> list[StoredValue]:
+    seen: set[tuple[str, str, str]] = set()
+    merged: list[StoredValue] = []
+    for value in [*primary, *extra]:
+        key = (value.table, value.column, value.value)
+        if key not in seen:
+            seen.add(key)
+            merged.append(value)
+    return merged
 
 
 def _alias_names(aliases: Mapping[str, list[str]]) -> dict[str, list[str]]:

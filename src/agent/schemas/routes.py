@@ -49,7 +49,10 @@ class QueryRoute(BaseModel):
     )
     names: list[NameMention] = Field(
         default_factory=list,
-        description="Places, buildings, projects, and developers the lookup is about, as the user wrote them.",
+        description=(
+            "Places, buildings, projects, developers, agencies, and agents the lookup is about, "
+            "as the user wrote them."
+        ),
     )
     listing_filters: ListingFilters | None = Field(
         default=None,

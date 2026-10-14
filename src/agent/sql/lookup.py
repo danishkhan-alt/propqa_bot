@@ -7,16 +7,17 @@ run, and retried once (`run_sql_lookup`).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from agent.enums.listing import MentionKind, NearStation
+from agent.enums.listing import Completion, Furnishing, MentionKind, NearStation
 from agent.enums.routing import Intent
 from agent.schemas.grounding import Grounding, as_grounding
 from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters
-from agent.schemas.listing_search import ListingSearch
+from agent.schemas.listing_search import BrandPlace, ListingSearch
 from agent.schemas.recipes import BoundRecipe
 from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
 from agent.schemas.sql import SqlDraft, SqlPage
@@ -39,6 +40,7 @@ from agent.sql.guard import (
 )
 from agent.sql.listing_card_ids import is_listing_list_request, listing_card_ids_from_rows
 from agent.sql.listing_search import search_listings
+from agent.sql.listing_text_search import build_text_query
 from agent.sql.listing_sql_fragments import LISTINGS_TABLE
 from agent.sql.recipes import bind_recipe, get_recipe
 from agent.sql.trace import trace_sql_attempt
@@ -62,13 +64,14 @@ ALL_ZERO_ROW_RETRY_REASON = (
     "nothing; use the stored values in resolved_names, or check the filters against the catalog."
 )
 BLENDED_AVERAGE_NOTE = "These figures average several kinds of property together, so treat them as a blend."
-LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK})
+LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK, Intent.AGGREGATE})
 
 
 def uses_listing_search(state: ChatState) -> bool:
-    """The user wants to see properties on the market. Written in code, not by the model.
+    """The user wants properties on the market, including how many match. Written in code.
 
-    The router's listing filters decide this, not which catalog packs were loaded.
+    The router's listing filters decide this, not which catalog packs were loaded. An aggregate
+    without those filters (a sales total, an average) stays on the drafted path.
     """
     query = as_query_route(state.get("query_route"))
     return query is not None and query.listing_filters is not None and query.intent in LISTING_INTENTS
@@ -94,16 +97,24 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
             offset=(window.page - 1) * window.per_page,
         )
     except SqlFailed as exc:
-        last = _build_sql_result(
-            domain_ids=domain_ids,
-            attempt=1,
-            purpose="property search",
-            sql="",
-            status="failed",
-            error=str(exc),
+        if not _can_retry_without_listing_text(search):
+            return _failed_listing_lookup(domain_ids, exc, client)
+        search = replace(
+            search,
+            text_query=None,
+            text_requirements=[],
+            match_features_in_text=False,
+            unchecked_requirements=[*search.unchecked_requirements, *search.text_requirements],
         )
-        trace_sql_attempt(last, client)
-        return {"sql_result": last, "sql_rows": [], "listing_ids": []}
+        try:
+            found = search_listings(
+                search,
+                runner,
+                limit=window.per_page,
+                offset=(window.page - 1) * window.per_page,
+            )
+        except SqlFailed as retry_exc:
+            return _failed_listing_lookup(domain_ids, retry_exc, client)
     rows = [{"property_id": listing_id} for listing_id in found.ids]
     last = _build_sql_result(
         domain_ids=domain_ids,
@@ -329,17 +340,147 @@ def _answer_with_recipe(bound: BoundRecipe, runner, cap: int, client) -> dict | 
 
 
 def _build_listing_search(query: QueryRoute | None, grounding: Grounding) -> ListingSearch:
-    places = [name for name in grounding.names if name.kind is MentionKind.PLACE]
     filters = (query.listing_filters if query is not None else None) or ListingFilters()
+    places = []
+    unmatched_places = []
+    brand_places = []
+    developers: list[str] = []
+    developer_patterns: list[str] = []
+    agency_ids: list[int] = []
+    agency_names: list[str] = []
+    agency_patterns: list[str] = []
+    agent_ids: list[int] = []
+    agent_names: list[str] = []
+    agent_patterns: list[str] = []
+    for name in grounding.names:
+        developer_values = [
+            match.value
+            for match in name.stored
+            if match.table == LISTINGS_TABLE and match.kind == "developer"
+        ]
+        if name.kind is MentionKind.PLACE and name.place is not None and developer_values:
+            brand_places.append(BrandPlace(place=name.place, developers=developer_values))
+            continue
+        if name.kind is MentionKind.PLACE and name.place is not None:
+            places.append(name.place)
+            continue
+        if name.kind is MentionKind.PLACE:
+            if developer_values:
+                developers.extend(developer_values)
+            elif name.agency_ids:
+                _add_entity(agency_ids, agency_names, name.agency_ids, name.entity_titles, name.text)
+            elif name.agent_ids:
+                _add_entity(agent_ids, agent_names, name.agent_ids, name.entity_titles, name.text)
+            else:
+                unmatched_places.append(name.text)
+            continue
+        if name.kind is MentionKind.DEVELOPER:
+            if developer_values:
+                developers.extend(developer_values)
+            else:
+                developer_patterns.append(name.text)
+            continue
+        if name.kind is MentionKind.AGENCY:
+            if name.agency_ids:
+                _add_entity(agency_ids, agency_names, name.agency_ids, name.entity_titles, name.text)
+            else:
+                agency_patterns.append(name.text)
+                agency_names.append(name.text)
+            continue
+        if name.kind is MentionKind.AGENT:
+            if name.agent_ids:
+                _add_entity(agent_ids, agent_names, name.agent_ids, name.entity_titles, name.text)
+            else:
+                agent_patterns.append(name.text)
+                agent_names.append(name.text)
+            continue
+        if developer_values:
+            developers.extend(developer_values)
+        elif name.agency_ids:
+            _add_entity(agency_ids, agency_names, name.agency_ids, name.entity_titles, name.text)
+        elif name.agent_ids:
+            _add_entity(agent_ids, agent_names, name.agent_ids, name.entity_titles, name.text)
+    unresolved = [feature.text for feature in grounding.features if not feature.is_resolved]
+    text_requirements = [text for text in unresolved if build_text_query([text])]
+    text_query = build_text_query(text_requirements) if ActiveConfig.LISTING_TEXT_SEARCH_ENABLED else None
+    if not text_query:
+        text_requirements = []
     return ListingSearch(
         filters=filters,
-        places=[name.place for name in places if name.place is not None],
-        developers=grounding.stored_values_in(LISTINGS_TABLE, "developer"),
-        unmatched_places=[name.text for name in places if name.place is None],
+        places=places,
+        developers=_unique(developers),
+        developer_patterns=_unique(developer_patterns),
+        unmatched_places=unmatched_places,
+        agency_ids=_unique(agency_ids),
+        agency_names=_unique(agency_names),
+        agency_patterns=_unique(agency_patterns),
+        agent_ids=_unique(agent_ids),
+        agent_names=_unique(agent_names),
+        agent_patterns=_unique(agent_patterns),
+        brand_places=brand_places,
         features=[feature for feature in grounding.features if feature.is_resolved],
         any_feature=filters.any_requirement,
-        unchecked_requirements=[feature.text for feature in grounding.features if not feature.is_resolved],
+        unchecked_requirements=[text for text in unresolved if text not in text_requirements],
+        text_requirements=text_requirements,
+        text_query=text_query,
+        match_features_in_text=bool(ActiveConfig.LISTING_TEXT_SEARCH_ENABLED),
     )
+
+
+def _add_entity(ids: list[int], names: list[str], matched_ids: list[int], titles: list[str], fallback: str) -> None:
+    ids.extend(matched_ids)
+    names.extend(titles or [fallback])
+
+
+def _unique(items: list) -> list:
+    return list(dict.fromkeys(items))
+
+
+def _can_retry_without_listing_text(search: ListingSearch) -> bool:
+    """A text-search failure may drop the text match only when other filters still bound it.
+
+    Purpose alone does not count: that would return every listing for sale or rent.
+    """
+    if not search.text_query and not search.match_features_in_text:
+        return False
+    filters = search.filters
+    return bool(
+        filters.property_types
+        or filters.bedrooms_min is not None
+        or filters.bedrooms_max is not None
+        or filters.price_min is not None
+        or filters.price_max is not None
+        or filters.size_min_sqft is not None
+        or filters.size_max_sqft is not None
+        or filters.furnishing is not Furnishing.ANY
+        or filters.completion is not Completion.ANY
+        or filters.near_station is not NearStation.ANY
+        or filters.golden_visa
+        or search.places
+        or search.unmatched_places
+        or search.developers
+        or search.developer_patterns
+        or search.agency_ids
+        or search.agency_patterns
+        or search.agent_ids
+        or search.agent_patterns
+        or search.brand_places
+        or filters.verified_agent
+        or search.features
+    )
+
+
+def _failed_listing_lookup(domain_ids: list[str], exc: SqlFailed, client) -> dict:
+    last = _build_sql_result(
+        domain_ids=domain_ids,
+        attempt=1,
+        purpose="property search",
+        sql="",
+        status="failed",
+        error=str(exc),
+    )
+    trace_sql_attempt(last, client)
+    return {"sql_result": last, "sql_rows": [], "listing_ids": []}
 
 
 def _stated_listing_filters(search: ListingSearch) -> list[str]:
@@ -347,13 +488,22 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
     stated = search.filters.model_dump(
         mode="json",
         exclude_defaults=True,
-        exclude={"near_station", "station_within_km", "golden_visa", "requirements", "any_requirement"},
+        exclude={
+            "near_station",
+            "station_within_km",
+            "golden_visa",
+            "verified_agent",
+            "requirements",
+            "any_requirement",
+        },
     )
     conditions = [f"{field}: {value}" for field, value in stated.items() if value not in (None, [], "")]
     if search.filters.golden_visa:
         conditions.append(
             f"qualifies for the UAE Golden Visa: for sale at AED {GOLDEN_VISA_MIN_PRICE_AED:,} or more"
         )
+    if search.filters.verified_agent:
+        conditions.append("verified agent")
     if search.filters.near_station is not NearStation.ANY:
         conditions.append(
             f"within {search.filters.station_km:g} km of {STATION_LABELS[search.filters.near_station]}"
@@ -361,10 +511,18 @@ def _stated_listing_filters(search: ListingSearch) -> list[str]:
     conditions.extend(f"place: {place.title}" for place in search.places)
     conditions.extend(f"place: {text}" for text in search.unmatched_places)
     conditions.extend(f"developer: {name}" for name in search.developers)
+    conditions.extend(f"developer: {name}" for name in search.developer_patterns)
+    conditions.extend(f"agency: {name}" for name in search.agency_names)
+    conditions.extend(f"agent: {name}" for name in search.agent_names)
+    for brand in search.brand_places:
+        developer_names = " or ".join(brand.developers)
+        conditions.append(f"place or developer: {brand.place.title} or {developer_names}")
     if search.features:
         label = "has any of" if search.any_feature and len(search.features) > 1 else "has"
         wanted = [" or ".join(feature.titles) for feature in search.features]
         conditions.append(f"{label}: " + "; ".join(wanted))
+    if search.text_requirements:
+        conditions.append("listing text mentions: " + "; ".join(search.text_requirements))
     return conditions
 
 

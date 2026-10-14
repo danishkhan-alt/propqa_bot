@@ -2,15 +2,21 @@
 #
 # Truth is written here as SQL, independent of the code under test.
 # - listings: the listing ids a correct search returns. `place` lists the lowercase names of the
-#   place; a listing is in it when it is linked (in either location tree, at any depth) to a node
-#   with one of those names, or its address mentions one. `where` adds filters on `p`.
-#   `relaxed_where` is the truth when `where` matches nothing, since the search must then relax
-#   a filter and say so.
+#   place. A listing is in it when location_v2_id is in that public.locations_v2 subtree, a legacy
+#   location_*_id is in that public.locations subtree, or a comma-separated part of address_en
+#   equals one of those names. A substring of the address is not enough. `where` adds filters on
+#   `p`. `relaxed_where` is the truth when `where` matches nothing, since the search must then
+#   relax a filter and say so. `text` is the search_vector phrase recorded on the fact sheet.
+#   `reply_contains` and `reply_omits` are phrases the reply must or must not include.
+#   `reply_contains_when_relaxed` applies only after a relaxation. `count_in_reply` requires the
+#   inventory total, as digits, in the reply. Property types use the PropertyCategory ids
+#   (apartment 25, villa 24, villa compound 17, penthouse 22, office 15).
 # - value: one number the answer must contain (within `tolerance`, relative). `sql` lists every
 #   acceptable reading of the question, e.g. the DLD area or the marketing master project.
 # - sql_contains: text the SQL must contain, such as the stored value it filters on.
 # - rows_contain: text that must appear in the returned rows.
-# `turns` runs a conversation; only the last turn is scored.
+# `turns` runs a conversation; only the last turn is scored. Listing replies are also checked
+# against the fact sheet of the returned ids.
 
 cases:
 - id: marina_listings
@@ -90,6 +96,204 @@ cases:
     where: >-
       p.rooms = 2
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: palm_listings_typo
+  message: show me property in palm jumeriah
+  listings:
+    place: [palm jumeirah]
+
+- id: business_bay_typo
+  message: show me 2 bedroom apartments in bussiness bay
+  listings:
+    place: [business bay]
+    where: >-
+      p.rooms = 2
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: creek_beach_mangrove
+  message: Show Me An Apartment In Creek Beach Mangrove Building 2
+  listings:
+    place: [creek beach mangrove, creek beach mangrove building 2]
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: marina_and_palm
+  message: show me apartments in Dubai Marina and Palm Jumeirah
+  listings:
+    place: [dubai marina, palm jumeirah]
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: marina_three_bed
+  message: show me apartments of 3 bedroom in dubai marina
+  listings:
+    place: [dubai marina]
+    where: >-
+      p.rooms = 3
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: al_furjan_villas_rent
+  message: show villas for rent in Al Furjan
+  listings:
+    place: [al furjan]
+    where: >-
+      p.purpose = 'for_rent'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 24)
+
+- id: business_bay_size_band
+  message: apartments in Business Bay between 400 and 600 sqft
+  listings:
+    place: [business bay]
+    where: >-
+      p.area >= 400 AND p.area <= 600
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+    relaxed_where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+    reply_contains_when_relaxed: [size]
+
+- id: golden_visa_listings
+  message: show me properties that support Golden Visa eligibility
+  listings:
+    where: COALESCE(p.price_max, p.price_min) >= 2000000
+
+- id: sale_gym_and_burj_view
+  message: Apartments for sale with private gym and Burj Khalifa view
+  listings:
+    where: >-
+      p.purpose = 'for_sale'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND EXISTS (
+        SELECT 1 FROM public.amenity_property ap
+        JOIN public.amenities a ON a.id = ap.amenity_id
+        WHERE ap.property_id = p.id AND lower(a.title_en) IN ('shared gym', 'private gym')
+      )
+      AND EXISTS (
+        SELECT 1 FROM public.property_view pv
+        JOIN public.views v ON v.id = pv.view_id
+        WHERE pv.property_id = p.id AND lower(v.title_en) = 'burj khalifa view'
+      )
+
+- id: marina_gym_or_pool
+  message: apartments in Marina with gym or pool
+  listings:
+    place: [dubai marina]
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND (
+        EXISTS (
+          SELECT 1 FROM public.amenity_property ap
+          JOIN public.amenities a ON a.id = ap.amenity_id
+          WHERE ap.property_id = p.id AND lower(a.title_en) IN ('shared gym', 'private gym')
+        )
+        OR EXISTS (
+          SELECT 1 FROM public.amenity_property ap
+          JOIN public.amenities a ON a.id = ap.amenity_id
+          WHERE ap.property_id = p.id AND lower(a.title_en) IN ('shared pool', 'private pool')
+        )
+      )
+
+- id: downtown_furnished
+  message: furnished apartment in Downtown Dubai
+  listings:
+    place: [downtown dubai, burj khalifa]
+    where: >-
+      p.furnished = 'furnished'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+
+- id: high_ceilings
+  message: show apartment with high ceilings
+  listings:
+    text: '"high ceilings"'
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND p.search_vector @@ websearch_to_tsquery('english', '"high ceilings"')
+    relaxed_where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND p.search_vector @@ websearch_to_tsquery('english', '"high ceilings" OR "high ceiling" OR "double height" OR "double volume"')
+    reply_omits: [pool]
+
+- id: large_windows_natural_light
+  message: show me apartment with large windows and natural light
+  listings:
+    text: '"large windows" "natural light"'
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND p.search_vector @@ websearch_to_tsquery('english', '"large windows" "natural light"')
+
+- id: villa_double_height
+  message: villa with double height living room
+  listings:
+    text: '"double height"'
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 24)
+      AND p.search_vector @@ websearch_to_tsquery('english', '"double height"')
+    relaxed_where: >-
+      EXISTS (
+        SELECT 1 FROM public.category_property cp
+        WHERE cp.property_id = p.id AND cp.category_id IN (24, 17)
+      )
+      AND p.search_vector @@ websearch_to_tsquery('english', '"double height" OR "high ceiling" OR "high ceilings" OR "double volume"')
+    reply_contains_when_relaxed: [villa]
+
+- id: betterhomes_agency
+  message: show me properties listed by Betterhomes
+  listings:
+    where: >-
+      EXISTS (
+        SELECT 1 FROM public.users u
+        WHERE u.deleted_at IS NULL
+          AND (u.id = p.agency_id OR u.id = p.user_id)
+          AND (u.company_name ILIKE '%betterhomes%' OR u.name_en ILIKE '%betterhomes%')
+      )
+
+- id: marina_verified_rent
+  message: >-
+    How many verified 2-bedroom apartments are currently for rent in Dubai Marina
+    with yearly rent below AED 120,000, area above 900 sqft, and parking included?
+  listings:
+    place: [dubai marina]
+    count_in_reply: true
+    where: >-
+      p.purpose = 'for_rent'
+      AND p.rooms = 2
+      AND p.area > 900
+      AND COALESCE(p.price_max, p.price_min) <= 120000
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+      AND EXISTS (
+        SELECT 1 FROM public.amenity_property ap
+        JOIN public.amenities a ON a.id = ap.amenity_id
+        WHERE ap.property_id = p.id AND lower(a.title_en) IN ('covered parking', 'parking spaces')
+      )
+      AND EXISTS (
+        SELECT 1 FROM public.users vu
+        WHERE vu.id = p.user_id AND vu.verification_status = 'approved' AND vu.deleted_at IS NULL
+      )
+
+- id: marina_penthouse_count
+  message: how many penthouses are present in dubai marina ?
+  listings:
+    place: [dubai marina]
+    count_in_reply: true
+    where: >-
+      EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 22)
+
+- id: marina_price_miss
+  message: apartments for sale in Dubai Marina under AED 1
+  listings:
+    place: [dubai marina]
+    where: >-
+      p.purpose = 'for_sale'
+      AND COALESCE(p.price_max, p.price_min) <= 1
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+    relaxed_where: >-
+      p.purpose = 'for_sale'
+      AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
+    reply_contains_when_relaxed: [price]
+
+- id: downtown_not_jebel_ali
+  message: show me properties in Downtown
+  listings:
+    place: [downtown dubai, burj khalifa]
 
 - id: marina_average_sale_price
   message: average sale price in Dubai Marina last 12 months

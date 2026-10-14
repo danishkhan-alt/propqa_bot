@@ -10,6 +10,8 @@ class MentionKind(str, Enum):
 
     PLACE = "place"
     DEVELOPER = "developer"
+    AGENCY = "agency"
+    AGENT = "agent"
     OTHER = "other"
 
 

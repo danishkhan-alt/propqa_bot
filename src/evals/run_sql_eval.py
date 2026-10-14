@@ -3,7 +3,9 @@
     python -m evals.run_sql_eval                 # every case
     python -m evals.run_sql_eval marina_listings # chosen cases
 
-Prints one line per case and writes the full record (SQL, rows, reply) to logs/.
+Prints one line per case and writes the full record (SQL, rows, reply, fact sheet) to logs/.
+Listing cases are also checked against an independent truth set and a fact sheet, and the
+reply is checked for unsupported claims.
 """
 
 from __future__ import annotations
@@ -27,47 +29,11 @@ from agent.graph.workflow import build_chat_graph
 from agent.grounding import get_grounding_cache
 from agent.sql.execute import fetch_reference_rows
 from common.db import close_pools
-from common.schemas.pagination import DEFAULT_PER_PAGE
+from evals.listing_facts import fetch_fact_sheet, fetch_truth_ids
+from evals.listing_justification import judge_listing_reply
+from evals.listing_score import TurnOutcome, score_listing_result
 
 GOLDEN_PATH = Path(__file__).resolve().parent / "sql_golden.yaml"
-
-PLACE_LISTINGS_SQL = """
-WITH RECURSIVE v2_place AS (
-    SELECT id FROM public.locations_v2 WHERE lower(title_en) = ANY(%(names)s)
-    UNION SELECT child.id FROM public.locations_v2 child JOIN v2_place parent ON child.parent_id = parent.id
-), legacy_place AS (
-    SELECT id FROM public.locations WHERE lower(name_en) = ANY(%(names)s)
-    UNION SELECT child.id FROM public.locations child JOIN legacy_place parent ON child.parent_id = parent.id
-)
-SELECT p.id FROM public.properties p
-WHERE p.status = 'active' AND p.deleted_at IS NULL
-  AND (
-    p.location_v2_id IN (SELECT id FROM v2_place)
-    OR p.location_master_project_id IN (SELECT id FROM legacy_place)
-    OR p.location_project_id IN (SELECT id FROM legacy_place)
-    OR p.location_building_id IN (SELECT id FROM legacy_place)
-    OR p.address_en ILIKE ANY(%(patterns)s)
-  )
-  AND ({where})
-"""
-ANY_LISTINGS_SQL = "SELECT p.id FROM public.properties p WHERE p.status = 'active' AND p.deleted_at IS NULL AND ({where})"
-
-
-@dataclass
-class TurnOutcome:
-    """What the last turn of a case produced."""
-
-    sql: str = ""
-    status: str = ""
-    rows: list[dict] = field(default_factory=list)
-    listing_ids: list[str] = field(default_factory=list)
-    total: int | None = None
-    notes: list[str] = field(default_factory=list)
-    names: list[dict] = field(default_factory=list)
-    route: dict = field(default_factory=dict)
-    reply: str = ""
-    seconds: float = 0.0
-    error: str = ""
 
 
 @dataclass
@@ -76,6 +42,8 @@ class CaseScore:
     passed: bool
     detail: str
     outcome: TurnOutcome
+    facts: list[dict] = field(default_factory=list)
+    unsupported_claims: list[str] = field(default_factory=list)
 
 
 def main(case_ids: list[str]) -> int:
@@ -152,6 +120,7 @@ def _record_node_update(update: dict, outcome: TurnOutcome) -> None:
             outcome.rows = list(result.get("rows") or [])
             outcome.total = result.get("total")
             outcome.notes = list(result.get("notes") or [])
+            outcome.filters = [str(item) for item in (result.get("filters") or [])]
             outcome.listing_ids = [str(item) for item in value.get("listing_ids") or []]
         if node == "write_reply" and value.get("messages"):
             outcome.reply = str(value["messages"][-1].content)
@@ -161,8 +130,8 @@ def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
     if outcome.error:
         return CaseScore(case["id"], False, outcome.error, outcome)
     if "listings" in case:
-        passed, detail = _score_listings(case["listings"], outcome)
-    elif "value" in case:
+        return _score_listings(case, outcome)
+    if "value" in case:
         passed, detail = _score_value(case["value"], outcome)
     elif "sql_contains" in case:
         passed, detail = _score_sql_contains(case["sql_contains"], outcome)
@@ -171,37 +140,35 @@ def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
     return CaseScore(case["id"], passed, detail, outcome)
 
 
-def _score_listings(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
-    truth = _truth_listing_ids(expected, expected.get("where") or "TRUE")
+def _score_listings(case: dict, outcome: TurnOutcome) -> CaseScore:
+    expected = case["listings"]
+    where = expected.get("where") or "TRUE"
+    truth = fetch_truth_ids(expected, where)
     relaxed = False
     if not truth and expected.get("relaxed_where"):
-        truth = _truth_listing_ids(expected, expected["relaxed_where"])
+        where = expected["relaxed_where"]
+        truth = fetch_truth_ids(expected, where)
         relaxed = True
-    returned = set(outcome.listing_ids)
-    wrong = returned - truth
-    # "The cheapest penthouse" asks for one row; otherwise a page of the default size.
-    page_size = outcome.route.get("limit") or DEFAULT_PER_PAGE
-    expected_on_page = min(len(truth), page_size)
-    total_ok = outcome.total is None or outcome.total == len(truth)
-    note_ok = not relaxed or bool(outcome.notes)
-    passed = not wrong and len(returned) == expected_on_page and total_ok and note_ok
-    detail = (
-        f"truth={len(truth)}{' (relaxed)' if relaxed else ''} returned={len(returned)} "
-        f"total={outcome.total} wrong={len(wrong)}"
+    facts = fetch_fact_sheet(outcome.listing_ids, expected, where)
+    claims = _justify(case, outcome, facts)
+    passed, detail = score_listing_result(
+        expected, outcome, truth, relaxed=relaxed, facts=facts, unsupported_claims=claims
     )
-    if relaxed and not outcome.notes:
-        detail += " missing relaxation note"
-    return passed, detail
+    return CaseScore(case["id"], passed, detail, outcome, facts=facts, unsupported_claims=claims)
 
 
-def _truth_listing_ids(expected: dict, where: str) -> set[str]:
-    names = [str(name).lower() for name in expected.get("place") or []]
-    if names:
-        sql = PLACE_LISTINGS_SQL.format(where=where)
-        rows = fetch_reference_rows(sql, {"names": names, "patterns": [f"%{name}%" for name in names]})
-    else:
-        rows = fetch_reference_rows(ANY_LISTINGS_SQL.format(where=where))
-    return {str(row["id"]) for row in rows}
+def _justify(case: dict, outcome: TurnOutcome, facts: list[dict]) -> list[str]:
+    turns = case.get("turns") or [case.get("message") or ""]
+    try:
+        return judge_listing_reply(
+            message=str(turns[-1]),
+            reply=outcome.reply,
+            filters=outcome.filters,
+            notes=outcome.notes,
+            facts=facts,
+        )
+    except Exception as exc:
+        return [f"justification check failed: {type(exc).__name__}"]
 
 
 def _score_value(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:

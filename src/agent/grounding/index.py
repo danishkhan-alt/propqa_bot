@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from psycopg import sql
 
 from agent.enums.grounding import Breadth, FeatureKind
+from agent.grounding.advertisers import AdvertiserDirectory, advertisers_from_rows
 from agent.grounding.features import Feature, FeatureVocabulary, build_feature_vocabulary
 from agent.grounding.places import LEGACY_BREADTH, V2_BREADTH, PlaceDirectory, build_place_directory
 from agent.grounding.region_rows import RegionScope, ids_outside_region
@@ -52,6 +53,7 @@ class GroundingIndex:
     stored: StoredValueIndex
     loaded_at: float
     features: FeatureVocabulary = field(default_factory=FeatureVocabulary)
+    advertisers: AdvertiserDirectory = field(default_factory=AdvertiserDirectory)
     # Table to (id column, ids of rows outside the region), for tables that mix emirates.
     outside_region: dict[str, tuple[str, frozenset[int]]] = field(default_factory=dict)
     building_pages: BuildingPageDirectory = field(default_factory=BuildingPageDirectory)
@@ -95,6 +97,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
             )
     stored = StoredValueIndex(values, same_place, aliases)
     features = build_feature_vocabulary(_fetch_features(read), load_feature_aliases())
+    advertisers = _fetch_advertisers(read)
     outside_region = _rows_outside_region(read, v2_nodes, region)
     building_pages = _fetch_building_pages(read)
     logger.info(
@@ -105,6 +108,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
                 "stored_values": len(stored),
                 "same_place": len(same_place),
                 "features": len(features.features),
+                "advertisers": len(advertisers),
                 "outside_region": {table: len(ids) for table, (_, ids) in outside_region.items()},
                 "building_pages": len(building_pages),
             }
@@ -115,6 +119,7 @@ def load_grounding_index(read: ReferenceReader, *, region: str) -> GroundingInde
         stored=stored,
         loaded_at=time.monotonic(),
         features=features,
+        advertisers=advertisers,
         outside_region=outside_region,
         building_pages=building_pages,
     )
@@ -223,6 +228,30 @@ def _rows_outside_region(
             continue
         outside[scope.table] = (scope.id_column, ids_outside_region(rows, scope, v2_nodes, region))
     return outside
+
+
+def _fetch_advertisers(read: ReferenceReader) -> AdvertiserDirectory:
+    """Agency and agent users that advertise at least one live listing. Empty when the read fails."""
+    try:
+        rows = read(
+            "SELECT u.id, NULLIF(trim(u.company_name), '') AS company_name, "
+            "NULLIF(trim(u.name_en), '') AS name_en, 'agency' AS role, count(*) AS n "
+            "FROM public.properties p "
+            "JOIN public.users u ON u.id = p.agency_id "
+            f"WHERE {ACTIVE_LISTING_CONDITION} AND u.deleted_at IS NULL "
+            "GROUP BY 1, 2, 3 "
+            "UNION ALL "
+            "SELECT u.id, NULLIF(trim(u.company_name), '') AS company_name, "
+            "NULLIF(trim(u.name_en), '') AS name_en, 'agent' AS role, count(*) AS n "
+            "FROM public.properties p "
+            "JOIN public.users u ON u.id = p.user_id "
+            f"WHERE {ACTIVE_LISTING_CONDITION} AND u.deleted_at IS NULL "
+            "GROUP BY 1, 2, 3"
+        )
+    except Exception as exc:
+        logger.warning("grounding.advertisers_failed", extra={"extra_data": {"error": str(exc)[:200]}})
+        return AdvertiserDirectory()
+    return AdvertiserDirectory(advertisers_from_rows(rows))
 
 
 def _fetch_features(read: ReferenceReader) -> list[Feature]:

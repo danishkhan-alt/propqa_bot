@@ -85,6 +85,7 @@ class AgentModels(Protocol):
         assumptions: dict | None,
         memory_block: str = "",
         listing_count: int = 0,
+        inventory_count: bool = False,
         data_note: str = "",
         search_notes: list[str] | None = None,
         filters: list[str] | None = None,

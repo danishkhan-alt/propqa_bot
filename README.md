@@ -69,7 +69,7 @@ Then fill in secrets in `development.env`. Grouped variables:
 | Group | Variables |
 | --- | --- |
 | App | `DEBUG`, `BASE_URL`, `APP_HOST`, `APP_PORT`, `TIMEZONE` |
-| Warehouse | `AUDIT_DB_*`, `DB_SEARCH_PATH`, `SQL_ROW_CAP`, `SQL_TIMEOUT_MS`, `GROUNDING_*` |
+| Warehouse | `AUDIT_DB_*`, `DB_SEARCH_PATH`, `SQL_ROW_CAP`, `SQL_TIMEOUT_MS`, `GROUNDING_*`, `LISTING_TEXT_*` |
 | Chat database | `CHAT_DB_*` |
 | Redis | `REDIS_URL`, `CACHE_KEY_PREFIX` |
 | Auth | `JWT_SIGNING_KEY`, `JWT_ISSUER`, token TTLs |

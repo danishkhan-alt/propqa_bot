@@ -33,4 +33,4 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["src/common/tests", "src/agent/tests", "src/routes/tests"]
+testpaths = ["src/common/tests", "src/agent/tests", "src/routes/tests", "src/evals/tests"]

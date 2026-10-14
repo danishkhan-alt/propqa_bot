@@ -377,6 +377,91 @@ def test_a_company_name_sharing_only_generic_words_is_not_matched():
     assert index.find(["DAWN Developers"], [table], {"developer"}) == []
 
 
+def test_a_developer_brand_stem_matches_the_short_name_and_skips_another_company():
+    from agent.grounding.name_matching import brand_stem
+
+    table = "public.properties"
+    assert brand_stem("Emaar Properties (P.J.S.C)") == "emaar"
+    assert brand_stem("Property Development") == ""
+    assert brand_stem("Dubai Properties") == ""
+    index = GroundingIndex(
+        places=build_place_directory([], [], ListingCountsByPlaceLink(), region="Dubai"),
+        stored=StoredValueIndex(
+            [
+                StoredValue(table, "developer", "Emaar", "developer", 82),
+                StoredValue(table, "developer", "ACES PROPERTY DEVELOPMENT L.L.C", "developer", 3),
+            ],
+            {},
+        ),
+        loaded_at=time.monotonic(),
+    )
+    grounding = ground_names(
+        [
+            NameMention(text="Emaar Properties", kind=MentionKind.DEVELOPER),
+            NameMention(text="Pathfinder Property Development", kind=MentionKind.DEVELOPER),
+        ],
+        index,
+        [table],
+    )
+    emaar, pathfinder = grounding.names
+    assert [match.value for match in emaar.stored] == ["Emaar"]
+    assert pathfinder.stored == []
+    assert pathfinder.text in grounding.unresolved_names()
+
+
+def test_a_place_keeps_a_developer_only_when_it_is_the_same_brand():
+    table = "public.properties"
+    index = GroundingIndex(
+        places=_directory(),
+        stored=StoredValueIndex(
+            [
+                StoredValue(table, "developer", "DAMAC", "developer", 40),
+                StoredValue(table, "developer", "Marina Homes Real Estate", "developer", 8),
+            ],
+            {},
+        ),
+        loaded_at=time.monotonic(),
+    )
+    grounding = ground_names(
+        [NameMention(text="Damac"), NameMention(text="marina")],
+        index,
+        [table],
+    )
+    damac, marina = grounding.names
+    assert [match.value for match in damac.stored if match.kind == "developer"] == ["DAMAC"]
+    assert marina.place is not None
+    assert [match.value for match in marina.stored if match.kind == "developer"] == []
+
+
+def test_an_agency_matches_containing_names_and_an_agent_matches_the_full_name_only():
+    from agent.grounding.advertisers import Advertiser, AdvertiserDirectory
+
+    directory = AdvertiserDirectory(
+        [
+            Advertiser(1, "agency", "Betterhomes", "Betterhomes", 20),
+            Advertiser(2, "agency", "Allsopp & Allsopp Real Estate", "Allsopp", 5),
+            Advertiser(3, "agent", "", "John Smith", 2),
+            Advertiser(4, "agent", "", "John William Smith", 1),
+        ]
+    )
+    assert [advertiser.user_id for advertiser in directory.find_agencies("Betterhomes LLC")] == [1]
+    assert [advertiser.user_id for advertiser in directory.find_agencies("Allsopp")] == [2]
+    assert directory.find_agents("John") == []
+    assert [advertiser.user_id for advertiser in directory.find_agents("John Smith")] == [3]
+    assert [advertiser.user_id for advertiser in directory.find_agents("Jon Smith")] == [3]
+
+    index = GroundingIndex(
+        places=build_place_directory([], [], ListingCountsByPlaceLink(), region="Dubai"),
+        stored=StoredValueIndex([], {}, {}),
+        loaded_at=time.monotonic(),
+        advertisers=directory,
+    )
+    grounding = ground_names([NameMention(text="Betterhomes", kind=MentionKind.PLACE)], index, ["public.properties"])
+    assert grounding.names[0].place is None
+    assert grounding.names[0].agency_ids == [1]
+    assert grounding.names[0].is_resolved
+
+
 def test_the_matched_place_spelling_counts_only_where_a_table_spells_it_exactly():
     index = StoredValueIndex(
         [

@@ -1,0 +1,117 @@
+flowchart TD
+    UserQ["User: How many verified 2 bedroom apartments<br/>are currently for rent in Dubai Marina<br/>yearly rent below AED 120000<br/>area above 900 sqft, parking included"]
+
+    subgraph pipeline [Message to FilterSpec]
+        Think["think_node<br/>how many listings forces intent search"]
+        Enhance["enhance_node _run_parser"]
+        Tier1["Tier 1 Claude Haiku<br/>extract_filter_spec_llm"]
+        Tier2["Tier 2 slot parsers<br/>parse_query_to_spec"]
+        Tier3["Tier 3 regex<br/>extract_filter_spec"]
+        Spec["FilterSpec"]
+        UserQ --> Think
+        Think --> Enhance
+        Enhance --> Tier1
+        Tier1 -->|"timeout or thin spec"| Tier2
+        Tier2 -->|"no concrete spec"| Tier3
+        Tier1 --> Spec
+        Tier2 --> Spec
+        Tier3 --> Spec
+    end
+
+    subgraph sample [Sample query fields]
+        CountQ["How many<br/>inventory count, not card length"]
+        Active["Currently<br/>p.status active and deleted_at null"]
+        Rent["For rent<br/>purpose for_rent<br/>completion_status ready inferred"]
+        Beds["2 bedroom<br/>bedroom 2 on p.rooms"]
+        Apt["Apartments<br/>subcategory apartments"]
+        Loc["Dubai Marina<br/>location_id via locations index<br/>p.location_v2_id ANY"]
+        Yearly["Yearly<br/>rental_period yearly"]
+        Price["Below AED 120000<br/>price_max 120000"]
+        Area["Area above 900 sqft<br/>area_min 900"]
+        Verified["Verified<br/>agent_is_verified true<br/>regex misses bare Verified"]
+        Park["Parking included<br/>amenities Covered Parking<br/>regex misses this phrase"]
+        Spec --> CountQ
+        Spec --> Active
+        Spec --> Rent
+        Spec --> Beds
+        Spec --> Apt
+        Spec --> Loc
+        Spec --> Yearly
+        Spec --> Price
+        Spec --> Area
+        Spec --> Verified
+        Spec --> Park
+    end
+
+    subgraph exec [property_search execution]
+        Core["propqa_core forwards parser_filter_spec"]
+        Repair["canonicalize_entity_filters<br/>plus reinforce_deterministic_filters"]
+        AndJoin["Cross-filter clauses AND together<br/>values inside one list OR together"]
+        Sql["build_property_sql<br/>try_count_matching"]
+        CountOut["apply_inventory_count_to_answer<br/>spoken N is SQL COUNT"]
+        Cards["Other searches<br/>cards plus total_matches"]
+        Spec --> Core
+        Core --> Repair
+        Repair --> AndJoin
+        AndJoin --> Sql
+        Sql --> CountOut
+        Sql --> Cards
+        CountQ --> CountOut
+    end
+
+    subgraph amenityPath [Amenities]
+        AmenSlot["amenities slot or Haiku<br/>with parking maps to Covered Parking"]
+        Canon["canonical_amenities<br/>against amenities.title_en<br/>unknown phrases dropped"]
+        ExistsA["EXISTS amenity_property ap<br/>JOIN amenities a<br/>soft title match"]
+        OrAmen["Several amenities<br/>one parenthesized OR group"]
+        Park --> AmenSlot
+        AmenSlot --> Canon
+        Canon --> ExistsA
+        ExistsA --> OrAmen
+        OrAmen --> AndJoin
+    end
+
+    subgraph entityPath [Agencies and developers]
+        Catalog["EntityIndex<br/>exact then fuzzy then token overlap"]
+        DevField["developers<br/>brand stem, skip generic stems"]
+        DevSql["p.developer ILIKE percent stem percent"]
+        AgencyField["agent_company_name<br/>regulatory agency_name slot"]
+        AgencySql["users u on p.user_id<br/>agency_u on p.agency_id<br/>company_name and name_en ILIKE"]
+        Person["agent_person_name<br/>users.name_en"]
+        PlaceBrand["entity_location_or_match<br/>OR location with brand when both hit"]
+        Repair --> Catalog
+        Catalog --> DevField
+        Catalog --> AgencyField
+        Catalog --> Person
+        Catalog --> PlaceBrand
+        DevField --> DevSql
+        AgencyField --> AgencySql
+        DevSql --> AndJoin
+        AgencySql --> AndJoin
+        Person --> AndJoin
+        PlaceBrand --> AndJoin
+    end
+
+    subgraph visaPath [Golden Visa]
+        GvSrc["golden visa or GV eligible<br/>Haiku, general slot, or regex"]
+        GvFlag["FilterSpec.golden_visa true<br/>no golden_visa column"]
+        GvSql["p.price_max is not null<br/>and p.price_max at least 2000000"]
+        InvSql["investor_visa<br/>p.price_max at least 750000"]
+        Clash["AND with price_max at most 120000<br/>empty intersection"]
+        Policy["Policy questions<br/>policy advisor, not inventory SQL"]
+        Spec --> GvSrc
+        GvSrc --> GvFlag
+        GvFlag --> GvSql
+        GvFlag --> InvSql
+        GvSql --> AndJoin
+        InvSql --> AndJoin
+        Price --> Clash
+        GvSql --> Clash
+        GvSrc -->|"explain the rule"| Policy
+    end
+
+    subgraph verifiedSql [Verified agent]
+        VerSql["JOIN users u<br/>u.verification_status approved<br/>and u.is_active"]
+        Verified --> VerSql
+        VerSql --> AndJoin
+    end

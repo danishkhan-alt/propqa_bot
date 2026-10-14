@@ -5,6 +5,7 @@ from catalog.registry import (
     load_domain,
     load_domains,
     load_feature_aliases,
+    load_listing_text_synonyms,
     load_name_aliases,
     load_named_value_declarations,
     load_recipes,
@@ -24,6 +25,7 @@ __all__ = [
     "load_recipes",
     "load_region_scopes",
     "load_feature_aliases",
+    "load_listing_text_synonyms",
     "load_name_aliases",
     "load_named_value_declarations",
 ]

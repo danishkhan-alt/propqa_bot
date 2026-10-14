@@ -17,7 +17,26 @@ from agent.grounding.name_matching import normalize_name, trigram_similarity
 from agent.schemas.grounding import GroundedFeature
 
 # Words that say how a feature is wanted, not what it is.
-_FILLER_WORDS = frozenset({"a", "an", "the", "with", "has", "have", "having", "and", "or", "of", "to", "access"})
+FEATURE_FILLER_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "with",
+        "has",
+        "have",
+        "having",
+        "and",
+        "or",
+        "of",
+        "to",
+        "access",
+        "included",
+        "includes",
+        "including",
+        "available",
+    }
+)
 # "near a mall" is how people say what listings store as "Nearby Shopping Malls".
 _SAME_WORD = {"near": "nearby", "close": "nearby"}
 _VIEW_WORD = "view"
@@ -88,7 +107,7 @@ def feature_words(text: str) -> frozenset[str]:
     """The words that say what a feature is: singular, without filler. "Maid's room" is {maid, room}."""
     words = normalize_name(str(text or "").replace("'", "").replace("’", "")).split()
     return frozenset(
-        _SAME_WORD.get(word, word) for word in (_singular(word) for word in words) if word not in _FILLER_WORDS
+        _SAME_WORD.get(word, word) for word in (_singular(word) for word in words) if word not in FEATURE_FILLER_WORDS
     )
 
 

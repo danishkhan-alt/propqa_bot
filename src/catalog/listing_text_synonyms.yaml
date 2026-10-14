@@ -1,0 +1,14 @@
+# Phrases that mean the same thing in a listing title or description.
+# Each group is wording people use, not an amenity catalog title.
+# A search that misses one phrase may match another phrase in its group.
+groups:
+  - - double height
+    - double volume
+    - high ceiling
+    - high ceilings
+  - - floor to ceiling
+  - - natural light
+    - sunlit
+  - - large windows
+    - big windows
+  - - open plan

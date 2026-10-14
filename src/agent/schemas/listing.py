@@ -13,7 +13,10 @@ class NameMention(BaseModel):
     text: str = Field(description="The name exactly as the user wrote it, such as 'marina' or 'JVC'.")
     kind: MentionKind = Field(
         default=MentionKind.PLACE,
-        description="place for an area, community, project, or building. developer for a developer.",
+        description=(
+            "place for an area, community, project, or building. developer for a builder. "
+            "agency for a brokerage. agent for a person who lists. other for any other proper name."
+        ),
     )
 
     @field_validator("text")
@@ -65,6 +68,10 @@ class ListingFilters(BaseModel):
     golden_visa: bool = Field(
         default=False,
         description="True when they want properties that qualify for the UAE Golden Visa. False otherwise.",
+    )
+    verified_agent: bool = Field(
+        default=False,
+        description="True when they want a verified or approved agent. False otherwise.",
     )
     requirements: list[str] = Field(
         default_factory=list,

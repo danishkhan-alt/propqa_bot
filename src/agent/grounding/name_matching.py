@@ -23,6 +23,44 @@ from agent.schemas.grounding_index import Key, NameHit
 _BRACKETED = re.compile(r"\(([^)]*)\)")
 _NON_WORD = re.compile(r"[^0-9a-z]+")
 
+# Legal and generic words in a company name. "Emaar Properties (P.J.S.C)" is the brand Emaar.
+# Single letters left by "L.L.C" and "P.J.S.C" are dropped in brand_stem, not listed here.
+COMPANY_GENERIC_WORDS = frozenset(
+    {
+        "properties",
+        "property",
+        "developments",
+        "development",
+        "developer",
+        "developers",
+        "real",
+        "estate",
+        "estates",
+        "realty",
+        "brokers",
+        "broker",
+        "brokerage",
+        "group",
+        "llc",
+        "pjsc",
+        "fz",
+        "fze",
+        "fzco",
+        "est",
+        "limited",
+        "ltd",
+        "inc",
+        "incorporated",
+        "co",
+        "company",
+        "holding",
+        "holdings",
+        "the",
+    }
+)
+# A stem that is only one of these is not a brand. "Dubai Properties" must not search "dubai".
+_BROAD_STEMS = frozenset({"dubai", "uae", "abu", "dhabi", "sharjah", "ajman", "emirates", "arab", "united"})
+
 # Trigram similarity only shortlists typo candidates; `is_typo_of` decides.
 MIN_TRIGRAM_SIMILARITY = 0.3
 # A word may differ by one edit per this many letters ("bussiness", "jumearih").
@@ -30,6 +68,22 @@ LETTERS_PER_TYPO = 4
 # A word this short is taken as a typo only beside a word that matches exactly ("AI Fahidi").
 SHORT_WORD_LETTERS = 3
 
+
+
+def brand_stem(text: str) -> str:
+    """The distinctive words of a company name, or "" when nothing distinctive is left.
+
+    "Emaar Properties" is "emaar". "Property Development" and "Dubai Properties" are "".
+    """
+    words = [
+        word
+        for word in normalize_name(text).split()
+        if len(word) > 1 and word not in COMPANY_GENERIC_WORDS
+    ]
+    stem = " ".join(words)
+    if stem in _BROAD_STEMS:
+        return ""
+    return stem
 
 
 def normalize_name(text: str) -> str:
