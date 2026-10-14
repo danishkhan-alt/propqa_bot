@@ -252,3 +252,4 @@ Exact duplicates are removed. Original wording, including typos, is kept on purp
 - what are the golden visa holders means in dubai what benifits they have related to property *(general knowledge, no DB agent)*
 - Can a foreigner get a mortgage in the UAE, and what deposit do I need? *(general knowledge, no DB agent)*
 - what are listings in python for dictionary properties? *(off-topic, should trigger a guardrail refusal)*
+..
