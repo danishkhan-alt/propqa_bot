@@ -1,0 +1,16 @@
+graph TB
+  Browser[Browser]
+  Web[web nginx]
+  Api[api FastAPI]
+  Worker[memory worker]
+  Redis[(redis)]
+  ChatDb[(chat Postgres)]
+  Warehouse[(warehouse Postgres)]
+
+  Browser -->|"HTTP :80 or :5173"| Web
+  Web -->|"HTTP /api"| Api
+  Api -->|"Redis protocol"| Redis
+  Worker -->|"Redis protocol memq"| Redis
+  Api -->|"Postgres protocol"| ChatDb
+  Worker -->|"Postgres protocol"| ChatDb
+  Api -->|"Postgres protocol read-only"| Warehouse

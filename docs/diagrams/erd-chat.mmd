@@ -1,0 +1,40 @@
+erDiagram
+  chatbot_users ||--o{ chatbot_refresh_tokens : "user_id"
+  user_memories ||--o| user_memories : "supersedes_id"
+  user_memories {
+    uuid id PK
+    text user_id
+    memory_type type
+    text cluster
+    vector embedding
+    memory_status status
+  }
+  chatbot_users {
+    uuid id PK
+    text email
+    text password_hash
+    text role
+  }
+  chatbot_refresh_tokens {
+    uuid id PK
+    uuid user_id FK
+    text token_hash
+    timestamptz revoked_at
+  }
+  user_profile_summary {
+    text user_id PK
+    text summary
+  }
+  memory_events {
+    bigserial id PK
+    text user_id
+    uuid memory_id
+  }
+  user_memory_settings {
+    text user_id PK
+    bool memory_enabled
+  }
+  memory_column_map {
+    text logical_col PK
+    text physical_col
+  }

@@ -1,0 +1,9 @@
+sequenceDiagram
+  participant Browser
+  participant Route as user_memory.py
+  participant Views as views/user_memory.py
+  participant Db as user_memories
+  Browser->>Route: GET or DELETE /api/users/id/memory
+  Route->>Views: export_memory or delete_memory
+  Views->>Db: list_active or soft delete
+  Views-->>Browser: list or deleted count

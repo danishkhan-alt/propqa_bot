@@ -22,7 +22,12 @@ def load_recipes_by_id() -> dict[str, Recipe]:
     loaded: dict[str, Recipe] = {}
     for item in load_recipes():
         params = tuple(
-            RecipeParam(name=str(name), table=str(spec["table"]).lower(), kind=str(spec["kind"]))
+            RecipeParam(
+                name=str(name),
+                table=str(spec["table"]).lower(),
+                kind=str(spec["kind"]),
+                many=bool(spec.get("many")),
+            )
             for name, spec in (item.get("params") or {}).items()
         )
         recipe = Recipe(
@@ -46,27 +51,50 @@ def recipe_index_text() -> str:
     return "\n".join(f"- {item.id} ({', '.join(item.domains)}): {item.when}" for item in load_recipes_by_id().values())
 
 
+def _stored_for(name, param: RecipeParam) -> list[str]:
+    return sorted(
+        {match.value for match in name.stored if match.table == param.table and match.kind == param.kind}
+    )
+
+
 def bind_recipe(chosen: Recipe, grounding: Grounding | None) -> BoundRecipe | None:
     """The recipe's SQL with each parameter replaced by its stored values, or None.
 
-    Each parameter takes exactly one grounded name, and every grounded name must be taken.
-    Values are stored spellings from the warehouse, rendered as quoted literals by sqlglot.
+    A parameter takes exactly one grounded name, unless it is marked many, in which case it
+    takes every remaining name of its table and kind and needs at least two. Every grounded
+    name must be taken. Values are stored spellings from the warehouse, rendered as quoted
+    literals by sqlglot.
     """
     unused = list(grounding.names) if grounding is not None else []
-    if len(unused) != len(chosen.params):
-        return None
     values: dict[str, list[str]] = {}
     for param in chosen.params:
+        if param.many:
+            continue
         for name in unused:
-            stored = sorted(
-                {match.value for match in name.stored if match.table == param.table and match.kind == param.kind}
-            )
+            stored = _stored_for(name, param)
             if stored:
                 values[param.name] = stored
                 unused.remove(name)
                 break
         else:
             return None
+    for param in chosen.params:
+        if not param.many:
+            continue
+        taken = []
+        collected: list[str] = []
+        for name in unused:
+            stored = _stored_for(name, param)
+            if stored:
+                taken.append(name)
+                collected.extend(stored)
+        if len(taken) < 2:
+            return None
+        for name in taken:
+            unused.remove(name)
+        values[param.name] = sorted(set(collected))
+    if unused:
+        return None
     statement = sqlglot.parse_one(chosen.sql, read="postgres")
 
     def fill(node: exp.Expression) -> exp.Expression:

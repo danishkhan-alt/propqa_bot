@@ -1,0 +1,5 @@
+stateDiagram-v2
+  [*] --> active: insert token_hash
+  active --> revoked: logout or rotate
+  active --> purged: expires_at passed
+  revoked --> purged: stale delete

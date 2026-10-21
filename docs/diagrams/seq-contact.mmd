@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant Browser
+  participant Leads as routes/leads.py
+  participant Warehouse as sql/contact.py
+  Browser->>Leads: GET /api/leads/property-contact
+  Leads->>Warehouse: CONTACT_SQL
+  alt row with a number or email
+    Warehouse-->>Browser: contact object
+  else none
+    Leads-->>Browser: ResourceNotFound
+  end

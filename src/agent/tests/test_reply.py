@@ -20,7 +20,7 @@ from agent.reply.building_pages import (
     building_pages_from_rows,
     pick_building_pages,
 )
-from agent.reply.buyer_profile import merge_profile, pick_next_profile_question
+from agent.reply.buyer_profile import drop_repeated_question, merge_profile, pick_next_profile_question
 from agent.reply.figures import build_explainer, build_figures, build_reply_blocks, format_figure
 from agent.reply.place_map import (
     MAX_MAP_PINS,
@@ -110,6 +110,16 @@ def test_advice_without_listings_still_asks():
     question = pick_next_profile_question(route, {}, [], has_listings=False)
     assert question is not None and question.id == "goal"
     assert all(option["reply"] for option in question.to_ui_payload()["options"])
+
+
+def test_a_question_the_model_repeated_is_dropped_from_the_text():
+    route = _route(route=Route.DIRECT_ANSWER, intent=Intent.OTHER, seeking_advice=True)
+    question = pick_next_profile_question(route, {}, [], has_listings=False)
+    assert question is not None
+    text = f"Yields in Marina hold up.\n\n{question.prompt}"
+    assert drop_repeated_question(text, question) == "Yields in Marina hold up."
+    assert drop_repeated_question("Yields in Marina hold up.", question) == "Yields in Marina hold up."
+    assert drop_repeated_question(text, None) == text
 
 
 # Listing cards

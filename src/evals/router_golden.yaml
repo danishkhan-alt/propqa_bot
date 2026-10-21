@@ -48,3 +48,7 @@
   message: What properties qualify for the UAE Golden Visa?
   expect_route: need_db
   deterministic: false
+- id: city_investment_judgment
+  message: is Dubai good for investment?
+  expect_route: need_db
+  deterministic: false

@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant Browser
+  participant Caller as CallerMiddleware
+  participant Auth as AuthMiddleware
+  Browser->>Auth: optional Authorization Bearer
+  Auth->>Caller: user_id or none
+  alt registered
+    Caller-->>Browser: Caller registered
+  else visitor
+    Caller-->>Browser: Set-Cookie visitor id
+  end

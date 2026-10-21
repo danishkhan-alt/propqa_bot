@@ -267,9 +267,26 @@ def test_graph_hides_a_database_error():
     )
     state = _value(result)
     reply = state["messages"][-1].content
-    assert reply == FAILED_LOOKUP_REPLY
+    assert reply == "unavailable"
+    assert reply != FAILED_LOOKUP_REPLY
     assert "password" not in reply
     assert "1650000" not in reply
+
+
+def test_a_failed_lookup_falls_back_to_the_fixed_line_when_the_model_call_fails():
+    class _BrokenModels(_GraphModels):
+        def answer_unavailable(self, **kwargs) -> str:
+            raise RuntimeError("model down")
+
+    runner = _Rows([SqlFailed("boom"), SqlFailed("boom")])
+    graph = build_chat_graph(InMemorySaver())
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="Average sale price in Dubai Marina")]},
+        config={"configurable": {"thread_id": "t-fail-sql-fallback"}},
+        context=AgentContext(user_id="user-1", models=_BrokenModels(), sql_runner=runner),
+        version="v2",
+    )
+    assert _value(result)["messages"][-1].content == FAILED_LOOKUP_REPLY
 
 
 def test_json_ready_keeps_money_exact():
@@ -491,24 +508,53 @@ def test_a_recipe_binds_only_the_names_it_takes():
     assert "ARRAY['O''Hara Gardens']" in quoted.sql
 
 
+def test_a_many_parameter_binds_every_matching_name():
+    recipe = get_recipe("communities_overview")
+    three = _grounded(
+        "Dubai Marina",
+        "Al Barsha",
+        "Jebel Ali",
+        table="chatbot_ai.area_insights_communities",
+        kind="community",
+    )
+    bound = bind_recipe(recipe, three)
+    assert bound is not None
+    assert "ANY(ARRAY[" in bound.sql
+    for name in ("Dubai Marina", "Al Barsha", "Jebel Ali"):
+        assert name in bound.sql
+    assert (
+        bind_recipe(
+            recipe,
+            _grounded("Dubai Marina", table="chatbot_ai.area_insights_communities", kind="community"),
+        )
+        is None
+    )
+    mixed = Grounding(
+        names=[
+            *_grounded(
+                "Dubai Marina",
+                "Al Barsha",
+                table="chatbot_ai.area_insights_communities",
+                kind="community",
+            ).names,
+            *_grounded("Emaar", table="public.developers", kind="developer").names,
+        ]
+    )
+    assert bind_recipe(recipe, mixed) is None
+
+
 def test_every_recipe_passes_the_guard_and_splits_kinds_of_property():
     for item in load_recipes_by_id().values():
-        grounding = (
-            Grounding(
-                names=[
-                    GroundedName(
-                        text="Dubai Marina",
-                        kind="place",
-                        stored=[
-                            StoredMatch(table=param.table, column="name", value="Dubai Marina", kind=param.kind)
-                            for param in item.params
-                        ],
-                    )
-                ]
+        names = [
+            GroundedName(
+                text=label,
+                kind="place",
+                stored=[StoredMatch(table=param.table, column="name", value=label, kind=param.kind)],
             )
-            if item.params
-            else Grounding()
-        )
+            for param in item.params
+            for label in (("Dubai Marina", "Al Barsha") if param.many else ("Dubai Marina",))
+        ]
+        grounding = Grounding(names=names)
         bound = bind_recipe(item, grounding)
         guarded = prepare_select(bound.sql, tables_in_domains(list(item.domains)), 100)
         assert blended_average_reasons(guarded, segment_rules(list(item.domains))) == [], item.id

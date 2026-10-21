@@ -54,9 +54,11 @@ from config import ActiveConfig
 logger = get_logger("agent.sql")
 
 MAX_ATTEMPTS = 2
-EMPTY_LOOKUP_REPLY = "Nothing matched those filters. I can widen the area or the dates if you want."
+EMPTY_LOOKUP_REPLY = (
+    "I couldn't find anything matching that. Want me to widen the area or the price range?"
+)
 FAILED_LOOKUP_REPLY = (
-    "I couldn't work that out from the data this time. You can ask again, or ask for one part of it at a time."
+    "I couldn't work that out this time. Ask me again, or try one part of it at a time."
 )
 NO_ROWS_RETRY_REASON = "The query returned no rows."
 ALL_ZERO_ROW_RETRY_REASON = (

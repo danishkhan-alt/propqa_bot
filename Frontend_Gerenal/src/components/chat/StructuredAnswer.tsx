@@ -48,6 +48,17 @@ const TAG_CLASS: Record<string, string> = {
   warning: "bg-[#F8F1E6] text-[#8A5A12]",
 };
 
+/** The buttons already ask this, so a copy at the end of the answer is dropped. */
+function introWithoutRepeatedQuestion(intro: string | undefined, prompt: string | undefined): string {
+  if (!intro) return "";
+  const trimmed = intro.replace(/\s+$/, "");
+  const question = prompt?.trim();
+  if (question && trimmed.toLowerCase().endsWith(question.toLowerCase())) {
+    return trimmed.slice(0, -question.length).replace(/\s+$/, "");
+  }
+  return intro;
+}
+
 interface StructuredAnswerProps {
   reply: StructuredReply;
   /** Only the latest reply offers next steps and takes a quick reply. */
@@ -68,14 +79,15 @@ export function StructuredAnswer({
   const cards = reply.cards ?? [];
   const followups = reply.suggested_followups ?? [];
   const question = reply.question ?? null;
+  const intro = introWithoutRepeatedQuestion(reply.intro_text, question?.prompt);
   const buildingPages = (reply.building_pages ?? []).filter((page) => page.slug);
 
   return (
     <div className="flex flex-col gap-3">
-      {reply.intro_text && (
+      {intro && (
         <div
           className="prose-chat min-w-0 max-w-full text-[#141B34]"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(reply.intro_text) }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(intro) }}
         />
       )}
 

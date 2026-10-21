@@ -19,6 +19,7 @@ joins:
 pitfalls:
 - real_estate_offices is the company; real_estate_brokers are people licensed under an office.
 - Do not treat these as property listings.
+- 'Brokers and offices here are not linked to any project, building, or listing. "Agents for Vita Grande" or "agents with listings in JVC" is the listings pack (public.users on properties.user_id and agency_id). Use this pack for a licence, a RERA number, or an office''s activities.'
 - 'Not in this pack: who builds a project or its handover (developers); service charges (regulations);
   sale or rent listings (listings); registered sales and rents (transactions).'
 tables:

@@ -1,0 +1,16 @@
+graph TB
+  Host[compose.yaml]
+  Web[web nginx:1.29]
+  Api[api python src/app.py]
+  Worker[worker memory.worker]
+  Pg[(postgres pgvector:pg17)]
+  Redis[(redis:8.2 AOF)]
+
+  Host --> Web
+  Host --> Api
+  Host --> Worker
+  Web -->|"depends_on healthy"| Api
+  Api -->|"CHAT_DB_*"| Pg
+  Worker -->|"CHAT_DB_*"| Pg
+  Api -->|"REDIS_URL"| Redis
+  Worker -->|"REDIS_URL"| Redis

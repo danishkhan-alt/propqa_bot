@@ -125,8 +125,9 @@ pitfalls:
   A listing is an asking price; a DLD row is a registered fact. Ask the transactions or market pack for
   the registered figure instead.
 - 'Not in this pack: sold prices, volumes, and registered rents (transactions); community average prices
-  and yields (market); what an area is like (locations); who is building a project (developers); agents
-  and agencies (agencies).'
+  and yields (market); what an area is like (locations); who is building a project (developers); the
+  licensed broker register and RERA licences (agencies). Agents and agencies with listings in a project,
+  building, or area stay in this pack.'
 tables:
 - name: properties
   description: Live property listings with asking price, size, and sale or rent. This is the table for what is on the market.

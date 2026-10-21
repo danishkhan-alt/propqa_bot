@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +12,7 @@ from agent.graph.workflow import get_chat_graph
 from agent.memory.maintenance.privacy import delete_user_memory
 from agent.memory.models.records import ALL_CLUSTERS
 from agent.memory.session.backends import get_repository
+from agent.sql.cards import fetch_listing_card_rows, fetch_listing_cards
 from auth.middleware import require_user_id
 from common.logger import get_logger
 from common.session import (
@@ -50,6 +52,7 @@ async def session_turns(request: Request, session_id: str, limit: int = 30) -> d
         raise HTTPException(status_code=503, detail="Could not load this session.") from None
     values = getattr(snapshot, "values", None) or {}
     turns, messages = restore_turns_from_checkpoint(values, limit=limit)
+    await _attach_listing_cards(request, turns)
     return {
         "session_id": thread_id,
         "turns": turns,
@@ -126,6 +129,28 @@ def delete_preferences(user_id: str, session_id: str | None = None) -> dict:
     del session_id
     preferences.clear(_require_user(user_id))
     return {"status": "deleted"}
+
+
+async def _attach_listing_cards(request: Request, turns: list[dict]) -> None:
+    """Fill each turn's cards from the ids its reply stored. One warehouse read for the whole chat."""
+    ids_by_turn: list[list[str]] = []
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for turn in turns:
+        ids = [str(item) for item in (turn.pop("listing_ids", None) or []) if str(item).strip()]
+        ids_by_turn.append(ids)
+        for item in ids:
+            if item in seen:
+                continue
+            seen.add(item)
+            ordered.append(item)
+    by_id: dict[str, dict] = {}
+    if ordered:
+        loader = getattr(request.app.state, "listing_loader", None) or fetch_listing_card_rows
+        cards = await asyncio.to_thread(fetch_listing_cards, ordered, loader)
+        by_id = {str(card.get("id")): card for card in cards if card.get("id") is not None}
+    for turn, ids in zip(turns, ids_by_turn):
+        turn["cards"] = [by_id.get(item) or {"id": item} for item in ids]
 
 
 def _get_chat_graph(request: Request):

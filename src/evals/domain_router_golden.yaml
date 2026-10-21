@@ -261,6 +261,17 @@ cases:
   domains: [locations, market]
   recipe: community_overview
 
+- id: agents_for_project
+  message: which agents have listings in Vita Grande
+  domains: [listings]
+  joins: [locations]
+  recipe: null
+
+- id: communities_overview_three
+  message: Tell me about Dubai Marina, Al Barsha and Jebel Ali
+  domains: [locations, market]
+  recipe: communities_overview
+
 - id: offplan_brochure
   message: Send me the brochure for Binghatti Lavender
   domains: [developers]

@@ -6,6 +6,7 @@ from common.session import (
     list_user_sessions,
     record_session_activity,
     remove_sidebar_session,
+    restore_turns_from_checkpoint,
 )
 from common.session.preferences import clear, load, merge
 
@@ -30,6 +31,44 @@ def test_detaching_a_session_removes_it_from_the_sidebar():
     assert remove_sidebar_session("thread1") == "thread1"
     assert list_user_sessions(user_id) == []
     assert remove_sidebar_session("has spaces") is None
+
+
+def test_each_reply_keeps_the_listing_ids_it_showed():
+    values = {
+        "messages": [
+            {"type": "human", "content": "Marina"},
+            {
+                "type": "ai",
+                "content": "Two in Marina.",
+                "additional_kwargs": {"listing_ids": ["1", "2"]},
+            },
+            {"type": "human", "content": "JVC"},
+            {
+                "type": "ai",
+                "content": "One in JVC.",
+                "data": {"additional_kwargs": {"listing_ids": ["3"]}},
+            },
+        ],
+        "last_need_db": {"result_meta": {"ids": ["99"]}},
+    }
+    turns, messages = restore_turns_from_checkpoint(values, limit=30)
+    assert [turn["listing_ids"] for turn in turns] == [["1", "2"], ["3"]]
+    assert all(turn["cards"] == [] for turn in turns)
+    assert all("listing_ids" not in message for message in messages)
+
+
+def test_an_older_checkpoint_gives_the_last_turn_the_search_ids():
+    values = {
+        "messages": [
+            {"type": "human", "content": "Marina"},
+            {"type": "ai", "content": "Here you go."},
+            {"type": "human", "content": "Thanks"},
+            {"type": "ai", "content": "Anytime."},
+        ],
+        "last_need_db": {"result_meta": {"ids": ["9", ""]}},
+    }
+    turns, _messages = restore_turns_from_checkpoint(values, limit=30)
+    assert [turn["listing_ids"] for turn in turns] == [[], ["9"]]
 
 
 def test_preferences_merge_then_clear():

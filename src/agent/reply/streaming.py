@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from agent.context import AgentModels
 from agent.memory.read.prompt_text import append_memory_notes
 from agent.reply.building_pages import BuildingPage
+from agent.reply.buyer_profile import drop_repeated_question
 from agent.reply.figures import build_reply_blocks
 from agent.schemas.profile import ProfileQuestion
 from agent.schemas.reply import StructuredReply
@@ -96,6 +97,9 @@ def publish_structured_reply(
         if isinstance(parsed, StructuredReply)
         else StructuredReply.model_validate(parsed)
     )
+    cleaned = drop_repeated_question(reply.intro_text, question)
+    if cleaned != reply.intro_text:
+        reply = reply.model_copy(update={"intro_text": cleaned})
     payload = reply.model_dump()
     # Listings have their own photo cards, so their rows are never laid out as figures.
     figure_rows = [] if fields.get("listings") else list(fields.get("rows") or [])

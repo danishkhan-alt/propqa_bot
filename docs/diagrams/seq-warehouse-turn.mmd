@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant Browser
+  participant Chat as routes/chat.py
+  participant Runner as graph/runner.py
+  participant Graph as graph/workflow.py
+  participant LLM as services/llm
+  participant Warehouse as sql/execute.py
+  Browser->>Chat: POST /api/chat
+  Chat->>Runner: stream_turn
+  Runner->>Graph: astream
+  Graph->>LLM: route_query and route_domain
+  Graph->>Warehouse: read-only SELECT
+  Warehouse-->>Graph: rows
+  Graph->>LLM: structured or prose reply
+  Graph-->>Runner: custom SSE events
+  Runner-->>Chat: text listings reply done
+  Chat-->>Browser: text/event-stream

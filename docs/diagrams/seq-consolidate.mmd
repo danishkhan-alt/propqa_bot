@@ -1,0 +1,9 @@
+sequenceDiagram
+  participant Compose as compose consolidate
+  participant Worker as write/worker.py
+  participant Job as consolidate.py
+  participant Db as user_memories
+  Compose->>Worker: python -m agent.memory.worker --consolidate
+  Worker->>Job: consolidate_all
+  Job->>Db: expire decay infer summarize retain
+  Job-->>Worker: return

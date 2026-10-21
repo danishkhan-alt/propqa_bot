@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant Browser
+  participant Auth as routes/auth.py
+  participant Service as auth/service.py
+  participant Db as chatbot_users
+  Browser->>Auth: POST /api/auth/register or login
+  Auth->>Service: register or sign_in
+  Service->>Db: insert user or select by email
+  Service->>Db: insert refresh token hash
+  Auth-->>Browser: AuthResponse
+  Browser->>Auth: POST /api/auth/refresh
+  Auth->>Service: rotate_refresh_token
+  Service->>Db: revoke old hash insert new
+  Auth-->>Browser: new AuthResponse

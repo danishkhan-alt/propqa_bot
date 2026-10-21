@@ -32,7 +32,8 @@ pitfalls:
 - public.developers is a developer profile (sold, delivered, HQ). It is not the DLD license register.
 - "public.offplan_projects_new is the current off-plan project card: starting price, handover_date (a real date), project_status, payment plan, unit and bedroom types, amenity JSON, and brochure and floor-plan links in project_files."
 - "Qualify public tables as public.<table>."
-- "Cue to table: an off-plan project, its developer, starting price, payment plan, status, or handover -> public.offplan_projects_new (ILIKE on project_name_en, developer_name_en; area_en for the area). A brochure or floor plan -> offplan_projects_new.project_files->>'brochure' and ->>'floorplan'; photos -> project_gallery. Registered projects, escrow, and completion percentage -> chatbot_ai.real_estate_projects. Developer profile, units sold or delivered -> public.developers. Permits -> the permit tables."
+- "Names the user reads are English. Select project_name_en when it is filled. When it is null, also select the Arabic name so the reply can translate it: real_estate_projects.project_name AS project_name_ar and developer_name AS developer_name_ar. Do not select any other Arabic column."
+- "Cue to table: an off-plan project, its developer, starting price, payment plan, status, or handover, or projects in an area -> public.offplan_projects_new (ILIKE on project_name_en, developer_name_en; area_en for the area). A brochure or floor plan -> offplan_projects_new.project_files->>'brochure' and ->>'floorplan'; photos -> project_gallery. Escrow, completion, and a project whose English name is null -> chatbot_ai.real_estate_projects, selecting project_name AS project_name_ar so the reply can translate it. Developer profile, units sold or delivered -> public.developers. Permits -> the permit tables."
 - "public.offplan_projects and public.offplan_files are an older catalog with its own ids. offplan_files joins only to offplan_projects (fileable_type = 'App\\Models\\offplan' AND fileable_id = offplan_projects.id). Never join offplan_files or offplan_projects to offplan_projects_new by id; they share project names only (lower(project_name_en)), for about 600 projects. Use them only when project_files has no brochure."
 - "Area filter: default is offplan_projects_new.area_en = the grounded area name (or ILIKE). public.locations is only for community-level follow-ups, joined for its parent or coordinates; do not use it for the first filter."
 - "Time: offplan_projects_new.handover_date is a date; filter a year with EXTRACT(YEAR FROM handover_date) = 2027. In the older offplan_projects, handover_date is free text ('Q4 2026'). DLD real_estate_projects uses project_start_date, project_end_date, and completion_date."
@@ -60,7 +61,7 @@ tables:
     - 504
   - name: project_name
     type: character varying(200)
-    meaning: Project name
+    meaning: Project name in Arabic. Select it as project_name_ar only. The reply translates it to English when project_name_en is null and never shows the Arabic.
   - name: developer_id
     type: numeric(10,0)
     meaning: Developer identifier
@@ -75,7 +76,7 @@ tables:
     - 3
   - name: developer_name
     type: character varying(200)
-    meaning: Developer name
+    meaning: Developer name in Arabic. Select it as developer_name_ar only, so the reply can translate it when developer_name_en is null.
   - name: master_developer_id
     type: numeric(10,0)
     meaning: Master developer identifier
@@ -90,7 +91,7 @@ tables:
     - 153
   - name: master_developer_name
     type: character varying(200)
-    meaning: Master developer name
+    meaning: Master developer name in Arabic. Select it as master_developer_name_ar only, so the reply can translate it when no English name is present.
   - name: project_start_date
     type: date
     meaning: Project start date

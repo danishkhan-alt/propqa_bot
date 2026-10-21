@@ -10,6 +10,7 @@ class RecipeParam:
     name: str
     table: str
     kind: str
+    many: bool = False
 
 
 @dataclass(frozen=True)

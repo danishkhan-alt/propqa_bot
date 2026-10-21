@@ -11,7 +11,8 @@ Rules:
   still pick the closest domain. Do not invent an id.
 - recipe_id: recipes are fixed lookups for common questions. Pick one only when its "when" covers
   the whole question as asked. Any extra condition (a bedroom count, a project, a period, a
-  second place, a comparison) means null. A recipe's own domains are loaded with it.
+  second place, a comparison) means null, except a recipe whose "when" says it takes several
+  places. A recipe's own domains are loaded with it.
 
 Confusions:
 - What exists (units, plots, buildings, freehold) -> listings. Sold prices, volumes, registered rents -> transactions.
@@ -20,5 +21,6 @@ Confusions:
 - Rental yield, rental return, or ROI by area -> market, which holds community yields. Not transactions.
 - Schools, KHDA, fees, nurseries -> schools. Metro, parking, Salik, commute -> rta. Parks, beaches, hospitals -> amenities.
 - Handover, off-plan, who is building -> developers. Brokers and owners associations -> agencies. Service charges -> regulations.
+- Agents or agencies with listings in a project, building, or area -> listings. A licence, RERA number, or office record -> agencies.
 - "Near schools" is schools plus the property subject (listings or locations), with locations as a join when a place is named.
 """

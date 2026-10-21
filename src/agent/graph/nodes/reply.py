@@ -11,7 +11,7 @@ from agent.enums.routing import Intent, Route
 from agent.graph.nodes.runtime import models_for
 from agent.grounding import get_grounding_cache
 from agent.reply.building_pages import BuildingPage, pick_building_pages
-from agent.reply.buyer_profile import pick_next_profile_question
+from agent.reply.buyer_profile import drop_repeated_question, pick_next_profile_question
 from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
 from agent.reply.place_map import place_pins
 from agent.sql.transit import get_rail_lines
@@ -38,15 +38,15 @@ from common.logger import get_logger
 logger = get_logger("agent.reply")
 
 MISSING_LISTINGS_REPLY = (
-    "I couldn't find the listings you selected. They may have been taken off the market. "
-    "Remove them from the chat and pick another listing to ask about."
+    "I couldn't find the listings you picked. They may have come off the market. "
+    "Take them out of the chat and choose another one to ask about."
 )
 OUT_OF_SCOPE_REPLY = (
-    "I can only help with Dubai property and living around it: buying and renting, prices, areas, "
-    "projects, agents, schools, and getting around. "
-    'Try something like "average rent for a 2-bed in JVC" or "apartments for sale in Dubai Marina under AED 2M".'
+    "That's outside what I can do. Ask me about a place, a price, or a home in Dubai and I'm with you."
 )
-FAILED_FOCUSED_LISTINGS_REPLY ="I couldn't put the details of those listings together just now. Could you ask me again?"
+FAILED_FOCUSED_LISTINGS_REPLY = (
+    "I couldn't pull those listing details together just now. Mind asking me again?"
+)
 
 
 def write_reply(
@@ -205,8 +205,7 @@ def _reply_from_lookup_results(
             config=config,
         )
     else:
-        text = FAILED_LOOKUP_REPLY
-        publish_stream_event("text", delta=text)
+        text = _reply_after_failed_lookup(runtime, message, messages, config)
     text = _stream_memory_notes(text, state)
     logger.info(
         "answer.synthesize",
@@ -226,7 +225,41 @@ def _reply_from_lookup_results(
             }
         },
     )
-    return _reply_state_update(state, text, question if structured is not None else None)
+    return _reply_state_update(
+        state,
+        text,
+        question if structured is not None else None,
+        listing_ids,
+    )
+
+
+def _reply_after_failed_lookup(
+    runtime: Runtime[AgentContext],
+    message: str,
+    messages: list,
+    config: RunnableConfig,
+) -> str:
+    """Answer about the thing asked, with next steps, instead of a fixed line.
+
+    `missing` stays empty on purpose: a failure's error is a database message and must not
+    reach the user. The fixed line remains the fallback when this call fails or says nothing.
+    """
+    try:
+        text = stream_prose_reply(
+            models_for(runtime),
+            "answer_unavailable",
+            message=message,
+            history=format_recent_history(messages, limit=ANSWER_HISTORY_MESSAGE_LIMIT),
+            missing="",
+            config=config,
+        )
+    except Exception:
+        logger.warning("answer.unavailable failed after a failed lookup", exc_info=True)
+        text = ""
+    if text.strip():
+        return text
+    publish_stream_event("text", delta=FAILED_LOOKUP_REPLY)
+    return FAILED_LOOKUP_REPLY
 
 
 def _reply_about_focused_listings(
@@ -327,10 +360,25 @@ def _next_profile_question(
     )
 
 
-def _reply_state_update(state: ChatState, text: str, question: ProfileQuestion | None) -> dict:
-    """Store the question with the reply, so history reads the way the user saw it."""
+def _reply_state_update(
+    state: ChatState,
+    text: str,
+    question: ProfileQuestion | None,
+    listing_ids: list[str] | None = None,
+) -> dict:
+    """Store the question with the reply, so history reads the way the user saw it.
+
+    A listing reply also keeps the ids it showed. The checkpoint stores those ids, not the
+    cards, and a refresh fills the cards again from them.
+    """
+    text = drop_repeated_question(text, question)
     content = f"{text}\n\n{question.prompt}" if question is not None else text
-    update: dict = {"messages": [AIMessage(content=content)], "awaiting_sql": False}
+    ids = [str(item) for item in (listing_ids or []) if str(item).strip()]
+    message = AIMessage(
+        content=content,
+        additional_kwargs={"listing_ids": ids} if ids else {},
+    )
+    update: dict = {"messages": [message], "awaiting_sql": False}
     if question is not None:
         update["profile_asked"] = [*(state.get("profile_asked") or []), question.id]
     return update

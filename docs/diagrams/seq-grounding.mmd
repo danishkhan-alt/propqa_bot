@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant Main as app.py main
+  participant Index as grounding/index.py
+  participant Warehouse as sql/execute.py
+  participant Lookup as resolve_mentioned_names
+  Main->>Index: load_in_background
+  Index->>Warehouse: fetch_reference_rows
+  Warehouse-->>Index: GroundingIndex
+  Lookup->>Index: wait_for_first_load 30s
+  Index-->>Lookup: index or None

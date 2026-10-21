@@ -1,0 +1,16 @@
+sequenceDiagram
+  participant Browser
+  participant Runner as graph/runner.py
+  participant Forget as ask_before_forgetting_memory
+  participant Store as user_memories
+  Browser->>Runner: POST /api/chat forget message
+  Runner->>Forget: interrupt prompt
+  Forget-->>Browser: SSE text prompt then done paused
+  Browser->>Runner: next POST /api/chat
+  Runner->>Forget: Command resume
+  alt yes or y
+    Forget->>Store: soft_delete_memories
+    Forget-->>Browser: Forgot that.
+  else other
+    Forget-->>Browser: Kept your saved preferences.
+  end

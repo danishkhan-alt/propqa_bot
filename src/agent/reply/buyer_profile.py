@@ -104,6 +104,17 @@ def merge_profile(
     return {key: profile[key] for key in PROFILE_KEYS if key in profile}
 
 
+def drop_repeated_question(text: str, question: ProfileQuestion | None) -> str:
+    """The buttons already ask this, so drop a copy the model wrote at the end."""
+    if question is None:
+        return text
+    trimmed = text.rstrip()
+    prompt = question.prompt.strip()
+    if prompt and trimmed.casefold().endswith(prompt.casefold()):
+        return trimmed[: -len(prompt)].rstrip()
+    return text
+
+
 def pick_next_profile_question(
     route: QueryRoute | None,
     profile: dict[str, Any],

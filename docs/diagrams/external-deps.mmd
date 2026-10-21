@@ -1,0 +1,11 @@
+graph TB
+  Api[api FastAPI]
+  Anthropic[Anthropic API]
+  OpenAI[OpenAI API]
+  Jev[TypeSafe Jev]
+  Langfuse[Langfuse]
+
+  Api -->|"HTTPS ChatAnthropic"| Anthropic
+  Api -->|"HTTPS ChatOpenAI"| OpenAI
+  Api -->|"HTTPS POST systemone"| Jev
+  Api -->|"HTTPS traces"| Langfuse

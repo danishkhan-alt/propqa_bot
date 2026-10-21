@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant Browser
+  participant Chat as routes/chat.py
+  participant Focus as load_focused_listings
+  participant Warehouse as sql/cards.py
+  participant Reply as write_reply
+  Browser->>Chat: POST /api/chat focused_property_ids
+  Chat->>Focus: skip recall and routing
+  Focus->>Warehouse: card rows and detail rows
+  Warehouse-->>Focus: facts and map_pins
+  Focus->>Reply: focused_listings
+  Reply-->>Browser: SSE text or fixed fallback

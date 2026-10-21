@@ -54,6 +54,21 @@ describe("StructuredAnswer", () => {
     expect(option.reply).toBe("I'm buying it as an investment.");
   });
 
+  it("shows a profile question once when the answer already ends with it", () => {
+    render(
+      <StructuredAnswer
+        reply={{
+          ...reply,
+          intro_text: "Dubai is an emirate, not a country.\n\nIs this a home for you, or an investment?",
+        }}
+        interactive
+        onQuickReply={() => {}}
+      />,
+    );
+    expect(screen.getAllByText("Is this a home for you, or an investment?")).toHaveLength(1);
+    expect(screen.getByText(/Dubai is an emirate/)).toBeInTheDocument();
+  });
+
   it("sends a follow-up as the user would say it", async () => {
     const onFollowup = vi.fn();
     const user = userEvent.setup();

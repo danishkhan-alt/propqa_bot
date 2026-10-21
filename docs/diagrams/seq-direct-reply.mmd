@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant Browser
+  participant Chat as routes/chat.py
+  participant Graph as choose_query_route
+  participant Reply as write_reply
+  participant LLM as services/llm
+  Browser->>Chat: POST /api/chat
+  Chat->>Graph: stream_turn
+  Graph->>LLM: route_query
+  alt out_of_scope
+    Graph->>Reply: fixed OUT_OF_SCOPE_REPLY
+  else direct_answer
+    Graph->>Reply: draft_reply or answer_direct
+    Reply->>LLM: structured then prose fallback
+  else no domain_ids
+    Graph->>Reply: answer_unavailable
+  end
+  Reply-->>Browser: SSE text then done

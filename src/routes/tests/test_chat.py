@@ -292,6 +292,79 @@ def test_a_listing_reply_streams_filled_cards_and_not_the_sql_row():
     assert state.values["listing_cards"] == []
 
 
+def test_a_refreshed_session_restores_filled_listing_cards():
+    client, graph = _client(_Listings(), _rows)
+    session_id = "6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
+    with client:
+        _read_session(client, "Show me apartments in Dubai Marina", session_id)
+        restored = client.get(f"/api/sessions/{session_id}/turns")
+    assert restored.status_code == 200
+    turn = restored.json()["turns"][0]
+    assert "listing_ids" not in turn
+    first, second = turn["cards"]
+    assert first["id"] == "15802"
+    assert first["title_en"] == "Marina Gate 2BR"
+    assert first["image_url"] == "https://cdn.test/a.jpg"
+    assert second == {"id": "19806"}
+    stored = graph.get_state({"configurable": {"thread_id": session_id}})
+    reply = stored.values["messages"][-1]
+    assert reply.additional_kwargs["listing_ids"] == ["15802", "19806"]
+
+
+def test_each_listing_turn_restores_its_own_cards():
+    pages = [
+        [{"property_id": 15802, "project_name_en": "Marina Gate"}],
+        [{"property_id": 22001, "project_name_en": "Aeternitas"}],
+    ]
+    calls = {"sql": 0, "cards": []}
+
+    def runner(sql: str) -> SqlPage:
+        del sql
+        rows = pages[min(calls["sql"], len(pages) - 1)]
+        calls["sql"] += 1
+        return SqlPage(
+            columns=["property_id", "project_name_en"],
+            rows=rows,
+            truncated=False,
+            duration_ms=1,
+        )
+
+    def loader(ids: list[int]) -> list[dict]:
+        calls["cards"].append(list(ids))
+        known = {
+            15802: {
+                "id": 15802,
+                "title_en": "Marina Gate 2BR",
+                "show_price": True,
+                "price_min": "1450000.0000",
+            },
+            22001: {
+                "id": 22001,
+                "title_en": "Aeternitas Tower",
+                "show_price": True,
+                "price_min": "4240000.0000",
+            },
+        }
+        return [known[item] for item in ids if item in known]
+
+    client, _graph = _client(_Listings(), runner, loader=loader)
+    session_id = "7a2e8d4f-2c5b-4f3e-8d9b-1b2c3d4e5f60"
+    with client:
+        _read_session(client, "Show me apartments in Dubai Marina", session_id)
+        _read_session(client, "Show me off-plan apartments in Dubai Marina", session_id)
+        restored = client.get(f"/api/sessions/{session_id}/turns")
+    assert restored.status_code == 200
+    turns = restored.json()["turns"]
+    assert [turn["cards"][0]["title_en"] for turn in turns] == [
+        "Marina Gate 2BR",
+        "Aeternitas Tower",
+    ]
+    assert [turn["cards"][0]["id"] for turn in turns] == ["15802", "22001"]
+    # Each live search loads its own cards. Refresh loads every id once.
+    assert calls["cards"][-1] == [15802, 22001]
+    assert calls["cards"].count([15802, 22001]) == 1
+
+
 def test_a_session_id_continues_the_same_thread():
     client, graph = _client(_Greeting())
     session_id = "6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"

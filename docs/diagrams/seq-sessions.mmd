@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant Browser
+  participant Sessions as routes/sessions.py
+  participant Cache as sidebar_sessions
+  participant Graph as Redis checkpointer
+  Browser->>Sessions: GET /api/sessions
+  Sessions->>Cache: list_user_sessions
+  Cache-->>Browser: session rows
+  Browser->>Sessions: GET /api/sessions/id/turns
+  Sessions->>Graph: aget_state
+  Graph-->>Sessions: checkpoint messages
+  Sessions-->>Browser: turns and cards

@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant Graph as queue_memory_extraction
+  participant Redis as memq
+  participant Worker as memory/write/worker.py
+  participant Db as user_memories
+  Graph->>Redis: XADD job
+  Worker->>Redis: XREADGROUP
+  Worker->>Worker: extract_turn regex
+  Worker->>Db: write_memories
+  Worker->>Redis: XACK

@@ -1,0 +1,22 @@
+flowchart TB
+  startNode[START] --> loadSession[load_session_context]
+  loadSession -->|focused ids| loadFocus[load_focused_listings]
+  loadSession -->|otherwise| recall[recall_long_term_memories]
+  loadFocus --> writeReply[write_reply]
+  recall --> forgetCheck[check_forget_request]
+  forgetCheck -->|pending_forget| askForget[ask_before_forgetting_memory]
+  forgetCheck -->|parallel| route[choose_query_route]
+  forgetCheck -->|parallel| frame[update_search_frame]
+  askForget --> endNode[END]
+  frame --> endNode
+  route -->|need_db| domains[choose_data_domains]
+  route -->|else| writeReply
+  domains -->|domain_ids| personalize[personalize_search_frame]
+  domains -->|none| writeReply
+  personalize --> catalog[load_domain_catalog]
+  catalog --> names[resolve_mentioned_names]
+  names --> lookup[run_warehouse_lookup]
+  lookup --> writeReply
+  writeReply --> queueMem[queue_memory_extraction]
+  queueMem --> turnEnd[record_search_and_clear_turn_state]
+  turnEnd --> endNode

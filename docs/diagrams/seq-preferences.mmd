@@ -1,0 +1,7 @@
+sequenceDiagram
+  participant Browser
+  participant Sessions as routes/sessions.py
+  participant Cache as preferences.py
+  Browser->>Sessions: GET or POST or DELETE /api/preferences
+  Sessions->>Cache: load merge or clear
+  Cache-->>Browser: preferences dict or deleted

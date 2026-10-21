@@ -1,0 +1,6 @@
+stateDiagram-v2
+  [*] --> active: insert
+  [*] --> contradicted: contradict insert
+  active --> expired: consolidate
+  active --> superseded: retire older episodic
+  active --> deleted: forget or upsert
