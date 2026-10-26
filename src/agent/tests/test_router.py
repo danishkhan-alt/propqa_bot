@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
+from agent.enums.listing import Completion, ListingPurpose
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.nodes.catalog import load_domain_catalog
 from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
@@ -18,6 +19,7 @@ from agent.graph.workflow import build_chat_graph
 from agent.schemas.listing import NameMention
 from agent.schemas.routes import (
     DomainRoute,
+    LastNeedDb,
     QueryRoute,
     as_assumptions,
     as_domain_route,
@@ -492,3 +494,86 @@ def test_the_city_itself_is_never_a_place_to_filter_on():
     updated, notes = sanitize_query_route(route, None)
     assert [name.text for name in updated.names] == ["Dubai Marina"]
     assert "dropped_region_name" in notes
+
+
+def _launch_shortlist() -> LastNeedDb:
+    return LastNeedDb(
+        domain_ids=["developers"],
+        intent_summary="new projects before 2030",
+        result_meta={
+            "projects": [
+                {"name": "Bling Avenue 1", "handover": "2026-09-30", "starting_price": 1101782},
+                {"name": "Ocean Tower", "handover": "2027-06-01", "starting_price": 1847819},
+            ],
+            "handover_window": {"from": "2026-10-01", "until": "2030-12-31"},
+        },
+    )
+
+
+def test_which_do_you_suggest_stays_on_the_projects_just_shown():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        names=[NameMention(text="Business Bay")],
+        confidence=0.9,
+        rationale="A new search.",
+    )
+    updated, notes = sanitize_query_route(
+        route,
+        _launch_shortlist(),
+        "I want to invest in one of these projects, which do you suggest and why?",
+    )
+    assert "kept_project_shortlist" in notes
+    assert updated.turn_kind is TurnKind.REFINE
+    assert updated.listing_filters is None
+    assert [name.text for name in updated.names] == ["Bling Avenue 1", "Ocean Tower"]
+
+
+def test_open_to_off_plan_does_not_leave_the_shortlist():
+    route = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Timeline.")
+    updated, notes = sanitize_query_route(route, _launch_shortlist(), "I'm open to off-plan.")
+    assert updated.profile.timeline == "off_plan"
+    assert "kept_project_shortlist" in notes
+    assert [name.text for name in updated.names] == ["Bling Avenue 1", "Ocean Tower"]
+
+
+def test_properties_for_those_projects_search_off_plan_listings():
+    route = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Projects.")
+    updated, notes = sanitize_query_route(
+        route,
+        _launch_shortlist(),
+        "projects you mention, do you have any properties for that",
+        {"budget_range": "1m_2m"},
+    )
+    assert "listing_search_for_shortlist" in notes
+    assert updated.intent is Intent.LIST
+    assert updated.listing_filters is not None
+    assert updated.listing_filters.completion is Completion.OFF_PLAN
+    assert updated.listing_filters.purpose is ListingPurpose.SALE
+    assert updated.listing_filters.price_min == 1_000_000
+    assert updated.listing_filters.price_max == 2_000_000
+    assert [name.text for name in updated.names] == ["Bling Avenue 1", "Ocean Tower"]
+
+
+def test_their_developers_keeps_each_project_and_the_place():
+    last = _launch_shortlist()
+    last.result_meta["names"] = [{"text": "Al Furjan", "kind": "place"}]
+    route = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Developers.")
+    updated, notes = sanitize_query_route(route, last, "can you tell me their developers")
+    assert "kept_project_shortlist" in notes
+    assert updated.intent is Intent.LIST
+    assert updated.listing_filters is None
+    assert [name.text for name in updated.names] == ["Bling Avenue 1", "Ocean Tower", "Al Furjan"]
+
+
+def test_a_fresh_launch_question_is_off_plan_and_not_pinned_to_an_older_shortlist():
+    route = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.9, rationale="Launches.")
+    updated, notes = sanitize_query_route(
+        route,
+        _launch_shortlist(),
+        "tell me about new projects that will launch before 2030",
+    )
+    assert updated.profile.timeline == "off_plan"
+    assert updated.names == []
+    assert "kept_project_shortlist" not in notes

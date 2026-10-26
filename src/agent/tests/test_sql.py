@@ -14,7 +14,7 @@ from agent.context import AgentContext
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
 from agent.schemas.grounding import GroundedName, Grounding, StoredMatch
-from agent.schemas.routes import DomainRoute, QueryRoute
+from agent.schemas.routes import DomainRoute, LastNeedDb, QueryRoute
 from agent.schemas.sql import SqlDraft, SqlPage
 from agent.sql.execute import SqlFailed, to_json_safe
 from agent.sql.guard import (
@@ -628,3 +628,114 @@ def test_a_condition_on_fixed_values_is_rejected():
             {"public.mv_community_landing_page_stats"},
             100,
         )
+
+
+def test_a_new_launch_lookup_drops_a_project_handed_over_in_2013():
+    sql = "SELECT project_name_en, handover_date, starting_price FROM public.offplan_projects_new"
+    models = _Draft(sql)
+    runner = _Rows(
+        [
+            SqlPage(
+                columns=["project_name_en", "handover_date", "starting_price"],
+                rows=[
+                    {"project_name_en": "Suburbia", "handover_date": "2013-03-01", "starting_price": 1747000},
+                    {"project_name_en": "Ocean Tower", "handover_date": "2027-06-01", "starting_price": 1847819},
+                ],
+                truncated=False,
+                duration_ms=1,
+            )
+        ]
+    )
+    state = _state("tell me about new projects that will launch before 2030")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["developers"], join_ids=[], confidence=1, rationale="Off-plan projects."
+    )
+    update = run_sql_lookup(state, models, runner)
+    folded = runner.calls[0].lower()
+    assert "date_trunc" in folded
+    assert "2030-12-31" in folded
+    assert [row["project_name_en"] for row in update["sql_rows"]] == ["Ocean Tower"]
+    assert update["sql_result"]["handover_window"]["until"] == "2030-12-31"
+
+
+def test_which_of_these_stays_on_the_saved_projects_and_budget():
+    sql = "SELECT project_name_en, handover_date, starting_price FROM public.offplan_projects_new"
+    models = _Draft(sql)
+    runner = _Rows(
+        [
+            SqlPage(
+                columns=["project_name_en", "handover_date", "starting_price"],
+                rows=[
+                    {"project_name_en": "Hamilton Residency", "handover_date": "2011-12-31", "starting_price": 850000},
+                    {"project_name_en": "Bling Avenue 1", "handover_date": "2027-06-01", "starting_price": 1101782},
+                ],
+                truncated=False,
+                duration_ms=1,
+            )
+        ]
+    )
+    state = _state("I want to invest in one of these projects, which do you suggest and why?")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["developers"], join_ids=[], confidence=1, rationale="Off-plan projects."
+    )
+    state["session_profile"] = {"budget_range": "1m_2m", "timeline": "off_plan"}
+    state["last_need_db"] = LastNeedDb(
+        domain_ids=["developers"],
+        intent_summary="new projects before 2030",
+        result_meta={
+            "projects": [
+                {"name": "Bling Avenue 1", "handover": "2026-09-30", "starting_price": 1101782},
+                {"name": "Ocean Tower", "handover": "2027-06-01", "starting_price": 1847819},
+            ],
+            "handover_window": {"from": "2026-10-01", "until": "2030-12-31"},
+        },
+    )
+    update = run_sql_lookup(state, models, runner)
+    folded = runner.calls[0].lower()
+    assert "bling avenue 1" in folded
+    assert "ocean tower" in folded
+    assert "1000000" in folded
+    assert "2000000" in folded
+    assert "date_trunc" in folded
+    assert [row["project_name_en"] for row in update["sql_rows"]] == ["Bling Avenue 1"]
+
+
+def test_a_legacy_offplan_table_is_not_run_for_a_future_launch():
+    models = _Draft("SELECT project_name_en, handover_date FROM public.offplan_projects")
+    runner = _Rows([SqlPage(columns=["project_name_en"], rows=[{"project_name_en": "Suburbia"}], truncated=False, duration_ms=1)])
+    state = _state("new projects that will launch before 2030")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["developers"], join_ids=[], confidence=1, rationale="Off-plan projects."
+    )
+    update = run_sql_lookup(state, models, runner)
+    assert runner.calls == []
+    assert update["sql_rows"] == []
+    assert models.calls == 2
+    assert "offplan_projects_new" in (models.errors[1] or "")
+
+
+def test_their_developers_is_not_run_without_the_project_name():
+    models = _Draft("SELECT DISTINCT developer_name_en FROM public.offplan_projects_new")
+    runner = _Rows(
+        [SqlPage(columns=["developer_name_en"], rows=[{"developer_name_en": "Azizi"}], truncated=False, duration_ms=1)]
+    )
+    state = _state("can you tell me their developers")
+    state["domain_route"] = DomainRoute(
+        domain_ids=["developers"], join_ids=[], confidence=1, rationale="Projects."
+    )
+    state["last_need_db"] = LastNeedDb(
+        domain_ids=["developers"],
+        intent_summary="projects in Al Furjan",
+        result_meta={
+            "projects": [
+                {"name": "Bling Avenue 1"},
+                {"name": "Ocean Tower"},
+            ],
+            "names": [{"text": "Al Furjan", "kind": "place"}],
+        },
+    )
+    update = run_sql_lookup(state, models, runner)
+    assert runner.calls == []
+    assert update["sql_rows"] == []
+    assert models.calls == 2
+    assert "project_name_en" in (models.errors[1] or "")

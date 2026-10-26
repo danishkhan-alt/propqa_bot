@@ -79,11 +79,7 @@ RELAXATIONS: tuple[Relaxation, ...] = (
         applies=lambda f: f.furnishing is not Furnishing.ANY,
         relax=lambda f: f.model_copy(update={"furnishing": Furnishing.ANY}),
     ),
-    Relaxation(
-        note="No listing matched the completion status, so ready and off-plan are both included.",
-        applies=lambda f: f.completion is not Completion.ANY,
-        relax=lambda f: f.model_copy(update={"completion": Completion.ANY}),
-    ),
+    # Ready or off-plan was asked for. Dropping it would show the other kind.
     # Being near a station is the point of such a search, so it is widened before it is dropped.
     Relaxation(
         note=f"No listing was that close to a station, so this widens the walk to {WIDER_STATION_KM:g} km.",
@@ -443,8 +439,13 @@ def _places_sql(places, unmatched: list[str], params: dict[str, Any], prefix: st
         params[key] = address_names
     if unmatched:
         key = f"{prefix}_address_patterns"
-        links.append(f"p.address_en ILIKE ANY(%({key})s)")
         params[key] = [f"%{_escape_like_pattern(text)}%" for text in unmatched]
+        links.append(f"p.address_en ILIKE ANY(%({key})s)")
+        links.append(
+            "EXISTS (SELECT 1 FROM public.locations loc "
+            "WHERE loc.id IN (p.location_project_id, p.location_building_id, p.location_master_project_id) "
+            f"AND loc.name_en ILIKE ANY(%({key})s))"
+        )
     return _or_group(links)
 
 

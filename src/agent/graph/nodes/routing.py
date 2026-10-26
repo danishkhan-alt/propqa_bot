@@ -43,7 +43,9 @@ def choose_query_route(
         property_types=property_type_names(),
         config=config,
     )
-    route, notes = sanitize_query_route(route, last)
+    route, notes = sanitize_query_route(
+        route, last, message, state.get("session_profile") or {}
+    )
 
     logger.info(
         "router.query",

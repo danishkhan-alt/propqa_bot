@@ -3,6 +3,8 @@ values a column does not hold explained when nothing comes back."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from langchain_core.messages import HumanMessage
 
 from agent.enums.listing import MentionKind
@@ -11,6 +13,13 @@ from agent.schemas.routes import DomainRoute
 from agent.schemas.sql import SqlDraft, SqlPage
 from agent.sql.execute import SqlFailed
 from agent.sql.filter_values import check_filter_values, explain_missing_column
+from agent.sql.handover_window import (
+    ProjectSearch,
+    asks_for_project_attribute,
+    constrain_offplan_sql,
+    drop_past_handovers,
+    resolve_handover_window,
+)
 from agent.sql.lookup import run_sql_lookup
 
 SALES = "public.real_estate_dld_transactions"
@@ -189,3 +198,73 @@ def test_a_question_the_data_cannot_answer_is_not_drafted_as_a_stand_in():
     assert models.calls == 1
     assert update["sql_result"]["status"] == "unavailable"
     assert update["sql_result"]["error"] == "passenger numbers per metro station"
+
+
+TODAY = date(2026, 10, 23)
+_OFFPLAN_SQL = (
+    "SELECT project_name_en, handover_date, starting_price FROM public.offplan_projects_new "
+    "WHERE handover_date < '2030-01-01'"
+)
+
+
+def test_a_new_launch_before_a_year_runs_from_this_month_through_that_year():
+    window = resolve_handover_window(
+        "tell me about new projects that will launch before 2030", today=TODAY
+    )
+    assert window is not None
+    assert window.start == date(2026, 10, 1)
+    assert window.until == date(2030, 12, 31)
+    constrained = constrain_offplan_sql(_OFFPLAN_SQL, _search(window))
+    sql = constrained.sql.lower()
+    assert constrained.retry_error is None
+    assert "date_trunc" in sql
+    assert "2030-12-31" in sql
+    assert "2030-01-01" not in sql
+
+
+def test_a_past_handover_and_a_ready_home_do_not_gain_the_future_window():
+    assert resolve_handover_window("Projects handed over before 2019", today=TODAY) is None
+    assert asks_for_project_attribute("Projects handed over before 2019") is False
+    assert resolve_handover_window("something ready to move into", today=TODAY) is None
+
+
+def test_off_plan_keeps_a_window_already_set():
+    carried = {"handover_window": {"from": "2026-10-01", "until": "2030-12-31"}}
+    window = resolve_handover_window("I'm open to off-plan.", carried, today=TODAY)
+    assert window is not None
+    assert window.start == date(2026, 10, 1)
+    assert window.until == date(2030, 12, 31)
+
+
+def test_a_text_handover_column_is_sent_back_to_the_dated_catalog():
+    window = resolve_handover_window("new projects that will launch before 2030", today=TODAY)
+    constrained = constrain_offplan_sql(
+        "SELECT project_name_en, handover_date FROM public.offplan_projects",
+        _search(window),
+    )
+    assert constrained.retry_error is not None
+    assert "offplan_projects_new" in constrained.retry_error
+
+
+def test_a_handover_before_this_month_is_removed():
+    window = resolve_handover_window("new projects that will launch before 2030", today=TODAY)
+    kept, removed = drop_past_handovers(
+        [
+            {"project_name_en": "Suburbia", "handover_date": "March 2013"},
+            {"project_name_en": "Ocean Tower", "handover_date": "2027-06-01"},
+        ],
+        window,
+    )
+    assert removed is True
+    assert [row["project_name_en"] for row in kept] == ["Ocean Tower"]
+
+
+def _search(window, names=None):
+    return ProjectSearch(
+        window=window,
+        names=list(names or []),
+        price_min=None,
+        price_max=None,
+        require_catalog=True,
+        clear_window=False,
+    )

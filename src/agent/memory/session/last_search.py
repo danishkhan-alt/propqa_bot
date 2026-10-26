@@ -31,6 +31,11 @@ def build_last_search(
         result_meta["truncated"] = bool(sql_result.get("truncated"))
     if listing_ids:
         result_meta["ids"] = listing_ids
+    if sql_result.get("clear_handover_window"):
+        result_meta.pop("handover_window", None)
+        result_meta.pop("projects", None)
+    elif sql_result.get("handover_window"):
+        result_meta["handover_window"] = sql_result["handover_window"]
     # A refine starts from these, so "cheaper" keeps the place and the filters.
     if query.names:
         result_meta["names"] = [name.model_dump(mode="json") for name in query.names]

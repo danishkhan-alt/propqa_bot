@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.enums.grounding import Breadth
-from agent.enums.listing import ListingPurpose, ListingSort, MentionKind, NearStation
+from agent.enums.listing import Completion, ListingPurpose, ListingSort, MentionKind, NearStation
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.graph.workflow import build_chat_graph
 from agent.grounding import GroundingIndex
@@ -108,7 +108,25 @@ def test_an_unmatched_place_is_searched_as_address_text_not_dropped():
         offset=0,
     )
     assert "p.address_en ILIKE ANY(%(place_address_patterns)s)" in query.sql
+    assert "loc.name_en ILIKE ANY(%(place_address_patterns)s)" in query.sql
+    assert "p.location_project_id" in query.sql
     assert query.params["place_address_patterns"] == ["%Zzyzx\\_50\\%%"]
+
+
+def test_an_explicit_off_plan_completion_is_not_relaxed():
+    runner = _CountingRunner(totals=[0])
+    result = search_listings(
+        ListingSearch(
+            filters=ListingFilters(completion=Completion.OFF_PLAN),
+            unmatched_places=["Bling Avenue 1"],
+        ),
+        runner,
+        limit=10,
+        offset=0,
+    )
+    assert result.ids == []
+    assert result.filters.completion is Completion.OFF_PLAN
+    assert runner.calls[-1][1]["completion"] == "off_plan"
 
 
 def test_nothing_matching_relaxes_price_first_and_says_so():

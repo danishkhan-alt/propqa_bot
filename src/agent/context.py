@@ -69,6 +69,9 @@ class AgentModels(Protocol):
         previous_error: str | None,
         listing_ids_only: bool = False,
         resolved_names: list[dict] | None = None,
+        handover_window: dict | None = None,
+        shortlist_projects: list | None = None,
+        starting_price_aed: dict | None = None,
         config: RunnableConfig | None = None,
     ) -> SqlDraft: ...
 

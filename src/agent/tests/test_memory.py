@@ -423,6 +423,18 @@ def test_result_meta_captures_the_quartile_used_by_cheaper():
     assert meta["p25_price"] == 200
     assert meta["ids"] == ["a", "b", "c", "d"]
     assert "sql" not in meta
+    projects = summarize_search_results(
+        [
+            {
+                "project_name_en": "Ocean Tower",
+                "handover_date": "2027-06-01",
+                "starting_price": 1847819,
+            }
+        ]
+    )
+    assert projects["projects"] == [
+        {"name": "Ocean Tower", "handover": "2027-06-01", "starting_price": 1847819.0}
+    ]
 
 
 def test_graph_cheaper_narrows_the_saved_frame_and_forget_asks_first():

@@ -56,9 +56,9 @@ export function FiguresBlock({ figures }: { figures: ReplyFigures }) {
   if (figures.layout === "table") {
     if (!figures.rows?.length) return null;
     return (
-      <div className={`${PANEL} overflow-x-auto`}>
+      <div className={`${PANEL} max-h-80 overflow-auto`}>
         <table className="w-full min-w-max text-left text-xs">
-          <thead>
+          <thead className="sticky top-0 bg-white">
             <tr className="border-b border-[#E8ECF3] text-[#747288]">
               {figures.headers.map((header, i) => (
                 <th key={`${header}-${i}`} scope="col" className={`px-3 py-2 font-medium ${i > 0 ? "text-right" : ""}`}>

@@ -29,6 +29,83 @@ _CAPTION_UNITS = frozenset({"text", "year"})
 _CHANGE_COLUMN = re.compile(r"change|growth", re.IGNORECASE)
 
 
+_PROJECT_LABELS = ("project_name_en", "project_name")
+_PROJECT_ATTRIBUTES = (
+    ("developer_name_en", "Developer", "text"),
+    ("developer_name", "Developer", "text"),
+    ("starting_price", "Starting price", "aed"),
+    ("starting_price_aed", "Starting price", "aed"),
+    ("handover_date", "Handover", "text"),
+    ("payment_plan_summary", "Payment plan", "text"),
+)
+
+
+def project_attribute_table(rows: list[dict[str, Any]], columns: list[str]) -> FigureSpec | None:
+    """A table of projects when the reply left figures empty. A count or a year series is not one."""
+    if len(rows) < 2:
+        return None
+    known = list(columns) or list(rows[0])
+    label = next((column for column in _PROJECT_LABELS if column in known), "")
+    if not label or _is_year_series(known):
+        return None
+    attributes = [
+        FigureColumn(column=column, label=title, unit=unit)
+        for column, title, unit in _PROJECT_ATTRIBUTES
+        if column in known and column != label
+    ]
+    if not attributes:
+        return None
+    return FigureSpec(
+        layout="table",
+        label_column=label,
+        label_title="Project",
+        columns=attributes,
+    )
+
+
+def _is_year_series(columns: list[str]) -> bool:
+    """A period column with no project name is a trend, even if a later column is named project."""
+    return "year" in columns and not any(column in columns for column in _PROJECT_LABELS)
+
+
+_RECORD_DATES = ("instance_date", "contract_start_date")
+_RECORD_COLUMNS = (
+    ("area_name_en", "Area", "text"),
+    ("actual_worth", "Price", "aed"),
+    ("annual_amount", "Price", "aed"),
+    ("procedure_name_en", "Procedure", "text"),
+    ("property_sub_type_en", "Type", "text"),
+    ("property_type_en", "Type", "text"),
+    ("rooms_en", "Bedrooms", "text"),
+    ("bedrooms", "Bedrooms", "text"),
+    ("project_name_en", "Project", "text"),
+)
+_AGGREGATE_COLUMN = re.compile(r"(^|_)(avg|average|median|count|total|sum|year)($|_)", re.I)
+_ONE_EACH = frozenset({"Price", "Type", "Bedrooms"})
+
+
+def record_rows_table(rows: list[dict[str, Any]], columns: list[str]) -> dict[str, Any] | None:
+    """Each transaction or sale when the reply left figures empty. A count or a year series is not one."""
+    if len(rows) < 2:
+        return None
+    known = list(columns) or list(rows[0])
+    if any(_AGGREGATE_COLUMN.search(column) for column in known):
+        return None
+    date = next((column for column in _RECORD_DATES if column in known), "")
+    if not date:
+        return None
+    attributes: list[FigureColumn] = []
+    for column, title, unit in _RECORD_COLUMNS:
+        if column not in known or column == date:
+            continue
+        if title in _ONE_EACH and any(item.label == title for item in attributes):
+            continue
+        attributes.append(FigureColumn(column=column, label=title, unit=unit))
+    if not any(item.label in {"Area", "Price"} for item in attributes):
+        return None
+    return _build_table_layout(attributes, date, "Date", rows, row_limit=len(rows))
+
+
 def build_figures(
     spec: FigureSpec | None, rows: list[dict[str, Any]], columns: list[str]
 ) -> dict[str, Any] | None:
@@ -142,7 +219,15 @@ def build_reply_blocks(
             "explainer": None,
         }
     place_map = build_place_map(map_pins, map_lines) if reply.show_map else None
-    figures = None if place_map is not None else build_figures(reply.figures, rows, columns)
+    spec = reply.figures
+    record = None
+    if place_map is None and (spec is None or spec.layout == "none"):
+        project = project_attribute_table(rows, columns)
+        if project is not None:
+            spec = project
+        else:
+            record = record_rows_table(rows, columns)
+    figures = None if place_map is not None else (record or build_figures(spec, rows, columns))
     explainer = (
         None if place_map is not None or figures is not None else build_explainer(reply.explainer)
     )
@@ -169,14 +254,19 @@ def _build_table_layout(
     label_column: str,
     label_title: str,
     rows: list[dict[str, Any]],
+    row_limit: int | None = None,
 ) -> dict[str, Any] | None:
     if len(rows) < 2:
         return None
-    ordered = _oldest_first(rows, label_column) if label_column else rows
-    # A run of periods keeps its latest ones; other rows keep the order the lookup gave them.
-    shown = (
-        ordered[-MAX_FIGURE_ROWS:] if ordered is not rows else rows[:MAX_FIGURE_ROWS]
-    )
+    if row_limit is None:
+        ordered = _oldest_first(rows, label_column) if label_column else rows
+        # A run of periods keeps its latest ones; other rows keep the order the lookup gave them.
+        shown = (
+            ordered[-MAX_FIGURE_ROWS:] if ordered is not rows else rows[:MAX_FIGURE_ROWS]
+        )
+    else:
+        ordered = rows
+        shown = rows[:row_limit]
     figures, caption = _lift_repeated_columns_to_caption(figures, shown)
     if not figures:
         return None

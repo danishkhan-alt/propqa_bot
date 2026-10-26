@@ -19,7 +19,7 @@ from agent.schemas.grounding import Grounding, as_grounding
 from agent.schemas.listing import GOLDEN_VISA_MIN_PRICE_AED, ListingFilters
 from agent.schemas.listing_search import BrandPlace, ListingSearch
 from agent.schemas.recipes import BoundRecipe
-from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_query_route
+from agent.schemas.routes import QueryRoute, as_assumptions, as_domain_route, as_last_need_db, as_query_route
 from agent.schemas.sql import SqlDraft, SqlPage
 from agent.services.transcript import (
     ANSWER_HISTORY_MESSAGE_LIMIT,
@@ -29,6 +29,15 @@ from agent.services.transcript import (
 from agent.sql.execute import SqlFailed
 from agent.grounding import get_grounding_cache
 from agent.sql.filter_values import check_filter_values, exclude_rows_outside_region, explain_missing_column
+from agent.sql.handover_window import (
+    asks_for_project_attribute,
+    constrain_offplan_sql,
+    drop_past_handovers,
+    missing_project_name_error,
+    past_rows_error,
+    project_search_for,
+    select_has_project_name,
+)
 from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
@@ -138,6 +147,7 @@ def run_listing_lookup(state: ChatState, runner, *, client=None) -> dict:
         station_kinds=list(STATION_KINDS.get(found.filters.near_station, ())),
     )
     trace_sql_attempt(last, client)
+    _stamp_handover(last, _project_search(state, query, _latest_user_message(state)))
     return {"sql_result": last, "sql_rows": rows, "listing_ids": found.ids}
 
 
@@ -163,15 +173,17 @@ def run_sql_lookup(
 
     listing_ids_only = is_listing_list_request(state)
     grounding = as_grounding(state.get("grounding"))
+    query = as_query_route(state.get("query_route"))
+    project_search = _project_search(state, query, message)
     if not listing_ids_only and domain is not None:
         bound = bind_recipe(chosen, grounding) if (chosen := get_recipe(domain.recipe_id)) else None
         if chosen is not None and bound is None:
             logger.info("sql.recipe_unbound", extra={"extra_data": {"recipe": chosen.id}})
         answered_by_recipe = _answer_with_recipe(bound, runner, cap, client) if bound else None
         if answered_by_recipe is not None:
+            _stamp_handover(answered_by_recipe["sql_result"], project_search)
             return answered_by_recipe
     resolved_names = grounding.for_sql_prompt() if grounding and grounding.names else None
-    query = as_query_route(state.get("query_route"))
     typed_names = [name.text for name in query.names] if query is not None else []
     rules = segment_rules(domain_ids)
     previous_error: str | None = None
@@ -190,6 +202,9 @@ def run_sql_lookup(
             previous_error=previous_error,
             listing_ids_only=listing_ids_only,
             resolved_names=resolved_names,
+            handover_window=project_search.window.as_dict() if project_search.window else None,
+            shortlist_projects=list(project_search.names),
+            starting_price_aed=project_search.price_payload(),
             config=config,
         )
         logger.info(
@@ -236,6 +251,40 @@ def run_sql_lookup(
                 extra={"extra_data": {"corrections": checked.corrections, "removed": checked.removed}},
             )
             guarded = checked.sql
+        constrained = constrain_offplan_sql(guarded, project_search)
+        if constrained.retry_error:
+            last = _build_sql_result(
+                domain_ids=domain_ids,
+                attempt=attempt,
+                purpose=draft.purpose,
+                sql=guarded,
+                status="failed",
+                error=constrained.retry_error,
+            )
+            trace_sql_attempt(last, client)
+            previous_error = constrained.retry_error
+            if attempt == MAX_ATTEMPTS:
+                break
+            continue
+        guarded = constrained.sql
+        if (
+            asks_for_project_attribute(message)
+            and project_search.names
+            and not select_has_project_name(guarded)
+        ):
+            previous_error = missing_project_name_error()
+            last = _build_sql_result(
+                domain_ids=domain_ids,
+                attempt=attempt,
+                purpose=draft.purpose,
+                sql=guarded,
+                status="failed",
+                error=previous_error,
+            )
+            trace_sql_attempt(last, client)
+            if attempt == MAX_ATTEMPTS:
+                break
+            continue
         blends = blended_average_reasons(guarded, rules)
         if blends and attempt < MAX_ATTEMPTS:
             last = _build_sql_result(
@@ -270,7 +319,24 @@ def run_sql_lookup(
                 truncated=bool(getattr(page, "truncated", False)),
                 duration_ms=int(getattr(page, "duration_ms", 0) or 0),
             )
-        status = "rows" if page.rows else "empty"
+        visible, dropped_past = drop_past_handovers(page.rows, project_search.window)
+        if dropped_past and not visible and project_search.window is not None and attempt < MAX_ATTEMPTS:
+            previous_error = " ".join([past_rows_error(project_search.window), *checked.problems])
+            last = _build_sql_result(
+                domain_ids=domain_ids,
+                attempt=attempt,
+                purpose=draft.purpose,
+                sql=guarded,
+                status="empty",
+                columns=page.columns,
+                rows=[],
+                truncated=page.truncated,
+                duration_ms=page.duration_ms,
+                error=previous_error,
+            )
+            trace_sql_attempt(last, client)
+            continue
+        status = "rows" if visible else "empty"
         last = _build_sql_result(
             domain_ids=domain_ids,
             attempt=attempt,
@@ -278,24 +344,25 @@ def run_sql_lookup(
             sql=guarded,
             status=status,
             columns=page.columns,
-            rows=page.rows,
+            rows=visible,
             truncated=page.truncated,
             duration_ms=page.duration_ms,
-            error=None if page.rows else NO_ROWS_RETRY_REASON,
+            error=None if visible else NO_ROWS_RETRY_REASON,
         )
         last["filters"] = applied_conditions(guarded)
         last["coverage"] = get_table_date_coverage(referenced_tables(guarded))
         last["notes"] = [BLENDED_AVERAGE_NOTE] if blends else []
         trace_sql_attempt(last, client)
-        if page.rows:
+        if visible:
             answered = last
-        retry_reason = NO_ROWS_RETRY_REASON if not page.rows else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(page.rows) else None
+        retry_reason = NO_ROWS_RETRY_REASON if not visible else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(visible) else None
         if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
         previous_error = " ".join([retry_reason, *checked.problems])
 
     if last["status"] == "failed" and answered is not None:
         last = answered
+    _stamp_handover(last, project_search)
     rows = list(last["rows"]) if last["status"] == "rows" else []
     return {
         "sql_result": last,
@@ -549,6 +616,39 @@ def _is_zero_or_empty(value: Any) -> bool:
         return Decimal(str(value)) == 0
     except (InvalidOperation, ValueError):
         return False
+
+
+def _project_search(state: ChatState, query: QueryRoute | None, message: str):
+    """The future-launch window and shortlist carried into this lookup."""
+    last = as_last_need_db(state.get("last_need_db"))
+    profile = state.get("session_profile") or {}
+    timeline = profile.get("timeline")
+    bucket = profile.get("budget_range")
+    stated_budget = False
+    if query is not None:
+        if query.profile.timeline:
+            timeline = query.profile.timeline
+        if query.profile.budget_range:
+            bucket = query.profile.budget_range
+            stated_budget = True
+    return project_search_for(
+        message,
+        carried=last.result_meta if last is not None else None,
+        timeline=timeline,
+        budget_bucket=bucket,
+        route_names=list(query.names) if query is not None else [],
+        stated_budget=stated_budget,
+    )
+
+
+def _stamp_handover(result: dict[str, Any], search) -> None:
+    """Remember the window for the next turn, or clear it when they ask for a ready home."""
+    if search.clear_window:
+        result["clear_handover_window"] = True
+        result.pop("handover_window", None)
+        return
+    if search.window is not None:
+        result["handover_window"] = search.window.as_dict()
 
 
 def _draft_sql(models, **kwargs) -> SqlDraft:

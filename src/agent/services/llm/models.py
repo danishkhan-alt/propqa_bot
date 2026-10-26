@@ -216,6 +216,9 @@ class LangChainAgentModels:
         previous_error: str | None,
         listing_ids_only: bool = False,
         resolved_names: list[dict] | None = None,
+        handover_window: dict | None = None,
+        shortlist_projects: list | None = None,
+        starting_price_aed: dict | None = None,
         config: RunnableConfig | None = None,
     ) -> SqlDraft:
         # The catalog and table list depend only on the loaded packs, so they sit in the
@@ -231,6 +234,9 @@ class LangChainAgentModels:
             "query_frame": query_frame,
             "previous_error": previous_error,
             "listing_ids_only": listing_ids_only,
+            "handover_window": handover_window,
+            "shortlist_projects": shortlist_projects or [],
+            "starting_price_aed": starting_price_aed,
         }
         return invoke_structured_with_fallback(
             self._sql,

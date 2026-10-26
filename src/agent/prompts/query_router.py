@@ -26,7 +26,11 @@ turn_kind, compared with last_need_db:
 - pivot: same place or property, different subject (for example schools near that building).
 
 A follow-up must move the conversation forward. Never route a lookup identical to the last one (same names, same listing_filters) unless the user asks to see it again: it returns the same result again.
-- A message that only tells you about them, such as a goal, budget, or timeline ("my goal is capital appreciation"), sets profile. When it still needs data, look up what serves that goal for the place and property they were looking at, not the same search: capital appreciation is how prices there have moved (intent trend, listing_filters null); rental income is rent and yield there.
+- A message that only tells you about them, such as a goal, budget, or timeline ("my goal is capital appreciation", "I'm open to off-plan", "my budget is AED 1M to 2M"), sets profile. Keep the projects in last_need_db.result_meta.projects and the handover window already in use. Do not start a new search of completed or already handed-over projects. When it still needs a different subject, look up what serves that goal for the place and property they were looking at: capital appreciation is how prices there have moved (intent trend, listing_filters null); rental income is rent and yield there.
+- "Which of these", "one of these", "which do you suggest", and choosing one of the projects just shown for investment is a refine of those projects, not a new search.
+- "Do you have properties, listings, or units for those" asks to see listings in those projects: intent list, listing_filters set, completion off_plan, purpose sale, and names are those projects.
+- "Their developers", "who built them", "their prices", or "their handover" is a refine of the projects just shown, one row per project, not a list of developers alone. Keep the place already named in the filters.
+- "Show me the transactions", "show me the sales", or "show me the details" of the rows just shown is intent list, one row per record. Keep the period already named. It is not a count and not a summary by area.
 - When last_need_db.result_meta.row_count is 0, that search found nothing, and repeating it finds nothing again. When they ask to go on from there ("suggest properties based on your suggestion", "show me what you recommended"), apply what the last assistant reply in history suggested: its wider budget, other property types, or other areas become this search's filters and names.
 
 purpose, limit, and order are yours to set from this message and from last_need_db. There is no fixed default.
@@ -43,7 +47,7 @@ seeking_advice is true when the user is deciding what or where to buy, or whethe
 profile holds buyer facts this message states. Leave a field null unless this message says it; history and memory_context do not count.
 - goal: live (a home for them or their family), invest (rental income or capital growth), or both.
 - budget_range: the bucket holding their maximum purchase budget in AED. "Under AED 2M" and "1.5M" are 1m_2m. Null for a rent budget.
-- timeline: ready (move in now) or off_plan (willing to wait for handover). Asking for off-plan listings counts as off_plan.
+- timeline: ready (move in now) or off_plan (willing to wait for handover). Asking for off-plan listings counts as off_plan. Asking for new, upcoming, launching, or off-plan projects counts as off_plan: handover runs from the current month through the end of any year they name.
 - family_size: people in the household, when they say it.
 
 names lists each place, building, project, community, developer, agency, or agent the lookup is about, spelled as the user wrote it ("marina", "JVC", "Emaar", "Betterhomes"). kind is place, developer for a builder, agency for a brokerage ("Betterhomes", "Allsopp & Allsopp"), or agent for a person who lists. other is any other proper name. Do not correct or expand a name. On a refine, keep the names in last_need_db.result_meta.names unless this message replaces them. Leave out generic words such as "Dubai" or "the area".

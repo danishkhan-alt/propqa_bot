@@ -338,6 +338,52 @@ def test_figures_read_the_way_a_buyer_reads_them(value, unit, shown):
     assert format_figure(value, unit) == shown
 
 
+def test_project_rows_with_no_figures_become_a_project_table():
+    rows = [
+        {"project_name_en": "Azizi Plaza", "developer_name_en": "Azizi Developments"},
+        {"project_name_en": "Danube Tower", "developer_name_en": "Danube Properties"},
+    ]
+    blocks = build_reply_blocks(
+        StructuredReply(intro_text="Here are the projects."),
+        rows,
+        ["project_name_en", "developer_name_en"],
+    )
+    assert blocks["figures"]["headers"] == ["Project", "Developer"]
+    assert blocks["figures"]["rows"][0] == ["Azizi Plaza", "Azizi Developments"]
+
+
+def test_transaction_rows_with_no_figures_become_a_record_table():
+    areas = ("Jumeirah Village Circle", "Business Bay", "Al Furjan")
+    rows = [
+        {
+            "instance_date": f"2026-07-{day:02d}",
+            "area_name_en": areas[day % 3],
+            "actual_worth": 650000 + day,
+        }
+        for day in range(1, 13)
+    ]
+    blocks = build_reply_blocks(
+        StructuredReply(intro_text="Here are the transactions."),
+        rows,
+        ["instance_date", "area_name_en", "actual_worth"],
+    )
+    assert blocks["figures"]["headers"] == ["Date", "Area", "Price"]
+    assert len(blocks["figures"]["rows"]) == 12
+    assert blocks["figures"]["hidden_rows"] == 0
+    assert blocks["figures"]["rows"][0] == ["2026-07-01", "Business Bay", "AED 650,001"]
+
+
+def test_a_count_and_a_year_series_are_not_a_project_table():
+    count = build_reply_blocks(StructuredReply(intro_text="x"), [{"n": 4}], ["n"])
+    assert count["figures"] is None
+    years = [
+        {"year": 2018, "sales": 10},
+        {"year": 2019, "sales": 12},
+    ]
+    series = build_reply_blocks(StructuredReply(intro_text="x"), years, ["year", "sales"])
+    assert series["figures"] is None
+
+
 def test_only_one_block_is_shown_under_the_text():
     rows = [{"n": 5}]
     reply = StructuredReply(
