@@ -2,6 +2,7 @@
 
     python -m evals.run_sql_eval                 # every case
     python -m evals.run_sql_eval marina_listings # chosen cases
+    python -m evals.run_sql_eval --split holdout
 
 Prints one line per case and writes the full record (SQL, rows, reply, fact sheet) to logs/.
 Listing cases are also checked against an independent truth set and a fact sheet, and the
@@ -10,6 +11,7 @@ reply is checked for unsupported claims.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
@@ -20,20 +22,20 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-import yaml
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.context import AgentContext
 from agent.graph.workflow import build_chat_graph
 from agent.grounding import get_grounding_cache
+from agent.services.llm.fallbacks import REPLY_FALLBACK
 from agent.sql.execute import fetch_reference_rows
 from common.db import close_pools
+from evals.cases import SQL_PATH, load_suite, select_cases
 from evals.listing_facts import fetch_fact_sheet, fetch_truth_ids
 from evals.listing_justification import judge_listing_reply
 from evals.listing_score import TurnOutcome, score_listing_result
-
-GOLDEN_PATH = Path(__file__).resolve().parent / "sql_golden.yaml"
+from evals.report import sentence
 
 
 @dataclass
@@ -44,34 +46,52 @@ class CaseScore:
     outcome: TurnOutcome
     facts: list[dict] = field(default_factory=list)
     unsupported_claims: list[str] = field(default_factory=list)
+    must_pass: bool = False
+    split: str = ""
+    fallback: bool = False
 
 
-def main(case_ids: list[str]) -> int:
-    cases = [case for case in _load_cases() if not case_ids or case["id"] in case_ids]
-    if get_grounding_cache().load_now() is None:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("case_ids", nargs="*")
+    parser.add_argument("--split", choices=("train", "val", "holdout"))
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    cases = select_cases(load_suite(SQL_PATH), split=args.split, case_ids=args.case_ids)
+    status, scores = evaluate(cases)
+    if status == 2:
         print("Grounding index did not load; the eval would not reflect production.")
         return 2
-    scores: list[CaseScore] = []
-    try:
-        for case in cases:
-            outcome = _run_case(case)
-            score = _score(case, outcome)
-            scores.append(score)
-            mark = "PASS" if score.passed else "FAIL"
-            print(f"{mark}  {case['id']:<32} {score.detail}  ({outcome.seconds:.1f}s)", flush=True)
-    finally:
-        close_pools()
     passed = sum(score.passed for score in scores)
     print(f"\n{passed}/{len(scores)} passed")
     report = Path("logs") / f"sql_eval_{datetime.now():%Y%m%d_%H%M%S}.json"
     report.parent.mkdir(exist_ok=True)
     report.write_text(json.dumps([asdict(score) for score in scores], indent=2, default=str), encoding="utf-8")
     print(f"Report: {report}")
-    return 0 if passed == len(scores) else 1
+    return 0 if scores and passed == len(scores) else (0 if not scores else 1)
 
 
-def _load_cases() -> list[dict]:
-    return list(yaml.safe_load(GOLDEN_PATH.read_text(encoding="utf-8"))["cases"])
+def evaluate(cases: list[dict], *, quiet: bool = False) -> tuple[int, list[CaseScore]]:
+    """Score every case. Status 2 means the grounding index did not load, so nothing ran."""
+    if not cases:
+        return 0, []
+    if get_grounding_cache().load_now() is None:
+        return 2, []
+    scores: list[CaseScore] = []
+    try:
+        for case in cases:
+            try:
+                outcome = _run_case(case)
+                score = _score(case, outcome)
+            except Exception as exc:
+                outcome = TurnOutcome(error=f"{type(exc).__name__}: {exc}"[:300])
+                score = _score(case, outcome)
+            scores.append(score)
+            if not quiet:
+                mark = "PASS" if score.passed else "FAIL"
+                print(f"{mark}  {case['id']:<32} {score.detail}  ({outcome.seconds:.1f}s)", flush=True)
+    finally:
+        close_pools()
+    return 0, scores
 
 
 def _run_case(case: dict) -> TurnOutcome:
@@ -128,7 +148,7 @@ def _record_node_update(update: dict, outcome: TurnOutcome) -> None:
 
 def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
     if outcome.error:
-        return CaseScore(case["id"], False, outcome.error, outcome)
+        return _finish(case, False, f"the turn failed before a score: {outcome.error}", outcome)
     if "listings" in case:
         return _score_listings(case, outcome)
     if "value" in case:
@@ -137,7 +157,20 @@ def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
         passed, detail = _score_sql_contains(case["sql_contains"], outcome)
     else:
         passed, detail = _score_rows_contain(case["rows_contain"], outcome)
-    return CaseScore(case["id"], passed, detail, outcome)
+    return _finish(case, passed, detail, outcome)
+
+
+def _finish(case: dict, passed: bool, detail: str, outcome: TurnOutcome, **extra) -> CaseScore:
+    return CaseScore(
+        case["id"],
+        passed,
+        sentence(case["id"], passed, detail),
+        outcome,
+        must_pass=bool(case.get("must_pass")),
+        split=str(case.get("split") or ""),
+        fallback=outcome.reply.strip() == REPLY_FALLBACK.intro_text.strip(),
+        **extra,
+    )
 
 
 def _score_listings(case: dict, outcome: TurnOutcome) -> CaseScore:
@@ -154,7 +187,7 @@ def _score_listings(case: dict, outcome: TurnOutcome) -> CaseScore:
     passed, detail = score_listing_result(
         expected, outcome, truth, relaxed=relaxed, facts=facts, unsupported_claims=claims
     )
-    return CaseScore(case["id"], passed, detail, outcome, facts=facts, unsupported_claims=claims)
+    return _finish(case, passed, detail, outcome, facts=facts, unsupported_claims=claims)
 
 
 def _justify(case: dict, outcome: TurnOutcome, facts: list[dict]) -> list[str]:
@@ -180,20 +213,30 @@ def _score_value(expected: dict, outcome: TurnOutcome) -> tuple[bool, str]:
             continue
         for number in answered:
             if abs(number - truth) <= tolerance * max(abs(truth), 1):
-                return True, f"answer={number:g} truth={truth:g}"
+                return True, f"the answered figure {number:g} is within tolerance of the truth query {truth:g}."
     shown = ", ".join(f"{truth:g}" for truth in truths if truth is not None)
-    return False, f"answer={answered[:3]} truth in [{shown}] status={outcome.status}"
+    return False, (
+        f"the lookup answered {answered[:3]} but the truth query returned [{shown}] "
+        f"(status {outcome.status or 'none'})."
+    )
 
 
 def _score_sql_contains(texts: list[str], outcome: TurnOutcome) -> tuple[bool, str]:
     missing = [text for text in texts if text not in outcome.sql]
-    return not missing and bool(outcome.rows), f"rows={len(outcome.rows)} missing_in_sql={missing}"
+    if missing or not outcome.rows:
+        return False, (
+            f"the statement is missing {missing or 'a returned row'} "
+            f"and returned {len(outcome.rows)} rows."
+        )
+    return True, f"the statement contains the required text and returned {len(outcome.rows)} rows."
 
 
 def _score_rows_contain(texts: list[str], outcome: TurnOutcome) -> tuple[bool, str]:
     cells = " | ".join(str(value) for row in outcome.rows for value in row.values()).lower()
     missing = [text for text in texts if text.lower() not in cells]
-    return not missing and bool(outcome.rows), f"rows={len(outcome.rows)} missing={missing}"
+    if missing or not outcome.rows:
+        return False, f"the rows are missing {missing or 'any cell'} ({len(outcome.rows)} rows)."
+    return True, f"the rows contain the required text ({len(outcome.rows)} rows)."
 
 
 def _to_float(value: Any) -> float | None:
@@ -206,4 +249,4 @@ def _to_float(value: Any) -> float | None:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

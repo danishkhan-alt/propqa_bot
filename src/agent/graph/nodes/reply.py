@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
@@ -25,6 +27,7 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.services.stream_events import publish_stream_event
+from agent.services.tracing import current_trace_id
 from agent.services.transcript import (
     ANSWER_HISTORY_MESSAGE_LIMIT,
     format_recent_history,
@@ -66,7 +69,7 @@ def write_reply(
         # Fixed text: a model asked to decline tends to answer a little first, and this costs nothing.
         publish_stream_event("text", delta=OUT_OF_SCOPE_REPLY)
         text = _stream_memory_notes(OUT_OF_SCOPE_REPLY, state)
-        return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
+        return _reply_state_update(state, text, None)
 
     if query.route is Route.DIRECT_ANSWER:
         question = _next_profile_question(state, query, has_listings=False)
@@ -320,7 +323,7 @@ def _reply_without_data(
         config=config,
     )
     text = _stream_memory_notes(text, state)
-    return {"messages": [AIMessage(content=text)], "awaiting_sql": False}
+    return _reply_state_update(state, text, None)
 
 
 def _building_pages_for(
@@ -374,10 +377,13 @@ def _reply_state_update(
     text = drop_repeated_question(text, question)
     content = f"{text}\n\n{question.prompt}" if question is not None else text
     ids = [str(item) for item in (listing_ids or []) if str(item).strip()]
-    message = AIMessage(
-        content=content,
-        additional_kwargs={"listing_ids": ids} if ids else {},
-    )
+    kwargs: dict = {"turn_id": str(uuid.uuid4())}
+    if ids:
+        kwargs["listing_ids"] = ids
+    trace_id = current_trace_id()
+    if trace_id:
+        kwargs["trace_id"] = trace_id
+    message = AIMessage(content=content, additional_kwargs=kwargs)
     update: dict = {"messages": [message], "awaiting_sql": False}
     if question is not None:
         update["profile_asked"] = [*(state.get("profile_asked") or []), question.id]

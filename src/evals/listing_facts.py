@@ -94,8 +94,8 @@ SELECT
         WHERE pv.property_id = p.id
     ), ARRAY[]::text[]) AS views,
     CASE
-        WHEN %(text_query)s IS NULL THEN NULL
-        ELSE p.search_vector @@ websearch_to_tsquery('english', %(text_query)s)
+        WHEN %(text_query)s::text IS NULL THEN NULL
+        ELSE p.search_vector @@ websearch_to_tsquery('english', %(text_query)s::text)
     END AS text_match,
     EXISTS (
         SELECT 1 FROM public.users vu

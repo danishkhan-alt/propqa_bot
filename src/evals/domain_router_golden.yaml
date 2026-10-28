@@ -6,172 +6,261 @@
 # - joins: expected join packs. Omitted when a place is arguable (a project, a road).
 # - recipe: the recipe id, or null.
 # - turn_kind and last_need_db describe a follow-up.
+# split is train, val, or holdout, and it stays as written. must_pass cases block a holdout run.
+# tags.domain, tags.kind, and tags.hard say where a regression happened.
 
 cases:
 - id: average_sale_price_period
+  split: holdout
+  tags: {domain: transactions, kind: route, hard: true}
+  must_pass: true
   message: Average sale price in Dubai Marina last 12 months
   domains: [transactions]
   joins: [locations]
   recipe: null
 
 - id: listings_sale_budget
+  split: holdout
+  tags: {domain: listings, kind: route, hard: true}
+  must_pass: true
   message: 2 bed apartments for sale in JVC under 1.5M
   domains: [listings]
   joins: [locations]
   recipe: null
 
 - id: listings_rent_villas
+  split: holdout
+  tags: {domain: listings, kind: route, hard: false}
+  must_pass: false
   message: show me villas for rent in Dubai Hills
   domains: [listings]
   joins: [locations]
   recipe: null
 
 - id: market_overview
+  split: holdout
+  tags: {domain: market, kind: route, hard: true}
+  must_pass: true
   message: How is the Dubai property market doing?
   domains: [market]
   joins: []
   recipe: dubai_market_overview
 
 - id: market_prices_up
+  split: val
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: Are prices going up in Dubai?
   domains: [market]
   joins: []
   recipe: dubai_market_overview
 
 - id: community_sale_prices
+  split: val
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: What are sale prices like in JVC?
   domains: [market]
   joins: [locations]
   recipe: community_sale_prices_by_bedrooms
 
 - id: community_rents
+  split: train
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: Rents in Dubai Marina
   domains: [market]
   joins: [locations]
   recipe: community_rents_by_bedrooms
 
 - id: community_rent_bedrooms
+  split: train
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: Average rent for a 2 bed in JVC
   domains: [market]
   joins: [locations]
   recipe: null
 
 - id: rental_yield_area
+  split: train
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: What is the rental yield in Business Bay?
   domains: [market]
   joins: [locations]
   recipe: null
 
 - id: best_roi_areas
+  split: train
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: Which areas have the best ROI?
   domains: [market]
   recipe: null
 
 - id: sales_volume
+  split: train
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: How many apartments were sold in Downtown Dubai in 2024?
   domains: [transactions]
   joins: [locations]
   recipe: null
 
 - id: schools_near_community
+  split: holdout
+  tags: {domain: schools, kind: route, hard: true}
+  must_pass: true
   message: Best schools near Arabian Ranches
   domains: [schools]
   joins: [locations]
   recipe: null
 
 - id: schools_citywide
+  split: val
+  tags: {domain: schools, kind: route, hard: false}
+  must_pass: false
   message: KHDA outstanding schools with fees under 50k
   domains: [schools]
   joins: []
   recipe: null
 
 - id: metro_near
+  split: holdout
+  tags: {domain: rta, kind: route, hard: false}
+  must_pass: false
   message: Nearest metro station to JLT
   domains: [rta]
   joins: [locations]
   recipe: null
 
 - id: salik_count
+  split: train
+  tags: {domain: rta, kind: route, hard: false}
+  must_pass: false
   message: How many Salik gates are there in Dubai?
   domains: [rta]
   joins: []
   recipe: null
 
 - id: parks_beaches
+  split: train
+  tags: {domain: amenities, kind: route, hard: false}
+  must_pass: false
   message: Parks and beaches in Jumeirah
   domains: [amenities]
   joins: [locations]
   recipe: null
 
 - id: hospitals_near
+  split: train
+  tags: {domain: amenities, kind: route, hard: false}
+  must_pass: false
   message: Hospitals near Dubai Silicon Oasis
   domains: [amenities]
   joins: [locations]
   recipe: null
 
 - id: things_to_do
+  split: train
+  tags: {domain: amenities, kind: route, hard: false}
+  must_pass: false
   message: Things to do in Dubai Marina
   domains: [amenities]
   joins: [locations]
   recipe: null
 
 - id: project_handover
+  split: val
+  tags: {domain: developers, kind: route, hard: false}
+  must_pass: false
   message: When is Emaar's Creek Beach project handing over?
   domains: [developers]
   recipe: null
 
 - id: developer_offplan
+  split: train
+  tags: {domain: developers, kind: route, hard: false}
+  must_pass: false
   message: Off-plan projects by Sobha
   domains: [developers]
   joins: []
   recipe: null
 
 - id: who_builds
+  split: train
+  tags: {domain: developers, kind: route, hard: false}
+  must_pass: false
   message: Which developer is building Sobha Hartland?
   domains: [developers]
   recipe: null
 
 - id: brokers_area
+  split: val
+  tags: {domain: agencies, kind: route, hard: false}
+  must_pass: false
   message: Licensed brokers in Dubai Marina
   domains: [agencies]
   joins: [locations]
   recipe: null
 
 - id: owners_association
+  split: train
+  tags: {domain: agencies, kind: route, hard: false}
+  must_pass: false
   message: Who is the owners association for Marina Gate?
   domains: [agencies]
   recipe: null
 
 - id: service_charges_area
+  split: train
+  tags: {domain: regulations, kind: route, hard: false}
+  must_pass: false
   message: Service charges in Dubai Hills Estate
   domains: [regulations]
   joins: [locations]
   recipe: null
 
 - id: service_charges_developer
+  split: train
+  tags: {domain: regulations, kind: route, hard: false}
+  must_pass: false
   message: What are the service charges per sqft for Emaar buildings?
   domains: [regulations]
   recipe: null
 
 - id: where_is
+  split: holdout
+  tags: {domain: locations, kind: route, hard: true}
+  must_pass: true
   message: Where is Al Barsha South?
   domains: [locations]
   joins: []
   recipe: null
 
 - id: which_community
+  split: val
+  tags: {domain: locations, kind: route, hard: false}
+  must_pass: false
   message: Which community is Damac Hills in?
   domains: [locations]
   joins: []
   recipe: null
 
 - id: population
+  split: train
+  tags: {domain: locations, kind: route, hard: false}
+  must_pass: false
   message: What is the population of Al Nahda?
   domains: [locations]
   joins: []
   recipe: null
 
 - id: compare_two_places
+  split: holdout
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: Compare sale prices in JVC and JLT
   domains: [transactions]
   accept_lead: [market]
@@ -179,6 +268,9 @@ cases:
   recipe: null
 
 - id: listings_near_schools
+  split: train
+  tags: {domain: listings, kind: route, hard: false}
+  must_pass: false
   message: Villas for sale near good schools in Mirdif
   domains: [listings, schools]
   accept_lead: [schools]
@@ -186,6 +278,9 @@ cases:
   recipe: null
 
 - id: listings_near_metro
+  split: val
+  tags: {domain: listings, kind: route, hard: false}
+  must_pass: false
   message: Apartments for rent near a metro station in Al Barsha
   domains: [listings, rta]
   accept_lead: [rta]
@@ -193,36 +288,54 @@ cases:
   recipe: null
 
 - id: price_index_trend
+  split: val
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: How has the price index moved over the last 5 years?
   domains: [market]
   joins: []
   recipe: null
 
 - id: construction_cost
+  split: train
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: Show me the construction cost index
   domains: [market]
   joins: []
   recipe: null
 
 - id: valuation
+  split: train
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: Official valuations of villas on Palm Jumeirah
   domains: [transactions]
   joins: [locations]
   recipe: null
 
 - id: freehold_plots
+  split: train
+  tags: {domain: listings, kind: route, hard: false}
+  must_pass: false
   message: How many freehold plots are in Dubai South?
   domains: [listings]
   joins: [locations]
   recipe: null
 
 - id: ejari_contracts
+  split: train
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: Ejari rent contracts in Deira in 2019
   domains: [transactions]
   joins: [locations]
   recipe: null
 
 - id: pivot_schools
+  split: holdout
+  tags: {domain: schools, kind: follow_up, hard: true}
+  must_pass: true
   message: what about schools there?
   turn_kind: pivot
   last_need_db:
@@ -234,6 +347,9 @@ cases:
   recipe: null
 
 - id: pivot_service_charges
+  split: val
+  tags: {domain: regulations, kind: follow_up, hard: true}
+  must_pass: false
   message: and the service charges?
   turn_kind: pivot
   last_need_db:
@@ -245,6 +361,9 @@ cases:
   recipe: null
 
 - id: pivot_new_subject
+  split: train
+  tags: {domain: rta, kind: follow_up, hard: true}
+  must_pass: false
   message: Now show me metro stations in Business Bay
   turn_kind: new
   last_need_db:
@@ -257,60 +376,93 @@ cases:
 
 # Table-targeting cases from the legacy design: cue to pack, handoffs, join bans.
 - id: community_overview_like
+  split: train
+  tags: {domain: locations, kind: route, hard: false}
+  must_pass: false
   message: What's Business Bay like?
   domains: [locations, market]
   recipe: community_overview
 
 - id: agents_for_project
+  split: train
+  tags: {domain: listings, kind: route, hard: false}
+  must_pass: false
   message: which agents have listings in Vita Grande
   domains: [listings]
   joins: [locations]
   recipe: null
 
 - id: communities_overview_three
+  split: train
+  tags: {domain: locations, kind: route, hard: false}
+  must_pass: false
   message: Tell me about Dubai Marina, Al Barsha and Jebel Ali
   domains: [locations, market]
   recipe: communities_overview
 
 - id: offplan_brochure
+  split: train
+  tags: {domain: developers, kind: route, hard: false}
+  must_pass: false
   message: Send me the brochure for Binghatti Lavender
   domains: [developers]
   recipe: null
 
 - id: offplan_payment_plan
+  split: val
+  tags: {domain: developers, kind: route, hard: false}
+  must_pass: false
   message: What is the payment plan for off-plan projects in Dubai Creek Harbour?
   domains: [developers]
   joins: [locations]
   recipe: null
 
 - id: metro_ridership_not_loaded
+  split: train
+  tags: {domain: rta, kind: route, hard: false}
+  must_pass: false
   message: How many people used the metro in March?
   domains: [rta]
   recipe: null
 
 - id: parking_tariff_zone
+  split: train
+  tags: {domain: rta, kind: route, hard: false}
+  must_pass: false
   message: What is the parking tariff in zone B?
   domains: [rta]
   recipe: null
 
 - id: bus_routes_at_stop
+  split: train
+  tags: {domain: rta, kind: route, hard: false}
+  must_pass: false
   message: Which bus routes stop at Al Ghubaiba?
   domains: [rta]
   recipe: null
 
 - id: registered_rents_last_month
+  split: train
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: How many rent contracts were registered in JVC last month?
   domains: [transactions]
   joins: [locations]
   recipe: null
 
 - id: community_yield
+  split: holdout
+  tags: {domain: market, kind: route, hard: false}
+  must_pass: false
   message: What is the rental yield in JVC?
   domains: [market]
   joins: [locations]
   recipe: null
 
 - id: developer_sales_volume
+  split: train
+  tags: {domain: transactions, kind: route, hard: false}
+  must_pass: false
   message: Which developer had the most registered sales in 2025?
   domains: [transactions]
   recipe: null

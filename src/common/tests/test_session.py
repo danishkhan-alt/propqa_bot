@@ -71,6 +71,64 @@ def test_an_older_checkpoint_gives_the_last_turn_the_search_ids():
     assert [turn["listing_ids"] for turn in turns] == [[], ["9"]]
 
 
+def test_a_stored_turn_id_is_the_same_after_another_restore():
+    values = {
+        "messages": [
+            {"type": "human", "content": "Marina"},
+            {
+                "type": "ai",
+                "content": "Two in Marina.",
+                "additional_kwargs": {"turn_id": "turn-marina", "trace_id": "trace-1", "listing_ids": ["1"]},
+            },
+        ]
+    }
+    first, _messages = restore_turns_from_checkpoint(values, limit=30)
+    second, _messages = restore_turns_from_checkpoint(values, limit=30)
+    assert first[0]["turn_id"] == "turn-marina"
+    assert second[0]["turn_id"] == first[0]["turn_id"]
+    assert first[0]["trace_id"] == "trace-1"
+    assert first[0]["listing_ids"] == ["1"]
+
+
+def test_an_older_checkpoint_keeps_the_same_turn_id():
+    values = {
+        "messages": [
+            {"type": "human", "content": "Marina"},
+            {"type": "ai", "content": "Here you go."},
+            {"type": "human", "content": "Thanks"},
+            {"type": "ai", "content": "Anytime."},
+        ]
+    }
+    first, _messages = restore_turns_from_checkpoint(values, limit=30)
+    second, _messages = restore_turns_from_checkpoint(values, limit=1)
+    assert first[0]["turn_id"] != first[1]["turn_id"]
+    assert [turn["turn_id"] for turn in first] == [turn["turn_id"] for turn in restore_turns_from_checkpoint(values, limit=30)[0]]
+    assert second[0]["turn_id"] == first[1]["turn_id"]
+
+
+def test_older_text_matches_the_restored_turn_id():
+    from common.session.transcript import resolve_feedback_turn
+
+    values = {
+        "messages": [
+            {"type": "human", "content": "Marina"},
+            {"type": "ai", "content": "Here you go."},
+            {"type": "human", "content": "Thanks"},
+            {"type": "ai", "content": "Anytime.", "additional_kwargs": {"trace_id": "trace-old"}},
+        ]
+    }
+    restored, _messages = restore_turns_from_checkpoint(values, limit=30)
+    turn_id, trace_id = resolve_feedback_turn(
+        values,
+        turn_id="11111111-1111-1111-1111-111111111111",
+        user_message="Thanks",
+        assistant_message="Anytime.",
+    )
+    assert turn_id == restored[1]["turn_id"]
+    assert trace_id == "trace-old"
+    assert resolve_feedback_turn(values, turn_id=restored[0]["turn_id"], user_message=None, assistant_message=None)[0] == restored[0]["turn_id"]
+
+
 def test_preferences_merge_then_clear():
     user_id = "anon-6f1d7c3e-1b4a-4e2d-9c8a-0a1b2c3d4e5f"
     assert load(user_id) is None

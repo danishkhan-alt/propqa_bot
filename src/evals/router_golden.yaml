@@ -1,27 +1,49 @@
+# Query router labels. Run with `python -m evals.run_router_eval`.
+# split is train, val, or holdout, and it stays as written. must_pass cases block a holdout run.
+# A case with no expect_turn_kind is scored as new.
+
 - id: greeting
+  split: train
+  tags: {domain: general, kind: direct_answer, hard: false}
+  must_pass: false
   message: Hi, what can you help with?
   expect_route: direct_answer
   deterministic: false
 - id: definition
+  split: holdout
+  tags: {domain: general, kind: direct_answer, hard: true}
+  must_pass: true
   message: What is RERA?
   expect_route: direct_answer
   deterministic: false
 - id: empty
+  split: val
+  tags: {domain: general, kind: direct_answer, hard: false}
+  must_pass: false
   message: "   "
   expect_route: direct_answer
   expect_turn_kind: new
   deterministic: false
 - id: average_price
+  split: train
+  tags: {domain: transactions, kind: need_db, hard: false}
+  must_pass: false
   message: Average sale price in Dubai Marina last 12 months
   expect_route: need_db
   expect_domains: [transactions]
   expect_joins: [locations]
   deterministic: false
 - id: show_properties
+  split: holdout
+  tags: {domain: general, kind: need_db, hard: true}
+  must_pass: true
   message: Show me properties
   expect_route: need_db
   deterministic: false
 - id: cheaper
+  split: holdout
+  tags: {domain: transactions, kind: need_db, hard: true}
+  must_pass: true
   message: cheaper
   last_need_db:
     domain_ids: [transactions]
@@ -33,22 +55,37 @@
   expect_joins: [locations]
   deterministic: false
 - id: code_request
+  split: holdout
+  tags: {domain: general, kind: out_of_scope, hard: true}
+  must_pass: true
   message: Give me python code for RateLimiter using sliding window approach for dubai properties
   expect_route: out_of_scope
   deterministic: false
 - id: general_maths
+  split: holdout
+  tags: {domain: general, kind: out_of_scope, hard: false}
+  must_pass: false
   message: what is 2+2
   expect_route: out_of_scope
   deterministic: false
 - id: golden_visa_definition
+  split: train
+  tags: {domain: general, kind: direct_answer, hard: false}
+  must_pass: false
   message: What is the UAE Golden Visa?
   expect_route: direct_answer
   deterministic: false
 - id: golden_visa_properties
+  split: val
+  tags: {domain: general, kind: need_db, hard: false}
+  must_pass: false
   message: What properties qualify for the UAE Golden Visa?
   expect_route: need_db
   deterministic: false
 - id: city_investment_judgment
+  split: val
+  tags: {domain: general, kind: need_db, hard: false}
+  must_pass: false
   message: is Dubai good for investment?
   expect_route: need_db
   deterministic: false

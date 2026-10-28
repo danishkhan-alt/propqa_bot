@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 
 import anthropic
 import openai
@@ -16,6 +17,40 @@ from common.logger import get_logger
 logger = get_logger("agent.router")
 
 _TRANSIENT_CLIENT_STATUS_CODES = frozenset({408, 409, 429})
+
+
+class _FallbackFlag:
+    """A mutable flag so a graph node running in a worker thread can report back.
+
+    ``asyncio.to_thread`` copies the context, not the objects in it. Replacing the
+    context value in the worker would stay there. Mutating this object is visible
+    to the turn that created it.
+    """
+
+    def __init__(self) -> None:
+        self.fired = False
+
+
+_fallback_flag: ContextVar[_FallbackFlag | None] = ContextVar("llm_fallback_fired", default=None)
+
+
+def reset_fallback_fired() -> None:
+    """Clear the flag at the start of a turn. A later call must not inherit it."""
+    _fallback_flag.set(_FallbackFlag())
+
+
+def fallback_fired() -> bool:
+    """True once this turn returned a structured fallback."""
+    flag = _fallback_flag.get()
+    return bool(flag and flag.fired)
+
+
+def note_fallback() -> None:
+    flag = _fallback_flag.get()
+    if flag is None:
+        flag = _FallbackFlag()
+        _fallback_flag.set(flag)
+    flag.fired = True
 
 
 def invoke_structured_with_fallback(
@@ -47,6 +82,7 @@ def invoke_structured_with_fallback(
             extra={"extra_data": {"error": type(first_error).__name__}},
         )
         if is_permanent_api_error(first_error):
+            note_fallback()
             return fallback
         retry = [
             *messages,
@@ -59,6 +95,7 @@ def invoke_structured_with_fallback(
                 "router structured output retry failed",
                 extra={"extra_data": {"error": type(second_error).__name__}},
             )
+            note_fallback()
             return fallback
 
 
@@ -107,6 +144,7 @@ def stream_structured_reply_with_fallback(
         if shown.strip():
             return StructuredReply(intro_text=shown)
         if is_permanent_api_error(exc):
+            note_fallback()
             reply = REPLY_FALLBACK
         else:
             reply = invoke_structured_with_fallback(runnable, messages, config, REPLY_FALLBACK)

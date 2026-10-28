@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 
 from langchain_core.messages import HumanMessage
 from langfuse import propagate_attributes
@@ -11,6 +13,9 @@ from langgraph.types import Command
 from agent.context import AgentContext, AgentModels
 from agent.graph.workflow import get_chat_graph
 from agent.schemas.routes import as_query_route
+from agent.services.llm.calls import fallback_fired, reset_fallback_fired
+from agent.services.prompt_version import prompt_version
+from agent.services.trace_tags import tag_turn_span
 from agent.services.tracing import get_langfuse_client
 from common.logger import get_logger
 
@@ -26,6 +31,7 @@ def run_turn(
     focused_property_ids: list[int] | None = None,
 ) -> dict:
     """Run one user turn. `thread_id` reloads and updates that chat."""
+    reset_fallback_fired()
     client = get_langfuse_client()
     callbacks = _langfuse_callbacks(client)
 
@@ -46,8 +52,14 @@ def run_turn(
     if client is None:
         return invoke()
 
-    with propagate_attributes(user_id=user_id, session_id=thread_id):
-        result = invoke()
+    with propagate_attributes(
+        user_id=user_id,
+        session_id=thread_id,
+        metadata={"prompt_version": prompt_version()},
+    ):
+        with _chat_turn_span(client) as span:
+            result = invoke()
+            tag_turn_span(span, result, fallback_fired=fallback_fired())
     client.flush()
     return result
 
@@ -66,6 +78,7 @@ async def stream_turn(
     focused_property_ids: list[int] | None = None,
 ) -> AsyncIterator[dict]:
     """Yield listing cards and text deltas as the turn runs, then a done event."""
+    reset_fallback_fired()
     compiled = graph or get_chat_graph()
     client = get_langfuse_client()
     config = {
@@ -81,7 +94,7 @@ async def stream_turn(
         listing_detail_loader=listing_detail_loader,
     )
 
-    async def events() -> AsyncIterator[dict]:
+    async def events(span=None) -> AsyncIterator[dict]:
         paused_at_start = await _is_waiting_for_user_reply(compiled, config)
         graph_input = (
             Command(resume=message)
@@ -113,6 +126,7 @@ async def stream_turn(
                     yield {"event": "text", "delta": prompt}
         final = await compiled.aget_state(config)
         values = getattr(final, "values", None) or {}
+        tag_turn_span(span, values, fallback_fired=fallback_fired())
         query = as_query_route(values.get("query_route"))
         yield {
             "event": "done",
@@ -126,9 +140,14 @@ async def stream_turn(
             yield event
         return
 
-    with propagate_attributes(user_id=user_id, session_id=thread_id):
-        async for event in events():
-            yield event
+    with propagate_attributes(
+        user_id=user_id,
+        session_id=thread_id,
+        metadata={"prompt_version": prompt_version()},
+    ):
+        with _chat_turn_span(client) as span:
+            async for event in events(span):
+                yield event
     client.flush()
 
 
@@ -178,6 +197,33 @@ def _interrupt_prompt_text(raw) -> str:
             if prompt:
                 return str(prompt).strip()
     return ""
+
+
+@contextmanager
+def _chat_turn_span(client):
+    """The span whose metadata carries this turn's route, domains, and fallback flag.
+
+    A tracing failure must not fail the reply.
+    """
+    try:
+        observation = client.start_as_current_observation(name="chat-turn", as_type="span")
+    except Exception:
+        logger.warning("langfuse observation failed", exc_info=True)
+        yield None
+        return
+    try:
+        span = observation.__enter__()
+    except Exception:
+        logger.warning("langfuse observation failed", exc_info=True)
+        yield None
+        return
+    try:
+        yield span
+    finally:
+        try:
+            observation.__exit__(*sys.exc_info())
+        except Exception:
+            logger.warning("langfuse observation close failed", exc_info=True)
 
 
 def _langfuse_callbacks(client) -> list:

@@ -17,19 +17,30 @@
 # - rows_contain: text that must appear in the returned rows.
 # `turns` runs a conversation; only the last turn is scored. Listing replies are also checked
 # against the fact sheet of the returned ids.
+# split is train, val, or holdout, and it stays as written. must_pass cases block a holdout run.
+# tags.domain, tags.kind, and tags.hard say where a regression happened.
 
 cases:
 - id: marina_listings
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: true
   message: show me properties in marina
   listings:
     place: [dubai marina]
 
 - id: marina_listings_typo
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: true
   message: properties in dubia marina
   listings:
     place: [dubai marina]
 
 - id: jvc_two_bed_sale_under_budget
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: true
   message: 2 bed apartments for sale in JVC under 1.5M
   listings:
     place: [jumeirah village circle, jumeirah village circle (jvc)]
@@ -42,6 +53,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: dubai_hills_villas_rent
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: villas for rent in Dubai Hills
   listings:
     place: [dubai hills, dubai hills estate]
@@ -50,17 +64,26 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 24)
 
 - id: palm_penthouses
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: cheapest penthouse in Palm Jumeirah
   listings:
     place: [palm jumeirah]
     where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 22)
 
 - id: building_listings
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: properties in Binghatti Lavender
   listings:
     place: [binghatti lavender]
 
 - id: downtown_rentals
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: apartments for rent in downtown
   listings:
     place: [downtown dubai, burj khalifa]
@@ -69,6 +92,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: business_bay_offices
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: offices for sale in Business Bay
   listings:
     place: [business bay]
@@ -77,17 +103,26 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 15)
 
 - id: jlt_flats
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: flats in JLT
   listings:
     place: [jumeirah lake towers, jumeirah lake towers (jlt)]
     where: EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: developer_listings
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me properties by Emaar
   listings:
     where: p.developer ILIKE '%emaar%'
 
 - id: refine_keeps_place
+  split: holdout
+  tags: {domain: listings, kind: multi_turn, hard: true}
+  must_pass: true
   turns:
   - show me apartments in JVC
   - only 2 bedrooms
@@ -98,11 +133,17 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: palm_listings_typo
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: false
   message: show me property in palm jumeriah
   listings:
     place: [palm jumeirah]
 
 - id: business_bay_typo
+  split: train
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: false
   message: show me 2 bedroom apartments in bussiness bay
   listings:
     place: [business bay]
@@ -111,6 +152,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: creek_beach_mangrove
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: Show Me An Apartment In Creek Beach Mangrove Building 2
   listings:
     place: [creek beach mangrove, creek beach mangrove building 2]
@@ -118,6 +162,9 @@ cases:
       EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: marina_and_palm
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me apartments in Dubai Marina and Palm Jumeirah
   listings:
     place: [dubai marina, palm jumeirah]
@@ -125,6 +172,9 @@ cases:
       EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: marina_three_bed
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me apartments of 3 bedroom in dubai marina
   listings:
     place: [dubai marina]
@@ -133,6 +183,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: al_furjan_villas_rent
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show villas for rent in Al Furjan
   listings:
     place: [al furjan]
@@ -141,6 +194,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 24)
 
 - id: business_bay_size_band
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: apartments in Business Bay between 400 and 600 sqft
   listings:
     place: [business bay]
@@ -152,11 +208,17 @@ cases:
     reply_contains_when_relaxed: [size]
 
 - id: golden_visa_listings
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me properties that support Golden Visa eligibility
   listings:
     where: COALESCE(p.price_max, p.price_min) >= 2000000
 
 - id: sale_gym_and_burj_view
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: Apartments for sale with private gym and Burj Khalifa view
   listings:
     where: >-
@@ -174,6 +236,9 @@ cases:
       )
 
 - id: marina_gym_or_pool
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: apartments in Marina with gym or pool
   listings:
     place: [dubai marina]
@@ -193,6 +258,9 @@ cases:
       )
 
 - id: downtown_furnished
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: furnished apartment in Downtown Dubai
   listings:
     place: [downtown dubai, burj khalifa]
@@ -201,6 +269,9 @@ cases:
       AND EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 25)
 
 - id: high_ceilings
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show apartment with high ceilings
   listings:
     text: '"high ceilings"'
@@ -213,6 +284,9 @@ cases:
     reply_omits: [pool]
 
 - id: large_windows_natural_light
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me apartment with large windows and natural light
   listings:
     text: '"large windows" "natural light"'
@@ -221,6 +295,9 @@ cases:
       AND p.search_vector @@ websearch_to_tsquery('english', '"large windows" "natural light"')
 
 - id: villa_double_height
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: villa with double height living room
   listings:
     text: '"double height"'
@@ -236,6 +313,9 @@ cases:
     reply_contains_when_relaxed: [villa]
 
 - id: betterhomes_agency
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: show me properties listed by Betterhomes
   listings:
     where: >-
@@ -247,6 +327,9 @@ cases:
       )
 
 - id: marina_verified_rent
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: >-
     How many verified 2-bedroom apartments are currently for rent in Dubai Marina
     with yearly rent below AED 120,000, area above 900 sqft, and parking included?
@@ -270,6 +353,9 @@ cases:
       )
 
 - id: marina_penthouse_count
+  split: val
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: how many penthouses are present in dubai marina ?
   listings:
     place: [dubai marina]
@@ -278,6 +364,9 @@ cases:
       EXISTS (SELECT 1 FROM public.category_property cp WHERE cp.property_id = p.id AND cp.category_id = 22)
 
 - id: marina_price_miss
+  split: train
+  tags: {domain: listings, kind: listings, hard: false}
+  must_pass: false
   message: apartments for sale in Dubai Marina under AED 1
   listings:
     place: [dubai marina]
@@ -291,11 +380,17 @@ cases:
     reply_contains_when_relaxed: [price]
 
 - id: downtown_not_jebel_ali
+  split: holdout
+  tags: {domain: listings, kind: listings, hard: true}
+  must_pass: true
   message: show me properties in Downtown
   listings:
     place: [downtown dubai, burj khalifa]
 
 - id: marina_average_sale_price
+  split: holdout
+  tags: {domain: warehouse, kind: value, hard: false}
+  must_pass: false
   message: average sale price in Dubai Marina last 12 months
   value:
     tolerance: 0.02
@@ -308,6 +403,9 @@ cases:
       WHERE master_project_en = 'Dubai Marina' AND trans_group_en = 'Sales' AND instance_date >= CURRENT_DATE - INTERVAL '12 months'
 
 - id: downtown_sales_count
+  split: val
+  tags: {domain: warehouse, kind: value, hard: false}
+  must_pass: false
   message: how many sales transactions in downtown in 2025
   value:
     tolerance: 0
@@ -320,6 +418,9 @@ cases:
       WHERE master_project_en = 'DownTown Dubai' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2025
 
 - id: jvc_sales_count
+  split: train
+  tags: {domain: warehouse, kind: value, hard: false}
+  must_pass: false
   message: number of sale transactions in Jumeirah Village Circle in 2024
   value:
     tolerance: 0
@@ -332,6 +433,9 @@ cases:
       WHERE area_name_en = 'Al Barsha South Fourth' AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
 
 - id: dubai_hills_sales_count
+  split: train
+  tags: {domain: warehouse, kind: value, hard: false}
+  must_pass: false
   message: how many properties were sold in Dubai Hills in 2024
   value:
     tolerance: 0
@@ -344,6 +448,9 @@ cases:
       WHERE master_project_en IN ('DUBAI HILLS', 'Dubai Hills Estate') AND trans_group_en = 'Sales' AND EXTRACT(YEAR FROM instance_date) = 2024
 
 - id: jlt_one_bed_rent
+  split: train
+  tags: {domain: warehouse, kind: value, hard: false}
+  must_pass: false
   message: average annual rent for a 1 bed in JLT
   value:
     tolerance: 0.02
@@ -353,43 +460,73 @@ cases:
       WHERE area_name_en = 'Al Thanyah Fifth' AND ejari_property_sub_type_en = '1bed room+Hall'
 
 - id: palm_service_charges
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: what are the service charges in Palm Jumeirah
   sql_contains: ["'Palm Jumeirah'"]
 
 - id: schools_arabian_ranches
+  split: holdout
+  tags: {domain: warehouse, kind: rows, hard: false}
+  must_pass: false
   message: schools near Arabian Ranches
   rows_contain: [Arabian Ranches]
 
 - id: metro_business_bay
+  split: val
+  tags: {domain: warehouse, kind: rows, hard: false}
+  must_pass: false
   message: metro stations near Business Bay
   rows_contain: [Business Bay]
 
 - id: emaar_offplan_2027
+  split: train
+  tags: {domain: warehouse, kind: rows, hard: false}
+  must_pass: false
   message: off-plan projects by Emaar with handover in 2027
   rows_contain: [Emaar]
 
 # Table-targeting cases: the SQL must reach the right table or carry the right join key.
 - id: community_overview_business_bay
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: What's Business Bay like?
   sql_contains: [area_insights_communities, mv_community_landing_metrics]
   rows_contain: [Business Bay]
 
 - id: registered_rents_jvc
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: how many rent contracts were registered in JVC in 2024
   sql_contains: [real_estate_dld_rent_contracts]
 
 - id: bus_routes_ghubaiba
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: which bus routes stop at Al Ghubaiba
   sql_contains: [bus_stops_gis, routes]
 
 - id: parking_tariff_zone_b
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: what is the parking tariff in zone B
   sql_contains: [parking_rates]
 
 - id: offplan_brochure_files
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: brochure for Binghatti Lavender
   sql_contains: [offplan_projects_new, project_files]
 
 - id: community_yield_quality
+  split: train
+  tags: {domain: warehouse, kind: sql_contains, hard: false}
+  must_pass: false
   message: what is the rental yield in Business Bay
   sql_contains: [rental_yield_data_quality]

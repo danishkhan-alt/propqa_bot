@@ -27,7 +27,7 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.schemas.sql import SqlDraft, SqlPage
-from agent.services.llm.calls import invoke_structured_with_fallback
+from agent.services.llm.calls import fallback_fired, invoke_structured_with_fallback, reset_fallback_fired
 from agent.services.llm.providers import is_openai_reasoning_model
 from agent.validator import sanitize_domain_route, sanitize_query_route
 
@@ -347,6 +347,18 @@ def test_stated_purpose_is_kept_as_the_model_set_it():
     assert assumptions is not None
     assert assumptions.purpose == "rent"
     assert assumptions.limit is None
+
+
+def test_a_fallback_is_reported_for_the_turn():
+    class Boom:
+        def invoke(self, messages, config=None):
+            raise ValueError("bad json")
+
+    reset_fallback_fired()
+    assert fallback_fired() is False
+    fallback = QueryRoute(route=Route.NEED_DB, turn_kind=TurnKind.NEW, confidence=0.3, rationale="Fallback.")
+    assert invoke_structured_with_fallback(Boom(), [], None, fallback) is fallback
+    assert fallback_fired() is True
 
 
 def test_structured_output_retries_once_then_uses_the_fallback():

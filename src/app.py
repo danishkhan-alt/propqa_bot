@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,7 @@ from agent.grounding import get_grounding_cache
 from agent.memory.routes import router as memory_router
 from auth.middleware import AuthMiddleware
 from auth.tokens import signing_key
+from common.feedback import MemoryFeedbackStore
 from common.http import register_exception_handlers
 from common.logger import configure_logging
 from common.middleware import CallerMiddleware, RateLimitMiddleware, RequestIdMiddleware
@@ -17,6 +20,7 @@ from common.middleware.rate_limit import DEFAULT_EXEMPT_PREFIXES
 from config import ActiveConfig
 from routes.auth import router as auth_router
 from routes.chat import router as chat_router
+from routes.feedback import router as feedback_router
 from routes.leads import router as leads_router
 from routes.sessions import router as session_router
 
@@ -35,6 +39,7 @@ def create_app(
     listing_detail_loader=None,
     contact_loader=None,
     user_repository=None,
+    feedback_store=None,
 ) -> FastAPI:
     # A deployed app without a usable JWT key must not start.
     signing_key()
@@ -46,9 +51,13 @@ def create_app(
     app.state.listing_detail_loader = listing_detail_loader
     app.state.contact_loader = contact_loader
     app.state.user_repository = user_repository
+    if feedback_store is None and os.environ.get("PYTEST_CURRENT_TEST"):
+        feedback_store = MemoryFeedbackStore()
+    app.state.feedback_store = feedback_store
     register_exception_handlers(app)
     app.include_router(auth_router, prefix="/api")
     app.include_router(chat_router, prefix="/api")
+    app.include_router(feedback_router, prefix="/api")
     app.include_router(session_router, prefix="/api")
     app.include_router(leads_router, prefix="/api")
     app.include_router(memory_router, prefix="/api")

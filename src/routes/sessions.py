@@ -14,6 +14,7 @@ from agent.memory.models.records import ALL_CLUSTERS
 from agent.memory.session.backends import get_repository
 from agent.sql.cards import fetch_listing_card_rows, fetch_listing_cards
 from auth.middleware import require_user_id
+from common.feedback import attach_votes, feedback_store_for
 from common.logger import get_logger
 from common.session import (
     GUEST_USER_ID_PREFIX,
@@ -53,6 +54,7 @@ async def session_turns(request: Request, session_id: str, limit: int = 30) -> d
     values = getattr(snapshot, "values", None) or {}
     turns, messages = restore_turns_from_checkpoint(values, limit=limit)
     await _attach_listing_cards(request, turns)
+    _attach_thumbs(request, thread_id, turns)
     return {
         "session_id": thread_id,
         "turns": turns,
@@ -129,6 +131,20 @@ def delete_preferences(user_id: str, session_id: str | None = None) -> dict:
     del session_id
     preferences.clear(_require_user(user_id))
     return {"status": "deleted"}
+
+
+def _attach_thumbs(request: Request, session_id: str, turns: list[dict]) -> None:
+    """Mark each turn with the stored vote. A missing table leaves both flags false."""
+    votes: dict[str, str] = {}
+    store = feedback_store_for(request)
+    if store is not None:
+        try:
+            votes = store.votes_for(session_id)
+        except Exception:
+            logger.warning("could not load thumbs for %s", session_id, exc_info=True)
+    attach_votes(turns, votes)
+    for turn in turns:
+        turn.pop("trace_id", None)
 
 
 async def _attach_listing_cards(request: Request, turns: list[dict]) -> None:
