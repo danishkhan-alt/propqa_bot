@@ -177,6 +177,82 @@ def test_graph_declines_an_out_of_scope_request_without_a_model_reply():
     assert models.answer_calls == 0
 
 
+def test_graph_declines_bare_arithmetic_without_a_model_reply():
+    models = ScriptedModels()
+    state = _turn(build_chat_graph(InMemorySaver()), "what is 2+2", "t-maths", models)
+    route = as_query_route(state["query_route"])
+    assert route is not None
+    assert route.route is Route.OUT_OF_SCOPE
+    assert state["messages"][-1].content == OUT_OF_SCOPE_REPLY
+    assert models.domain_calls == 0
+    assert models.answer_calls == 0
+
+
+def test_property_arithmetic_is_left_on_the_model_route():
+    route = QueryRoute(
+        route=Route.DIRECT_ANSWER,
+        turn_kind=TurnKind.NEW,
+        confidence=0.9,
+        rationale="Mortgage arithmetic on a purchase.",
+    )
+    updated, notes = sanitize_query_route(
+        route, None, "what is the mortgage payment on a 2,000,000 AED apartment"
+    )
+    assert updated.route is Route.DIRECT_ANSWER
+    assert "bare_arithmetic" not in notes
+
+
+def test_a_named_place_list_uses_listing_search():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        names=[NameMention(text="marina")],
+        confidence=0.9,
+        rationale="Properties in a place.",
+    )
+    updated, notes = sanitize_query_route(route, None, "show me properties in marina")
+    assert updated.listing_filters is not None
+    assert "listing_search_for_place" in notes
+
+
+def test_an_aggregate_or_schools_question_does_not_start_a_listing_search():
+    aggregate = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.AGGREGATE,
+        names=[NameMention(text="Dubai Marina")],
+        confidence=0.9,
+        rationale="An average.",
+    )
+    schools = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        names=[NameMention(text="Arabian Ranches")],
+        confidence=0.9,
+        rationale="Schools.",
+    )
+    averaged, _ = sanitize_query_route(aggregate, None, "average sale price in Dubai Marina")
+    schooled, _ = sanitize_query_route(schools, None, "schools near Arabian Ranches")
+    assert averaged.listing_filters is None
+    assert schooled.listing_filters is None
+
+
+def test_a_compare_of_two_places_keeps_the_locations_join():
+    route = DomainRoute(
+        domain_ids=["transactions"],
+        join_ids=[],
+        confidence=0.9,
+        rationale="Compare two areas.",
+    )
+    cleaned, notes = sanitize_domain_route(route, "Compare sale prices in JVC and JLT")
+    assert cleaned.join_ids == ["locations"]
+    assert "restored_locations_join" in notes
+    left, _ = sanitize_domain_route(route, "Official valuations of villas on Palm Jumeirah")
+    assert left.join_ids == []
+
+
 def test_graph_routes_a_greeting_without_the_domain_router():
     models = ScriptedModels()
     state = _turn(build_chat_graph(InMemorySaver()), "Hi, what can you help with?", "t-hi", models)

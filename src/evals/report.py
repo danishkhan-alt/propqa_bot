@@ -1,8 +1,9 @@
 """One JSON report for a router, domain, and lookup run.
 
 A must_pass miss blocks the run. So does a holdout result-correctness drop of
-more than two points against the saved baseline. Latency, fallback rate, and
-cost are recorded and never block on their own.
+more than two points against the saved baseline. Latency, fallback rate, cost,
+and the share of data-backed replies with an ungrounded number are recorded
+and never block on their own.
 """
 
 from __future__ import annotations
@@ -48,7 +49,11 @@ def percent(passed: int, total: int) -> float | None:
     return round(100.0 * passed / total, 2)
 
 
-def build_report(split: str | None, rows: list[EvalRow]) -> dict[str, Any]:
+def build_report(
+    split: str | None,
+    rows: list[EvalRow],
+    answer_grounding: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     by_suite = {"router": [], "domain": [], "sql": []}
     for row in rows:
         by_suite[row.suite].append(row)
@@ -71,7 +76,20 @@ def build_report(split: str | None, rows: list[EvalRow]) -> dict[str, Any]:
         "fallback_rate": _fallback_rate(rows),
         "cost_usd": None,
         "must_pass_failures": failures,
+        "answer_grounding": answer_grounding
+        or {"data_backed": 0, "ungrounded": 0, "share": None},
         "cases": [asdict(row) for row in rows],
+    }
+
+
+def grounding_summary(scores: list) -> dict[str, Any]:
+    """Share of data-backed lookup replies that contain a number the lookup does not support."""
+    backed = [score for score in scores if getattr(score, "data_backed", False)]
+    flagged = [score for score in backed if getattr(score, "ungrounded", None)]
+    return {
+        "data_backed": len(backed),
+        "ungrounded": len(flagged),
+        "share": None if not backed else round(len(flagged) / len(backed), 4),
     }
 
 
@@ -116,6 +134,7 @@ def format_summary(report: dict[str, Any]) -> str:
         _metric_line("domain accuracy", metrics["domain_accuracy"], counts["domain"]),
         _metric_line("result correctness", metrics["result_correctness"], counts["sql"]),
         _side_line(report),
+        _grounding_line(report),
     ]
     failures = report["must_pass_failures"]
     if failures:
@@ -138,6 +157,15 @@ def _side_line(report: dict[str, Any]) -> str:
     fallback_shown = "n/a" if fallback is None else f"{fallback:.1%}"
     cost = "n/a" if report["cost_usd"] is None else f"{report['cost_usd']}"
     return f"latency mean {mean} p50 {p50} | fallback {fallback_shown} | cost {cost}"
+
+
+def _grounding_line(report: dict[str, Any]) -> str:
+    grounding = report.get("answer_grounding") or {}
+    share = grounding.get("share")
+    shown = "n/a" if share is None else f"{share:.1%}"
+    flagged = grounding.get("ungrounded", 0)
+    backed = grounding.get("data_backed", 0)
+    return f"ungrounded numbers: {shown} ({flagged}/{backed} data-backed replies)"
 
 
 def _latency(rows: list[EvalRow]) -> dict[str, float | None]:

@@ -116,6 +116,35 @@ def test_an_empty_result_retries_with_the_values_the_column_holds():
     assert update["sql_rows"] == [{"avg_price": 90000}]
 
 
+def test_a_place_filter_moves_to_the_column_that_stores_the_name():
+    from agent.enums.listing import MentionKind
+    from agent.schemas.grounding import GroundedName, Grounding, StoredMatch
+
+    grounding = Grounding(
+        names=[
+            GroundedName(
+                text="Arabian Ranches",
+                kind=MentionKind.PLACE,
+                stored=[
+                    StoredMatch(
+                        table="chatbot_ai.ps_schools",
+                        column="area",
+                        value="Arabian Ranches",
+                        kind="community",
+                    )
+                ],
+            )
+        ]
+    )
+    checked = check_filter_values(
+        "SELECT school_name FROM chatbot_ai.ps_schools WHERE location = 'Arabian Ranches'",
+        grounding,
+    )
+    folded = checked.sql.lower()
+    assert "area = 'arabian ranches'" in folded
+    assert "location" not in folded
+
+
 def test_the_stored_spelling_is_what_runs():
     models = _Drafts([f"SELECT COUNT(*) AS n FROM {SALES} WHERE area_name_en = 'Al Mamzer'"])
     ran: list[str] = []

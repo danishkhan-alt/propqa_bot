@@ -13,7 +13,7 @@ from evals.cases import (
     validate_cases,
 )
 from evals.domain_score import score_route
-from evals.report import EvalRow, build_report, exit_code, sentence
+from evals.report import EvalRow, build_report, exit_code, format_summary, sentence
 from evals.router_score import score_query_case
 
 MUST_PASS = {
@@ -166,3 +166,14 @@ def test_report_round_trip_keeps_the_three_scores(tmp_path):
     assert loaded["metrics"]["route_accuracy"] == 100.0
     assert loaded["metrics"]["result_correctness"] is None
     assert loaded["must_pass_failures"] == []
+    assert loaded["answer_grounding"]["share"] is None
+
+
+def test_ungrounded_share_is_printed_and_does_not_block():
+    report = build_report(
+        "holdout",
+        [EvalRow("sql", "average_sale_price_period", True, "PASS average_sale_price_period: ok.", True, "holdout")],
+        answer_grounding={"data_backed": 4, "ungrounded": 1, "share": 0.25},
+    )
+    assert "ungrounded numbers: 25.0% (1/4 data-backed replies)" in format_summary(report)
+    assert exit_code(report, {"metrics": {"result_correctness": 100.0}}) == 0

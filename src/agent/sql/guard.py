@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 import sqlglot
 from sqlglot import exp
 
+from agent.grounding.stored_values import PLACE_KIND_ORDER
 from agent.schemas.sql import SegmentRule
+from agent.sql.filter_values import _catalog_facts
 from agent.sql.listing_sql_fragments import LISTINGS_TABLE
-from catalog import load_domains
+from catalog import list_domains, load_domain, load_domains
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -92,16 +95,116 @@ def blended_average_reasons(sql: str, rules: dict[str, SegmentRule]) -> list[str
             continue
         seen.add(rule.table)
         if rule.segments and not split.intersection(rule.segments):
-            reasons.append(
-                f"The average over {rule.table} mixes kinds of property. Group by one of "
-                f"{', '.join(rule.segments)} (or filter to the one the user named), with a count per group."
-            )
+            if not _scoped_to_one_place(statement):
+                reasons.append(
+                    f"The average over {rule.table} mixes kinds of property. Group by one of "
+                    f"{', '.join(rule.segments)} (or filter to the one the user named), with a count per group."
+                )
         missing = [column for column in rule.basis if column not in split]
         if missing:
             reasons.append(
                 f"The average over {rule.table} mixes different measures. Filter or group by {', '.join(missing)}."
             )
     return reasons
+
+
+_ONE_FIGURE = re.compile(r"\b(?:average|mean|median|typical)\b", re.IGNORECASE)
+_KIND_SPLIT = re.compile(
+    r"\b(?:by|per|for each|split by|broken down by)\s+(?:\w+\s+){0,2}"
+    r"(?:type|types|subtype|sub-type|bedroom|bedrooms|bed|beds|room|rooms|layout)s?\b",
+    re.IGNORECASE,
+)
+
+
+def wants_one_overall_figure(message: str) -> bool:
+    """One average or median for a place or a period, not a split by kind of property."""
+    return bool(_ONE_FIGURE.search(message or "")) and not bool(_KIND_SPLIT.search(message or ""))
+
+
+def overall_figure_sql(sql: str, message: str, rules: dict[str, SegmentRule]) -> str:
+    """Turn a property-kind breakdown into the one figure the user asked for.
+
+    A grouped median by flat, villa, or bedrooms answers a different question from
+    "the average in this place". Place and time groupings are left as written.
+    """
+    if not wants_one_overall_figure(message):
+        return sql
+    try:
+        statement = sqlglot.parse_one(sql or "", read="postgres")
+    except sqlglot.errors.ParseError:
+        return sql
+    if not isinstance(statement, exp.Query):
+        return sql
+    segments = _segment_names(rules)
+    for select in statement.find_all(exp.Select):
+        group = select.args.get("group")
+        if group is None:
+            _use_asked_aggregate(select, message)
+            continue
+        keys = [column.name.lower() for key in group.expressions for column in key.find_all(exp.Column)]
+        if not keys or not set(keys) <= segments:
+            continue
+        select.set("group", None)
+        select.set("having", None)
+        select.set("order", None)
+        kept = [projection for projection in select.expressions if not _is_segment_label(projection, segments)]
+        if kept:
+            select.set("expressions", kept)
+        _use_asked_aggregate(select, message)
+    return statement.sql(dialect="postgres")
+
+
+def _segment_names(rules: dict[str, SegmentRule]) -> set[str]:
+    names: set[str] = set()
+    for rule in rules.values():
+        names.update(rule.segments)
+    return names
+
+
+def _is_segment_label(projection: exp.Expression, segments: set[str]) -> bool:
+    if projection.find(exp.AggFunc) or projection.find(exp.WithinGroup):
+        return False
+    columns = list(projection.find_all(exp.Column))
+    return bool(columns) and all(column.name.lower() in segments for column in columns)
+
+
+def _use_asked_aggregate(select: exp.Select, message: str) -> None:
+    """AVG when they asked for an average. A median stays only when they asked for one."""
+    if re.search(r"\b(?:median|typical)\b", message, re.IGNORECASE) and not re.search(
+        r"\b(?:average|mean)\b", message, re.IGNORECASE
+    ):
+        return
+    for node in list(select.find_all(exp.WithinGroup, exp.Median)):
+        column = next(iter(node.find_all(exp.Column)), None)
+        if column is None:
+            continue
+        node.replace(exp.Avg(this=column.copy()))
+
+
+def _scoped_to_one_place(statement: exp.Expression) -> bool:
+    """True when a filter pins one stored place, so one average is the figure for that place."""
+    places = _place_columns()
+    if not places:
+        return False
+    for node in statement.find_all(exp.EQ, exp.In):
+        column = node.this if isinstance(node.this, exp.Column) else None
+        if column is None or column.name.lower() not in places:
+            continue
+        if isinstance(node, exp.EQ) and isinstance(node.expression, exp.Literal) and node.expression.is_string:
+            return True
+        if isinstance(node, exp.In) and any(isinstance(item, exp.Literal) and item.is_string for item in node.expressions):
+            return True
+    return False
+
+
+@lru_cache(maxsize=1)
+def _place_columns() -> frozenset[str]:
+    found: set[str] = set()
+    for listed in list_domains():
+        for item in load_domain(str(listed["id"])).get("named_values") or []:
+            if str(item.get("kind") or "") in PLACE_KIND_ORDER and item.get("column"):
+                found.add(str(item["column"]).lower())
+    return frozenset(found)
 
 
 _AVERAGES = (exp.Avg, exp.Median)
@@ -198,6 +301,7 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     unknown = sorted(name for name in referenced if name not in allowed_tables)
     if unknown:
         raise SqlRejected("Query uses tables outside the loaded catalog")
+    _drop_unknown_output_columns(statement)
     constant = _condition_on_no_column(statement)
     if constant is not None:
         raise SqlRejected(
@@ -213,14 +317,75 @@ def prepare_select(sql: str, allowed_tables: set[str], row_cap: int) -> str:
     return capped.sql(dialect="postgres")
 
 
+def _drop_unknown_output_columns(statement: exp.Expression) -> None:
+    """Drop a selected column the table does not have, when the select still has another column.
+
+    A coordinate the catalog does not list should not fail a lookup that already names the place.
+    A statement whose every column is unknown is left for the database error, which lists the real ones.
+    """
+    facts = _catalog_facts()
+    for select in statement.find_all(exp.Select):
+        sources = _select_sources(select)
+        kept: list[exp.Expression] = []
+        dropped = False
+        for projection in select.expressions:
+            column = _bare_column(projection)
+            if column is not None and _column_is_unknown(column, sources, facts):
+                dropped = True
+                continue
+            kept.append(projection)
+        if dropped and kept:
+            select.set("expressions", kept)
+
+
+def _bare_column(projection: exp.Expression) -> exp.Column | None:
+    if isinstance(projection, exp.Column):
+        return projection
+    if isinstance(projection, exp.Alias) and isinstance(projection.this, exp.Column):
+        return projection.this
+    return None
+
+
+def _column_is_unknown(column: exp.Column, sources: dict[str, str], facts: dict) -> bool:
+    if column.table:
+        table = sources.get(column.table.lower())
+    elif len(sources) == 1:
+        table = next(iter(sources.values()))
+    else:
+        return False
+    if table is None:
+        return False
+    known = facts.get(table)
+    if known is None:
+        bare = table.rsplit(".", 1)[-1]
+        known = facts.get(bare)
+    if known is None or not known.columns:
+        return False
+    return column.name.lower() not in known.columns
+
+
+def _select_sources(select: exp.Select) -> dict[str, str]:
+    tables: list[exp.Expression] = []
+    source = select.args.get("from") or select.args.get("from_")
+    if source is not None:
+        tables.append(source.this)
+    tables.extend(join.this for join in select.args.get("joins") or [])
+    sources: dict[str, str] = {}
+    for table in tables:
+        if isinstance(table, exp.Table) and table.name:
+            key = f"{table.db.lower()}.{table.name.lower()}" if table.db else table.name.lower()
+            sources[table.alias_or_name.lower()] = key
+    return sources
+
+
 _COMPARISONS = (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.Like, exp.ILike, exp.In, exp.Is)
 
 
 def _condition_on_no_column(statement: exp.Expression) -> str | None:
-    """A WHERE or HAVING comparison with no column or subquery in it, such as LOWER('Villa') LIKE '%villa%'."""
+    """A WHERE or HAVING comparison with no column, aggregate, or subquery in it, such as LOWER('Villa') LIKE '%villa%'."""
     for clause in [*statement.find_all(exp.Where), *statement.find_all(exp.Having)]:
         for node in clause.find_all(*_COMPARISONS):
-            if node.find(exp.Column) is None and node.find(exp.Select) is None:
+            if node.find(exp.Column) is None and node.find(exp.Select) is None and node.find(exp.AggFunc) is None:
                 return node.sql(dialect="postgres")
     return None
 

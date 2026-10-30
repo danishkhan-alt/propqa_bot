@@ -110,7 +110,7 @@ def choose_data_domains(
             config=config,
         )
 
-    route, sanitize_notes = sanitize_domain_route(route)
+    route, sanitize_notes = sanitize_domain_route(route, message)
     notes.extend(sanitize_notes)
     logger.info(
         "router.domain",

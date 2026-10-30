@@ -1,0 +1,88 @@
+%% Current chat and eval architecture.
+%% BLOCKED: marina_listings_typo. The search is correct (truth 176, returned 10,
+%% total 176, wrong 0). The listing checker treats
+%% "number of properties in Dubai Marina is 176" as an unsupported price.
+%% _COUNT_CLAIM in src/evals/listing_score.py only matches "there are N" or
+%% "N properties". The number comes after the noun, so inventory_total is never
+%% consulted. must_pass fails and Phase 4 stays closed.
+%% The ungrounded-number share is printed and does not fail the run.
+
+flowchart TD
+  ui[Chat UI]
+  chatApi["POST /api/chat"]
+  thumbsApi["POST /api/feedback/thumbs"]
+  turnsApi["GET /sessions/turns"]
+
+  ui --> chatApi
+  ui --> thumbsApi
+  ui --> turnsApi
+
+  subgraph turn [LangGraph turn]
+    loadSession[load_session_context]
+    focused[load_focused_listings]
+    recall[recall_long_term_memories]
+    forget[check_forget_request]
+    queryRoute[choose_query_route]
+    domainRoute[choose_data_domains]
+    catalog[load_domain_catalog]
+    names[resolve_mentioned_names]
+    lookup[run_warehouse_lookup]
+    reply[write_reply]
+    numberCheck[grounding_check after stream]
+    memoryWrite[queue_memory_extraction]
+  end
+
+  chatApi --> loadSession
+  loadSession -->|listings picked on screen| focused
+  loadSession -->|normal message| recall
+  focused --> reply
+  recall --> forget
+  forget -->|forget| askForget[ask_before_forgetting_memory]
+  forget -->|continue| queryRoute
+  queryRoute -->|greeting or out of scope| reply
+  queryRoute -->|need database| domainRoute
+  domainRoute -->|no domain| reply
+  domainRoute -->|domains chosen| catalog
+  catalog --> names
+  names --> lookup
+  lookup -->|listing search or drafted SQL| reply
+  reply --> numberCheck
+  numberCheck --> memoryWrite
+
+  subgraph stores [Stores]
+    redisCkpt[Redis checkpoint]
+    chatPg["Chat Postgres: chat_feedback"]
+    warehouse[Warehouse Postgres]
+    langfuse["Langfuse: user_feedback and answer_grounding"]
+  end
+
+  loadSession --> redisCkpt
+  memoryWrite --> redisCkpt
+  thumbsApi --> chatPg
+  turnsApi --> chatPg
+  names --> warehouse
+  lookup --> warehouse
+  numberCheck --> langfuse
+  thumbsApi --> langfuse
+
+  subgraph gate [Holdout gate]
+    yaml["Golden YAML: train, val, holdout"]
+    runAll["python -m evals.run_all --split holdout"]
+    routerScore["route accuracy 100 percent"]
+    domainScore["domain accuracy 100 percent"]
+    resultScore["result correctness 88.9 percent"]
+    listingJudge[listing justification]
+    countGap["BLOCKED: count pattern misses is 176"]
+    mustFail["exit 1: marina_listings_typo"]
+    phase4[Phase 4 GEPA stays closed]
+  end
+
+  yaml --> runAll
+  runAll --> routerScore
+  runAll --> domainScore
+  runAll --> resultScore
+  runAll --> listingJudge
+  reply -.->|same streamed reply| listingJudge
+  listingJudge --> countGap
+  countGap --> mustFail
+  mustFail --> phase4

@@ -14,9 +14,11 @@ from evals.listing_score import judge_fields
 
 _SYSTEM = """You check a property-search reply against the listings that were returned.
 
-You are given the user's words, the filters the search applied, notes about any filter that was dropped, and a fact sheet of the returned listings. The fact sheet is the only evidence for prices, bedroom counts, places, types, amenities, views, and counts.
+You are given the user's words, the filters the search applied, notes about any filter that was dropped, a fact sheet of the returned listings, and inventory_total when the search counted the whole inventory. The fact sheet is the only evidence for prices, bedroom counts, places, types, amenities, views, completion, furnished, and counts.
 
-Flag a claim only when the reply states a price, bedroom count, place, property type, amenity, view, or inventory count that the fact sheet and the notes do not support. Ignore tone, advice, and wording. A number may be written with commas or rounded in words when it matches a fact. When a note says a filter was dropped, the reply may say so; it may not say that filter still applies.
+An inventory count is supported when it equals inventory_total. A count of the rows on this page is not the inventory when inventory_total is missing. Completion, including off-plan, and furnished may be stated when that returned listing's row says so. A building or project name on the sheet may be stated. A rent may be stated per month, week, or year when it is the same money as rent_aed for rental_period: a yearly rent divided by 12 is the monthly figure, divided by 52 is the weekly figure, and a monthly rent times 12 is the yearly figure. A price, a size, or a place that is not on the sheet is still unsupported.
+
+Flag a claim only when the reply states a price, bedroom count, place, property type, amenity, view, or inventory count that the fact sheet, inventory_total, and the notes do not support. Ignore tone, advice, and wording. A number may be written with commas or rounded in words when it matches a fact. When a note says a filter was dropped, the reply may say so; it may not say that filter still applies.
 
 Copy each unsupported claim as a short phrase from the reply. Leave unsupported_claims empty when every concrete claim is supported.
 """
@@ -38,6 +40,7 @@ def judge_listing_reply(
     filters: list[str],
     notes: list[str],
     facts: list[dict],
+    inventory_total: int | None = None,
 ) -> list[str]:
     """Unsupported concrete claims, or a single failure phrase when the check itself fails."""
     _router, answer, _sql = build_chat_models()
@@ -52,6 +55,7 @@ def judge_listing_reply(
         "reply": reply,
         "filters": filters,
         "search_notes": notes,
+        "inventory_total": inventory_total,
         "listings": [judge_fields(fact) for fact in facts],
     }
     messages = [

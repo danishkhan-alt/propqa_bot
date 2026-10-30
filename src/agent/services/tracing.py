@@ -67,3 +67,34 @@ def write_user_feedback(client, trace_id: str | None, thumbs: str, comment: str 
             flush()
     except Exception:
         logger.warning("langfuse user_feedback score failed", exc_info=True)
+
+
+def record_answer_grounding(trace_id: str | None, flags: list[str]) -> None:
+    """Write an `answer_grounding` score on the turn's trace. Missing keys are a no-op."""
+    client = get_langfuse_client()
+    if client is None:
+        return
+    write_answer_grounding(client, trace_id, flags)
+
+
+def write_answer_grounding(client, trace_id: str | None, flags: list[str]) -> None:
+    """1.0 when every number is in the lookup, 0.0 when one is not. The reply text stays as streamed."""
+    if client is None or not trace_id:
+        return
+    comment = " ".join(flag.strip() for flag in flags if flag and flag.strip()) or None
+    if comment and len(comment) > 2000:
+        comment = comment[:2000]
+    try:
+        client.create_score(
+            name="answer_grounding",
+            value=0.0 if flags else 1.0,
+            trace_id=trace_id,
+            score_id=f"answer_grounding:{trace_id}",
+            data_type="NUMERIC",
+            comment=comment,
+        )
+        flush = getattr(client, "flush", None)
+        if callable(flush):
+            flush()
+    except Exception:
+        logger.warning("langfuse answer_grounding score failed", exc_info=True)

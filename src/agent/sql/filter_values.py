@@ -70,6 +70,7 @@ def check_filter_values(sql: str, grounding: Grounding | None, typed_names: list
     grounded = _grounded_values_by_column(grounding)
     corrections: list[str] = []
     problems: list[str] = []
+    corrections.extend(_retarget_place_columns(statement, grounding))
     for column, literals in _filtered_literals(statement):
         table = _table_of(column)
         if table is None:
@@ -202,6 +203,63 @@ def _statement_tables(statement: exp.Expression) -> set[str]:
 
 def _table_key(table: exp.Table) -> str:
     return f"{table.db.lower()}.{table.name.lower()}" if table.db else table.name.lower()
+
+
+def _retarget_place_columns(statement: exp.Expression, grounding: Grounding | None) -> list[str]:
+    """Point a place filter at the column that stores the name, when this table has one.
+
+    Filtering `location = 'Arabian Ranches'` on a table that stores the place in `area`
+    returns no rows. The stored column on that same table is the one that matches.
+    """
+    if grounding is None:
+        return []
+    by_table: dict[str, list[tuple[str, str, str]]] = {}
+    for name in grounding.names:
+        for match in name.stored:
+            table = match.table.lower()
+            entry = (name.text, match.column.lower(), match.value)
+            for key in {table, table.rsplit(".", 1)[-1]}:
+                by_table.setdefault(key, []).append(entry)
+    if not by_table:
+        return []
+    corrections: list[str] = []
+    for column, literals in _filtered_literals(statement):
+        table = _table_of(column)
+        if table is None:
+            select = column.find_ancestor(exp.Select)
+            sources = _sources(select) if select is not None else {}
+            if len(sources) == 1:
+                table = next(iter(sources.values()))
+        if table is None:
+            continue
+        stored = by_table.get(table) or by_table.get(table.rsplit(".", 1)[-1]) or []
+        if not stored or any(column_name == column.name.lower() for _, column_name, _ in stored):
+            continue
+        for literal in literals:
+            match = _one_stored_column(literal.this, stored)
+            if match is None:
+                continue
+            column_name, value = match
+            previous = column.name
+            typed = literal.this
+            column.set("this", exp.to_identifier(column_name))
+            literal.replace(exp.Literal.string(value))
+            corrections.append(f"{table}.{previous}: '{typed}' -> {column_name} = '{value}'")
+    return corrections
+
+
+def _one_stored_column(typed: str, stored: list[tuple[str, str, str]]) -> tuple[str, str] | None:
+    wanted = normalize_name(typed)
+    hits = [
+        (column_name, value)
+        for text, column_name, value in stored
+        if normalize_name(text) == wanted or normalize_name(value) == wanted or is_typo_of(typed, text)
+    ]
+    columns = {column_name: value for column_name, value in hits}
+    if len(columns) != 1:
+        return None
+    column_name, value = next(iter(columns.items()))
+    return column_name, value
 
 
 def _grounded_values_by_column(grounding: Grounding | None) -> dict[tuple[str, str], list[tuple[str, str]]]:

@@ -32,6 +32,7 @@ from agent.services.llm.fallbacks import REPLY_FALLBACK
 from agent.sql.execute import fetch_reference_rows
 from common.db import close_pools
 from evals.cases import SQL_PATH, load_suite, select_cases
+from agent.reply.grounding_check import ungrounded_numbers
 from evals.listing_facts import fetch_fact_sheet, fetch_truth_ids
 from evals.listing_justification import judge_listing_reply
 from evals.listing_score import TurnOutcome, score_listing_result
@@ -49,6 +50,8 @@ class CaseScore:
     must_pass: bool = False
     split: str = ""
     fallback: bool = False
+    data_backed: bool = False
+    ungrounded: list[str] = field(default_factory=list)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,6 +88,7 @@ def evaluate(cases: list[dict], *, quiet: bool = False) -> tuple[int, list[CaseS
             except Exception as exc:
                 outcome = TurnOutcome(error=f"{type(exc).__name__}: {exc}"[:300])
                 score = _score(case, outcome)
+            _attach_grounding(score)
             scores.append(score)
             if not quiet:
                 mark = "PASS" if score.passed else "FAIL"
@@ -141,9 +145,36 @@ def _record_node_update(update: dict, outcome: TurnOutcome) -> None:
             outcome.total = result.get("total")
             outcome.notes = list(result.get("notes") or [])
             outcome.filters = [str(item) for item in (result.get("filters") or [])]
+            outcome.coverage = list(result.get("coverage") or [])
             outcome.listing_ids = [str(item) for item in value.get("listing_ids") or []]
         if node == "write_reply" and value.get("messages"):
             outcome.reply = str(value["messages"][-1].content)
+
+
+def _attach_grounding(score: CaseScore) -> None:
+    """Record ungrounded numbers on a lookup that returned rows or listings.
+
+    The listing pass/fail stays the justification already stored on the score.
+    """
+    outcome = score.outcome
+    backed = bool(outcome.rows or outcome.listing_ids or score.facts) and not outcome.error
+    score.data_backed = backed
+    if not backed:
+        return
+    if outcome.total is not None:
+        count = int(outcome.total)
+    elif outcome.listing_ids:
+        count = len(outcome.listing_ids)
+    else:
+        count = None
+    score.ungrounded = ungrounded_numbers(
+        outcome.reply,
+        rows=outcome.rows,
+        listings=score.facts,
+        listing_count=count,
+        filters=outcome.filters,
+        coverage=outcome.coverage,
+    )
 
 
 def _score(case: dict, outcome: TurnOutcome) -> CaseScore:
@@ -199,6 +230,7 @@ def _justify(case: dict, outcome: TurnOutcome, facts: list[dict]) -> list[str]:
             filters=outcome.filters,
             notes=outcome.notes,
             facts=facts,
+            inventory_total=outcome.total,
         )
     except Exception as exc:
         return [f"justification check failed: {type(exc).__name__}"]

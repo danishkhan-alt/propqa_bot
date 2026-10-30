@@ -64,6 +64,23 @@ SELECT
     COALESCE(p.price_max, p.price_min) AS asking_price_aed,
     p.area AS area_sqft,
     p.developer,
+    p.completion_status AS completion,
+    p.furnished,
+    p.price_min AS asking_price_min_aed,
+    p.price_max AS asking_price_max_aed,
+    CASE
+        WHEN p.purpose ILIKE '%%rent%%' THEN
+            CASE lower(COALESCE(p.rental_period, 'yearly'))
+                WHEN 'monthly' THEN p.monthly_price
+                WHEN 'weekly' THEN p.weekly_price
+                WHEN 'daily' THEN p.daily_price
+                ELSE p.yearly_price
+            END
+        ELSE NULL
+    END AS rent_aed,
+    lower(COALESCE(p.rental_period, 'yearly')) AS rental_period,
+    building.name_en AS building,
+    project.name_en AS project,
     p.address_en AS address,
     COALESCE(lv.title_en, master.name_en) AS community,
     (p.location_v2_id IN (SELECT id FROM v2_place)) AS place_v2,
@@ -107,6 +124,8 @@ SELECT
 FROM public.properties p
 LEFT JOIN public.locations_v2 lv ON lv.id = p.location_v2_id
 LEFT JOIN public.locations master ON master.id = p.location_master_project_id
+LEFT JOIN public.locations building ON building.id = p.location_building_id
+LEFT JOIN public.locations project ON project.id = p.location_project_id
 WHERE p.id = ANY(%(ids)s::bigint[])
 """
 )
@@ -166,7 +185,15 @@ def _fact(row: dict[str, Any]) -> dict[str, Any]:
         "purpose": row.get("purpose"),
         "rooms": _number(row.get("rooms")),
         "asking_price_aed": _number(row.get("asking_price_aed")),
+        "asking_price_min_aed": _number(row.get("asking_price_min_aed")),
+        "asking_price_max_aed": _number(row.get("asking_price_max_aed")),
+        "rent_aed": _number(row.get("rent_aed")),
+        "rental_period": row.get("rental_period"),
         "area_sqft": _number(row.get("area_sqft")),
+        "building": row.get("building"),
+        "project": row.get("project"),
+        "completion": row.get("completion"),
+        "furnished": row.get("furnished"),
         "developer": row.get("developer"),
         "address": row.get("address"),
         "community": row.get("community"),

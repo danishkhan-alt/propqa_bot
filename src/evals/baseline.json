@@ -1,38 +1,32 @@
 {
-  "created_at": "2026-10-28T15:10:54",
+  "created_at": "2026-10-29T16:17:14",
   "split": "holdout",
   "metrics": {
-    "route_accuracy": 80.0,
-    "domain_accuracy": 90.0,
-    "result_correctness": 0.0
+    "route_accuracy": 100.0,
+    "domain_accuracy": 100.0,
+    "result_correctness": 77.78
   },
   "counts": {
     "router": {
-      "passed": 4,
+      "passed": 5,
       "total": 5
     },
     "domain": {
-      "passed": 9,
+      "passed": 10,
       "total": 10
     },
     "sql": {
-      "passed": 0,
+      "passed": 7,
       "total": 9
     }
   },
   "latency_s": {
-    "mean": 3.749,
-    "p50": 1.623
+    "mean": 3.823,
+    "p50": 2.178
   },
   "fallback_rate": 0.0,
   "cost_usd": null,
-  "must_pass_failures": [
-    "marina_listings",
-    "marina_listings_typo",
-    "jvc_two_bed_sale_under_budget",
-    "refine_keeps_place",
-    "downtown_not_jebel_ali"
-  ],
+  "must_pass_failures": [],
   "cases": [
     {
       "suite": "router",
@@ -41,7 +35,7 @@
       "detail": "PASS definition: route direct_answer and turn kind new match.",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 1.6698249999899417,
+      "latency_s": 2.3161445999867283,
       "fallback": false
     },
     {
@@ -51,7 +45,7 @@
       "detail": "PASS show_properties: route need_db and turn kind new match.",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 1.622848500031978,
+      "latency_s": 2.178248300042469,
       "fallback": false
     },
     {
@@ -61,7 +55,7 @@
       "detail": "PASS cheaper: route need_db and turn kind refine match.",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 2.890320599952247,
+      "latency_s": 3.2034042000304908,
       "fallback": false
     },
     {
@@ -71,17 +65,17 @@
       "detail": "PASS code_request: route out_of_scope and turn kind new match.",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 1.3808733000187203,
+      "latency_s": 2.0008971000206657,
       "fallback": false
     },
     {
       "suite": "router",
       "id": "general_maths",
-      "passed": false,
-      "detail": "FAIL general_maths: route is direct_answer, expected out_of_scope. rationale: The user asked a simple arithmetic question, which does not require Dubai property data.",
+      "passed": true,
+      "detail": "PASS general_maths: route out_of_scope and turn kind new match.",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 1.19665920000989,
+      "latency_s": 2.0582894000108354,
       "fallback": false
     },
     {
@@ -91,7 +85,7 @@
       "detail": "PASS average_sale_price_period: lead, domains, joins, and recipe match (domains=['transactions'] joins=['locations'] recipe=None).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.6217124999966472,
+      "latency_s": 0.4810271000023931,
       "fallback": false
     },
     {
@@ -101,7 +95,7 @@
       "detail": "PASS listings_sale_budget: lead, domains, joins, and recipe match (domains=['listings'] joins=['locations'] recipe=None).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.35125589999370277,
+      "latency_s": 0.34559129999252036,
       "fallback": false
     },
     {
@@ -111,7 +105,7 @@
       "detail": "PASS listings_rent_villas: lead, domains, joins, and recipe match (domains=['listings'] joins=['locations'] recipe=None).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 0.3729944999795407,
+      "latency_s": 0.34383229998638853,
       "fallback": false
     },
     {
@@ -121,7 +115,7 @@
       "detail": "PASS market_overview: lead, domains, joins, and recipe match (domains=['market'] joins=[] recipe=dubai_market_overview).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.3604831999982707,
+      "latency_s": 0.34994230000302196,
       "fallback": false
     },
     {
@@ -131,7 +125,7 @@
       "detail": "PASS schools_near_community: lead, domains, joins, and recipe match (domains=['schools'] joins=['locations'] recipe=None).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.3889521000091918,
+      "latency_s": 0.39375079999445006,
       "fallback": false
     },
     {
@@ -141,7 +135,7 @@
       "detail": "PASS metro_near: lead, domains, joins, and recipe match (domains=['rta'] joins=['locations'] recipe=None).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 0.38786669995170087,
+      "latency_s": 0.3403808000148274,
       "fallback": false
     },
     {
@@ -151,17 +145,17 @@
       "detail": "PASS where_is: lead, domains, joins, and recipe match (domains=['locations'] joins=[] recipe=None).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.3996566000278108,
+      "latency_s": 0.36445769999409094,
       "fallback": false
     },
     {
       "suite": "domain",
       "id": "compare_two_places",
-      "passed": false,
-      "detail": "FAIL compare_two_places: joins did not match. Got domains=['transactions'] joins=[] recipe=None. expected domains=['transactions'] joins=['locations'] recipe=None.",
+      "passed": true,
+      "detail": "PASS compare_two_places: lead, domains, joins, and recipe match (domains=['transactions'] joins=['locations'] recipe=None).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 0.36619600001722574,
+      "latency_s": 0.3397555000265129,
       "fallback": false
     },
     {
@@ -171,7 +165,7 @@
       "detail": "PASS pivot_schools: lead, domains, joins, and recipe match (domains=['schools'] joins=['locations'] recipe=None).",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 0.37524150003446266,
+      "latency_s": 0.3855392999830656,
       "fallback": false
     },
     {
@@ -181,87 +175,87 @@
       "detail": "PASS community_yield: lead, domains, joins, and recipe match (domains=['market'] joins=['locations'] recipe=None).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 0.39045269996859133,
+      "latency_s": 0.37035690003540367,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "marina_listings",
-      "passed": false,
-      "detail": "FAIL marina_listings: truth=180 returned=50 total=None wrong=0 unsupported=Dubai Marina has 50 active listings; LIV LUX is off-plan",
+      "passed": true,
+      "detail": "PASS marina_listings: truth=176 returned=10 total=176 wrong=0",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 11.84023920004256,
+      "latency_s": 9.070296599995345,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "marina_listings_typo",
-      "passed": false,
-      "detail": "FAIL marina_listings_typo: truth=180 returned=10 total=180 wrong=0 unsupported=Mag 218 Tower 1 B/R renting for AED 5,999/month; Aeternitas Tower 2 B/R apartments for sale off-plan",
+      "passed": true,
+      "detail": "PASS marina_listings_typo: truth=176 returned=10 total=176 wrong=0",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 7.181947300035972,
+      "latency_s": 8.080864000017755,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "jvc_two_bed_sale_under_budget",
-      "passed": false,
-      "detail": "FAIL jvc_two_bed_sale_under_budget: truth=13 returned=10 total=13 wrong=0 unsupported=There are 13 two-bedroom apartments for sale in JVC under AED 1.5M",
+      "passed": true,
+      "detail": "PASS jvc_two_bed_sale_under_budget: truth=13 returned=10 total=13 wrong=0",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 7.386583600018639,
+      "latency_s": 7.74875659996178,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "business_bay_offices",
-      "passed": false,
-      "detail": "FAIL business_bay_offices: truth=10 returned=10 total=10 wrong=0 unsupported=There are 10 offices for sale currently listed in Business Bay",
+      "passed": true,
+      "detail": "PASS business_bay_offices: truth=10 returned=10 total=10 wrong=0",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 7.707286899967585,
+      "latency_s": 9.558919800037984,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "refine_keeps_place",
-      "passed": false,
-      "detail": "FAIL refine_keeps_place: truth=160 returned=10 total=160 wrong=0 unsupported=There are 160 two-bedroom apartments for rent in Jumeirah Village Circle; Dana Tower, District 12 is furnished; Westview Tower units have size range 1,265 to 1,290 sqft",
+      "passed": true,
+      "detail": "PASS refine_keeps_place: truth=160 returned=10 total=160 wrong=0",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 9.725726399978157,
+      "latency_s": 7.737494400003925,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "palm_listings_typo",
-      "passed": false,
-      "detail": "FAIL palm_listings_typo: truth=77 returned=10 total=77 wrong=0 unsupported=There are 77 properties in Palm Jumeirah",
+      "passed": true,
+      "detail": "PASS palm_listings_typo: truth=70 returned=10 total=70 wrong=0",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 8.132873399998061,
+      "latency_s": 7.810564399987925,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "downtown_not_jebel_ali",
-      "passed": false,
-      "detail": "FAIL downtown_not_jebel_ali: truth=162 returned=10 total=162 wrong=0 unsupported=There are 162 properties in Downtown Dubai; ranging from AED 6,000 to AED 2,000,000 in rent or yearly lease price; The Address Fountain Views 2 \u2192 A spacious 3-bedroom furnished hotel apartment renting for AED 650,000 yearly",
+      "passed": true,
+      "detail": "PASS downtown_not_jebel_ali: truth=159 returned=10 total=159 wrong=0",
       "must_pass": true,
       "split": "holdout",
-      "latency_s": 7.390190799953416,
+      "latency_s": 7.111930200015195,
       "fallback": false
     },
     {
       "suite": "sql",
       "id": "marina_average_sale_price",
       "passed": false,
-      "detail": "FAIL marina_average_sale_price: the lookup answered [] but the truth query returned [4.06637e+06, 2.65039e+06] (status failed).",
+      "detail": "FAIL marina_average_sale_price: the lookup answered [16.0, 9807619.0] but the truth query returned [4.05642e+06, 2.65296e+06] (status rows).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 8.444704200024717,
+      "latency_s": 10.421338599990122,
       "fallback": false
     },
     {
@@ -271,7 +265,7 @@
       "detail": "FAIL schools_arabian_ranches: the rows are missing ['Arabian Ranches'] (0 rows).",
       "must_pass": false,
       "split": "holdout",
-      "latency_s": 9.384655000001658,
+      "latency_s": 8.747812899993733,
       "fallback": false
     }
   ]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from agent.enums.listing import Completion, ListingPurpose, MentionKind
 from agent.enums.routing import Intent, Route, TurnKind
 from agent.schemas.listing import ListingFilters, NameMention
@@ -13,7 +15,7 @@ from agent.sql.handover_window import (
     wants_project_listings,
 )
 from agent.sql.recipes import get_recipe
-from catalog import list_domains
+from catalog import list_domains, load_domain
 from common.schemas.pagination import build_page_request
 from config import ActiveConfig
 
@@ -32,6 +34,18 @@ def sanitize_query_route(
     """Structural fixes only. The model's route, purpose, limit, and order stand."""
     notes: list[str] = []
     updated = route
+
+    if _bare_arithmetic(message):
+        updated = updated.model_copy(
+            update={
+                "route": Route.OUT_OF_SCOPE,
+                "turn_kind": TurnKind.NEW,
+                "intent": Intent.OTHER,
+                "rationale": "Arithmetic with no property subject.",
+            }
+        )
+        notes.append("bare_arithmetic")
+        return updated, notes
 
     if updated.turn_kind is TurnKind.REFINE and last is None:
         updated = updated.model_copy(update={"turn_kind": TurnKind.NEW})
@@ -54,6 +68,8 @@ def sanitize_query_route(
 
     updated, shortlist_notes = _keep_project_shortlist(updated, last, message, session_profile)
     notes.extend(shortlist_notes)
+    updated, search_notes = _listing_search_for_named_place(updated, message)
+    notes.extend(search_notes)
     return updated, notes
 
 
@@ -164,10 +180,57 @@ def _region_names() -> set[str]:
     }
 
 
-def sanitize_domain_route(route: DomainRoute) -> tuple[DomainRoute, list[str]]:
+_PROPERTY_SUBJECT = re.compile(
+    r"\b(?:propert(?:y|ies)|apartments?|villas?|rent|sale|price|aed|dirhams?|mortgage|yield|"
+    r"fees?|bedrooms?|listings?|sqft|community|dubai)\b",
+    re.IGNORECASE,
+)
+_ARITHMETIC_PREFIX = re.compile(
+    r"^(?:what(?:'s| is)|whats|calculate|compute|how much is)\s+",
+    re.IGNORECASE,
+)
+_SEE_PROPERTIES = re.compile(
+    r"\b(?:propert(?:y|ies)|listings?|apartments?|villas?|offices?|flats?|homes?|units?|"
+    r"townhouses?|penthouses?)\b",
+    re.IGNORECASE,
+)
+_NOT_A_LISTING_LIST = re.compile(r"\b(?:schools?|metro|tram|bus|transit|stations?)\b", re.IGNORECASE)
+_PLACE_COMPARE = re.compile(r"\bcompare\b.+\band\b|\bversus\b|\bvs\.?\b", re.IGNORECASE)
+
+
+def _bare_arithmetic(message: str) -> bool:
+    """True when the message is only a sum, with no property subject."""
+    if _PROPERTY_SUBJECT.search(message):
+        return False
+    text = _ARITHMETIC_PREFIX.sub("", message.strip().rstrip("?.!").strip()).strip()
+    if re.search(r"[A-Za-z]", text):
+        return False
+    return bool(re.fullmatch(r"[\d\s+\-*/x×÷.]+", text)) and bool(re.search(r"\d", text)) and bool(
+        re.search(r"[+\-*/x×÷]", text)
+    )
+
+
+def _listing_search_for_named_place(route: QueryRoute, message: str) -> tuple[QueryRoute, list[str]]:
+    """A list of properties in a named place uses listing search, which pages and counts.
+
+    An aggregate, a compare, and a schools or transit question stay on the drafted path.
+    """
+    if route.route is not Route.NEED_DB or route.intent not in {Intent.LIST, Intent.RANK}:
+        return route, []
+    if route.listing_filters is not None or _NOT_A_LISTING_LIST.search(message):
+        return route, []
+    if not _SEE_PROPERTIES.search(message):
+        return route, []
+    if not any(name.kind is MentionKind.PLACE for name in route.names):
+        return route, []
+    return route.model_copy(update={"listing_filters": ListingFilters()}), ["listing_search_for_place"]
+
+
+def sanitize_domain_route(route: DomainRoute, message: str = "") -> tuple[DomainRoute, list[str]]:
     """Drop unknown ids and cap how many packs are loaded.
 
-    The only pack added is a chosen recipe's own, since its tables must be loaded to run it.
+    The only packs added are a chosen recipe's own, and the locations join a transactions compare
+    of two places needs when the catalog already declares that join.
     """
 
     notes: list[str] = []
@@ -190,6 +253,10 @@ def sanitize_domain_route(route: DomainRoute) -> tuple[DomainRoute, list[str]]:
         for domain_id in _dedupe_known_domain_ids(route.join_ids, known)
         if domain_id not in primary
     ]
+
+    if _restore_locations_join(primary, joins, message, known):
+        joins.append("locations")
+        notes.append("restored_locations_join")
 
     if len(primary) > MAX_PRIMARY_DOMAINS:
         primary = primary[:MAX_PRIMARY_DOMAINS]
@@ -224,6 +291,26 @@ def _dedupe_known_domain_ids(ids: list[str], known: set[str]) -> list[str]:
 
 def _catalog_domain_ids() -> set[str]:
     return {str(domain["id"]) for domain in list_domains()}
+
+
+def _restore_locations_join(primary: list[str], joins: list[str], message: str, known: set[str]) -> bool:
+    """A compare of two places on transactions needs the locations pack the catalog already lists."""
+    if "locations" not in known or "locations" in primary or "locations" in joins:
+        return False
+    if "transactions" not in primary or not _PLACE_COMPARE.search(message):
+        return False
+    return _catalog_declares_join("transactions", "locations")
+
+
+def _catalog_declares_join(domain_id: str, join_id: str) -> bool:
+    try:
+        domain = load_domain(domain_id)
+    except KeyError:
+        return False
+    return any(
+        isinstance(item, dict) and str(item.get("domain")) == join_id
+        for item in domain.get("joins") or []
+    )
 
 
 def build_lookup_assumptions(route: QueryRoute) -> LookupAssumptions:

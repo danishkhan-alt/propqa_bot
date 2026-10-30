@@ -42,6 +42,7 @@ from agent.sql.guard import (
     SqlRejected,
     applied_conditions,
     blended_average_reasons,
+    overall_figure_sql,
     prepare_select,
     referenced_tables,
     segment_rules,
@@ -74,6 +75,25 @@ ALL_ZERO_ROW_RETRY_REASON = (
     "The query returned one row whose values are all zero or empty. A name filter probably matched "
     "nothing; use the stored values in resolved_names, or check the filters against the catalog."
 )
+
+
+def _empty_name_retry(grounding) -> str:
+    """The no-rows retry, naming the stored column each resolved place actually uses."""
+    shown: list[str] = []
+    for name in grounding.names if grounding is not None else []:
+        values = [
+            f"{match.table}.{match.column} = '{match.value}'"
+            for match in name.stored[:6]
+        ]
+        if values:
+            shown.append(f"{name.text}: " + "; ".join(values))
+    if not shown:
+        return NO_ROWS_RETRY_REASON
+    return (
+        NO_ROWS_RETRY_REASON
+        + " Filter the name with = or IN on a stored value: "
+        + " ".join(shown)
+    )
 BLENDED_AVERAGE_NOTE = "These figures average several kinds of property together, so treat them as a blend."
 LISTING_INTENTS = frozenset({Intent.LIST, Intent.RANK, Intent.AGGREGATE})
 
@@ -251,6 +271,7 @@ def run_sql_lookup(
                 extra={"extra_data": {"corrections": checked.corrections, "removed": checked.removed}},
             )
             guarded = checked.sql
+        guarded = overall_figure_sql(guarded, message, rules)
         constrained = constrain_offplan_sql(guarded, project_search)
         if constrained.retry_error:
             last = _build_sql_result(
@@ -356,6 +377,8 @@ def run_sql_lookup(
         if visible:
             answered = last
         retry_reason = NO_ROWS_RETRY_REASON if not visible else ALL_ZERO_ROW_RETRY_REASON if _is_single_all_zero_row(visible) else None
+        if retry_reason == NO_ROWS_RETRY_REASON:
+            retry_reason = _empty_name_retry(grounding)
         if retry_reason is None or attempt == MAX_ATTEMPTS:
             break
         previous_error = " ".join([retry_reason, *checked.problems])

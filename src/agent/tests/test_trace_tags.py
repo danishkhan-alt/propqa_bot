@@ -6,7 +6,7 @@ from agent.enums.routing import Intent, Route, TurnKind
 from agent.schemas.routes import DomainRoute, QueryRoute
 from agent.services.prompt_version import prompt_version
 from agent.services.trace_tags import tag_turn_span, turn_trace_metadata
-from agent.services.tracing import write_user_feedback
+from agent.services.tracing import write_answer_grounding, write_user_feedback
 
 
 class _Span:
@@ -83,3 +83,22 @@ def test_a_thumbs_vote_writes_user_feedback():
     write_user_feedback(client, "trace-9", "down")
     assert client.calls[-1]["value"] == 0.0
     assert client.calls[-1]["comment"] is None
+
+
+def test_a_lookup_reply_writes_answer_grounding_without_a_trace_rewrite():
+    client = _Scores()
+    write_answer_grounding(client, None, ["AED 9 is not in the rows, the listings, the count, the filters, or the visa minimum."])
+    assert client.calls == []
+    write_answer_grounding(client, "trace-9", [])
+    write_answer_grounding(
+        client,
+        "trace-9",
+        ["AED 900,000 is not in the rows, the listings, the count, the filters, or the visa minimum."],
+    )
+    assert client.calls[0]["name"] == "answer_grounding"
+    assert client.calls[0]["value"] == 1.0
+    assert client.calls[0]["score_id"] == "answer_grounding:trace-9"
+    assert client.calls[0]["comment"] is None
+    assert client.calls[1]["value"] == 0.0
+    assert "AED 900,000" in client.calls[1]["comment"]
+    assert client.flushed is True

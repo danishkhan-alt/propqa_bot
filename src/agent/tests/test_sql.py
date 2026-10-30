@@ -448,6 +448,47 @@ def test_an_average_must_not_mix_kinds_of_property():
     )
     # Counts and totals are not averages.
     assert not blended_average_reasons("SELECT count(*) FROM real_estate_dld_transactions", rules)
+    # One average for a named place is a single figure, not a split by property type.
+    assert not blended_average_reasons(
+        "SELECT avg(actual_worth) FROM public.real_estate_dld_transactions "
+        "WHERE master_project_en = 'Dubai Marina' AND trans_group_en = 'Sales'",
+        rules,
+    )
+
+
+def test_one_average_for_a_place_is_not_a_breakdown_by_kind():
+    from agent.sql.guard import overall_figure_sql
+
+    rules = segment_rules(["transactions"])
+    grouped = (
+        "SELECT property_sub_type_en, COUNT(*) AS n, "
+        "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY actual_worth) AS median_sale_price_aed "
+        "FROM public.real_estate_dld_transactions "
+        "WHERE trans_group_en = 'Sales' AND master_project_en = 'Dubai Marina' "
+        "GROUP BY property_sub_type_en HAVING COUNT(*) >= 10 "
+        "ORDER BY median_sale_price_aed DESC"
+    )
+    sql = overall_figure_sql(grouped, "average sale price in Dubai Marina last 12 months", rules)
+    folded = sql.lower()
+    assert "group by" not in folded
+    assert "percentile_cont" not in folded
+    assert "avg(" in folded
+    assert "property_sub_type_en" not in folded
+    left = overall_figure_sql(grouped, "average sale price by property type in Dubai Marina", rules)
+    assert "group by" in left.lower()
+
+
+def test_an_unknown_output_column_is_dropped_when_another_column_remains():
+    sql = prepare_select(
+        "SELECT school_name, latitude, longitude FROM chatbot_ai.ps_schools WHERE area = 'Arabian Ranches'",
+        tables_in_domains(["schools"]),
+        100,
+    )
+    folded = sql.lower()
+    assert "school_name" in folded
+    assert "latitude" not in folded
+    assert "longitude" not in folded
+    assert "arabian ranches" in folded
 
 
 def test_every_declared_segment_is_a_column_of_its_table_or_a_join():
@@ -628,6 +669,18 @@ def test_a_condition_on_fixed_values_is_rejected():
             {"public.mv_community_landing_page_stats"},
             100,
         )
+
+
+def test_a_having_count_is_kept():
+    from agent.sql.guard import prepare_select
+
+    kept = prepare_select(
+        "SELECT property_sub_type_en, COUNT(*) AS n FROM public.real_estate_dld_transactions "
+        "WHERE trans_group_en = 'Sales' GROUP BY property_sub_type_en HAVING COUNT(*) >= 5",
+        {"public.real_estate_dld_transactions"},
+        100,
+    )
+    assert "HAVING" in kept.upper()
 
 
 def test_a_new_launch_lookup_drops_a_project_handed_over_in_2013():

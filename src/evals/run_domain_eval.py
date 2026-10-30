@@ -42,7 +42,7 @@ def run_router_cases(router: str, cases: list[dict], *, quiet: bool = False) -> 
                 recipes_text=recipe_index_text(),
             )
             latency = time.perf_counter() - started
-            route, _ = sanitize_domain_route(route)
+            route, _ = sanitize_domain_route(route, case["message"])
             checks, detail = score_route(case, route)
             fallback = _fell_back(router, route.rationale)
             passed = all(checks.values())

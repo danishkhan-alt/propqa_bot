@@ -13,6 +13,7 @@ from agent.enums.routing import Intent, Route
 from agent.graph.nodes.runtime import models_for
 from agent.grounding import get_grounding_cache
 from agent.reply.building_pages import BuildingPage, pick_building_pages
+from agent.reply.grounding_check import ungrounded_numbers
 from agent.reply.buyer_profile import drop_repeated_question, pick_next_profile_question
 from agent.reply.data_sources import FOCUSED_LISTINGS_DATA_NOTE, describe_data_sources
 from agent.reply.place_map import place_pins
@@ -27,7 +28,7 @@ from agent.schemas.routes import (
     as_query_route,
 )
 from agent.services.stream_events import publish_stream_event
-from agent.services.tracing import current_trace_id
+from agent.services.tracing import current_trace_id, record_answer_grounding
 from agent.services.transcript import (
     ANSWER_HISTORY_MESSAGE_LIMIT,
     format_recent_history,
@@ -210,6 +211,8 @@ def _reply_from_lookup_results(
     else:
         text = _reply_after_failed_lookup(runtime, message, messages, config)
     text = _stream_memory_notes(text, state)
+    if status == "rows" or listing_ids:
+        _record_answer_grounding(text, rows, listings, result.get("total"), listing_ids, filters, coverage)
     logger.info(
         "answer.synthesize",
         extra={
@@ -234,6 +237,31 @@ def _reply_from_lookup_results(
         question if structured is not None else None,
         listing_ids,
     )
+
+
+def _record_answer_grounding(
+    text: str,
+    rows: list,
+    listings: list,
+    total,
+    listing_ids: list[str],
+    filters: list[str],
+    coverage: list,
+) -> None:
+    """Score the finished lookup reply. The text already streamed is left as it is."""
+    count = int(total) if total is not None else (len(listing_ids) if listing_ids else None)
+    try:
+        flags = ungrounded_numbers(
+            text,
+            rows=rows,
+            listings=listings,
+            listing_count=count,
+            filters=filters,
+            coverage=coverage,
+        )
+        record_answer_grounding(current_trace_id(), flags)
+    except Exception:
+        logger.warning("answer.grounding failed", exc_info=True)
 
 
 def _reply_after_failed_lookup(
