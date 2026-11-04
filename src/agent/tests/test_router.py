@@ -16,7 +16,7 @@ from agent.graph.nodes.catalog import load_domain_catalog
 from agent.graph.nodes.turn_end import record_search_and_clear_turn_state
 from agent.graph.nodes.reply import OUT_OF_SCOPE_REPLY
 from agent.graph.workflow import build_chat_graph
-from agent.schemas.listing import NameMention
+from agent.schemas.listing import ListingFilters, NameMention
 from agent.schemas.routes import (
     DomainRoute,
     LastNeedDb,
@@ -303,7 +303,7 @@ def test_refine_reuses_domains_when_the_model_says_refine():
     assumptions = as_assumptions(state["assumptions"])
     assert route is not None and route.turn_kind is TurnKind.REFINE
     assert domain is not None and domain.domain_ids == ["transactions"]
-    assert assumptions is not None and assumptions.purpose == "rent" and assumptions.limit == 25
+    assert assumptions is not None and assumptions.purpose is None and assumptions.limit == 25
     assert models.query_calls == 2
     assert models.domain_calls == 1
 
@@ -653,6 +653,84 @@ def test_their_developers_keeps_each_project_and_the_place():
     assert updated.intent is Intent.LIST
     assert updated.listing_filters is None
     assert [name.text for name in updated.names] == ["Bling Avenue 1", "Ocean Tower", "Al Furjan"]
+
+
+def test_an_unstated_rent_purpose_is_cleared():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        purpose="rent",
+        names=[NameMention(text="JVC")],
+        listing_filters=ListingFilters(purpose=ListingPurpose.RENT, property_types=["apartment"]),
+        confidence=0.9,
+        rationale="Apartments in JVC.",
+    )
+    updated, notes = sanitize_query_route(route, None, "show me apartments in JVC")
+    assert updated.purpose is None
+    assert updated.listing_filters is not None
+    assert updated.listing_filters.purpose is ListingPurpose.ANY
+    assert updated.listing_filters.property_types == ["apartment"]
+    assert "unstated_purpose" in notes
+
+
+def test_a_refine_keeps_a_purpose_the_previous_turn_stored():
+    last = LastNeedDb(
+        domain_ids=["listings"],
+        result_meta={"listing_filters": {"purpose": "rent", "property_types": ["apartment"]}},
+    )
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.REFINE,
+        intent=Intent.LIST,
+        purpose="sale",
+        listing_filters=ListingFilters(
+            purpose=ListingPurpose.SALE,
+            bedrooms_min=2,
+            bedrooms_max=2,
+            property_types=["apartment"],
+        ),
+        confidence=0.9,
+        rationale="Only two bedrooms.",
+    )
+    updated, notes = sanitize_query_route(route, last, "only 2 bedrooms")
+    assert updated.purpose == "rent"
+    assert updated.listing_filters is not None
+    assert updated.listing_filters.purpose is ListingPurpose.RENT
+    assert updated.listing_filters.bedrooms_min == 2
+    assert "kept_prior_purpose" in notes
+
+
+def test_a_stated_sale_purpose_stays():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        purpose="sale",
+        listing_filters=ListingFilters(purpose=ListingPurpose.SALE, property_types=["apartment"]),
+        confidence=0.9,
+        rationale="Apartments for sale.",
+    )
+    updated, notes = sanitize_query_route(route, None, "2 bed apartments for sale in JVC under 1.5M")
+    assert updated.purpose == "sale"
+    assert updated.listing_filters is not None
+    assert updated.listing_filters.purpose is ListingPurpose.SALE
+    assert "unstated_purpose" not in notes
+
+
+def test_a_golden_visa_filter_stays_a_sale():
+    route = QueryRoute(
+        route=Route.NEED_DB,
+        turn_kind=TurnKind.NEW,
+        intent=Intent.LIST,
+        listing_filters=ListingFilters(golden_visa=True),
+        confidence=0.9,
+        rationale="Visa homes.",
+    )
+    updated, notes = sanitize_query_route(route, None, "Golden Visa homes in Marina")
+    assert updated.listing_filters is not None
+    assert updated.listing_filters.purpose is ListingPurpose.SALE
+    assert "unstated_purpose" not in notes
 
 
 def test_a_fresh_launch_question_is_off_plan_and_not_pinned_to_an_older_shortlist():

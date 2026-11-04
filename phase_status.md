@@ -2,16 +2,16 @@
 
 Status against [.cursor/plans/start_propqa_improvements_06fb878a.plan.md](.cursor/plans/start_propqa_improvements_06fb878a.plan.md). The diagram of the same system is [architecture.mmd](architecture.mmd).
 
-Phase 4 is open. The 30 Oct 2026 retest holdout exited 0. This file does not start a GEPA run.
+Phase 4 is open. `logs/eval_20261102_141204.json` exited 0. This file does not start a GEPA run.
 
-Latest holdout: `logs/eval_20261030_131445.json`. `src/evals/baseline.json` is still the week-2 measurement (result correctness 77.78) and was not overwritten. Its SHA-256 is still `CED1BC8FACDDBF6CCCA35532AB1E030BCB150B6E4DCBCF058E9B764F0DF63F68`.
+Latest holdout: `logs/eval_20261102_141204.json`. `src/evals/baseline.json` is still the week-2 measurement (result correctness 77.78) and was not overwritten. Its SHA-256 is still `CED1BC8FACDDBF6CCCA35532AB1E030BCB150B6E4DCBCF058E9B764F0DF63F68`.
 
 | Phase | Built | Exit check |
 | --- | --- | --- |
-| 1. Eval command and holdout | Yes | Met. Holdout exited 0. `must_pass` failures none. |
-| 2. Thumbs stored | Yes | Met. Live thumbs check passed earlier. Offline tests passed again on 30 Oct 2026. |
-| 3. Number check | Yes | Met. Offline tests passed, and the 30 Oct 2026 retest printed the ungrounded share. |
-| 4. GEPA | Not started | Open. The three exit checks are met. No GEPA run has been opened. |
+| 1. Eval command and holdout | Yes | Met. `logs/eval_20261102_141204.json` exited 0. `must_pass` failures none. |
+| 2. Thumbs stored | Yes | Met. Live thumbs check passed earlier. Offline tests passed again on 2 Nov 2026. |
+| 3. Number check | Yes | Offline tests passed on 2 Nov 2026. The latest holdout printed ungrounded numbers 33.3% (3 of 9). That share does not change the exit code. |
+| 4. GEPA | Not started | Open. The 2 Nov 2026 holdout exited 0. No GEPA run has been opened. |
 
 ## Phase 1 — eval command and holdout
 
@@ -36,6 +36,40 @@ Met again by `logs/eval_20261030_131445.json`, after the bedroom-shorthand and m
 - `must_pass` failures: none
 - Exit code 0
 - Baseline file unchanged
+
+The 2 Nov 2026 retest, `logs/eval_20261102_102239.json`, exited 1. It is not a new lookup-rule failure. The run logged `429` and `You have no credits remaining` from the model API. Three router cases fell back to a database lookup because the router output was invalid. All 9 lookup cases returned no rows or status `failed`. Domain accuracy stayed 100.0 (10/10). Scores:
+
+- Route accuracy 40.0 (2/5)
+- Domain accuracy 100.0 (10/10)
+- Result correctness 0.0 (0/9)
+- Ungrounded numbers: n/a (0 of 0 data-backed replies)
+- `must_pass` failures: definition, cheaper, code_request, marina_listings, marina_listings_typo, jvc_two_bed_sale_under_budget, refine_keeps_place, downtown_not_jebel_ali
+- Exit code 1
+- Baseline file unchanged
+
+No checker or lookup rule was changed. A code change would not make those cases pass while the model API refuses the call.
+
+A later run the same morning, `logs/eval_20261102_110458.json`, had credits again and still exited 1:
+
+- Route accuracy 100.0 (5/5)
+- Domain accuracy 100.0 (10/10)
+- Result correctness 77.8 (7/9), level with the saved 77.78
+- Ungrounded numbers 33.3% (3 of 9 data-backed replies). Printed only.
+- `must_pass` failures: `jvc_two_bed_sale_under_budget` (truth 12, returned 10, total 12, wrong 0; the reply added an unsupported sentence about Districts 10–13), `refine_keeps_place` (truth 156, returned 10, total 109, wrong 0, `total_mismatch`)
+- Exit code 1
+- Baseline file unchanged
+
+Those two misses were fixed in the route sanitizer and the reply prompt. A purpose the user did not say is cleared, and a refine keeps a sale or rent purpose the previous lookup stored. The listings close can only repeat a price, size, building, project, or completion status already on a shown listing. `logs/eval_20261102_140807.json` reran the two cases and both passed. The full holdout `logs/eval_20261102_141204.json` then exited 0:
+
+- Route accuracy 100.0 (5/5)
+- Domain accuracy 100.0 (10/10)
+- Result correctness 100.0 (9/9), above the saved 77.78
+- Ungrounded numbers 33.3% (3 of 9 data-backed replies). Printed only.
+- `must_pass` failures: none
+- Exit code 0
+- Baseline file unchanged
+
+Phase 4 is open. No GEPA run has been started.
 
 The earlier full holdout `logs/eval_20261030_110842.json` had also exited 0, with an ungrounded share of 66.7% (6 of 9). `marina_listings_typo` was run on its own three times before that holdout. Two exited 0 (`logs/eval_20261030_110005.json`, `logs/eval_20261030_110216.json`). The third exited 1 (`logs/eval_20261030_110443.json`) on `Aeternitas Tower 2 B/R for Sale priced around AED 4.24 to 4.25 million`, with the search itself correct. The checker now accepts that sentence, and the 13:14 holdout includes the same case and passed.
 
@@ -89,6 +123,6 @@ Nothing. `src/evals/gepa/` does not exist. The router prompt and the SQL draft p
 
 ### Blockage
 
-None on the exit checks. The 30 Oct 2026 retest left no must_pass failure and no correctness drop, so Phase 4 can start with the query router, then the SQL drafter. Train and val only. A candidate is written under `src/evals/gepa/runs/<date>/` and reaches production only through a reviewed PR after a person runs holdout: every `must_pass` case passes, the candidate beats the current prompt on its own metric, and no other score drops by more than 1 point. Leave the Jev domain router and `STRUCTURED_REPLY_SYSTEM` alone. No GEPA run has been opened yet.
+None on the exit checks. `logs/eval_20261102_141204.json` exited 0, so Phase 4 can start with the query router, then the SQL drafter. An earlier holdout the same day, `logs/eval_20261102_110458.json`, had exited 1 on `jvc_two_bed_sale_under_budget` and `refine_keeps_place`. Those two rules are fixed. The 30 Oct 2026 retest had also exited 0. Train and val only. A candidate is written under `src/evals/gepa/runs/<date>/` and reaches production only through a reviewed PR after a person runs holdout: every `must_pass` case passes, the candidate beats the current prompt on its own metric, and no other score drops by more than 1 point. Leave the Jev domain router and `STRUCTURED_REPLY_SYSTEM` alone. No GEPA run has been opened yet.
 
 Week-6 targets, judged against the Phase 1 baseline of 77.78 result correctness, stay ahead of this work: lookup correctness +10 points, route accuracy at least 95%, ungrounded numbers under 1% of data-backed turns, thumbs-down 25% lower than the first two weeks of votes, and zero nightly `must_pass` failures.

@@ -23,6 +23,11 @@ MAX_PRIMARY_DOMAINS = 3
 MAX_LOADED_DOMAINS = 3
 # Row results share one page window. An average or a single lookup does not.
 _PAGED_INTENTS = frozenset({Intent.LIST, Intent.RANK})
+# A purpose counts only when the user said it. "Let me see" is not a rental.
+_STATED_PURPOSE = re.compile(
+    r"\b(?:sales?|sell(?:ing)?|buys?|buying|purchases?|rent(?:al|ing|s)?|leases?|leasing|to let|for let)\b",
+    re.IGNORECASE,
+)
 
 
 def sanitize_query_route(
@@ -31,7 +36,11 @@ def sanitize_query_route(
     message: str = "",
     session_profile: dict | None = None,
 ) -> tuple[QueryRoute, list[str]]:
-    """Structural fixes only. The model's route, purpose, limit, and order stand."""
+    """Structural fixes only. The model's route, limit, and order stand.
+
+    A purpose the message does not state is cleared. A refine keeps a sale or rent
+    purpose the previous lookup already stored.
+    """
     notes: list[str] = []
     updated = route
 
@@ -70,7 +79,64 @@ def sanitize_query_route(
     notes.extend(shortlist_notes)
     updated, search_notes = _listing_search_for_named_place(updated, message)
     notes.extend(search_notes)
+    updated, purpose_notes = _drop_unstated_purpose(updated, last, message, notes)
+    notes.extend(purpose_notes)
     return updated, notes
+
+
+def _drop_unstated_purpose(
+    route: QueryRoute,
+    last: LastNeedDb | None,
+    message: str,
+    notes: list[str],
+) -> tuple[QueryRoute, list[str]]:
+    """A rent or sale filter the user did not ask for is not applied.
+
+    A refine keeps the purpose stored on the previous lookup. Golden Visa and a
+    project-shortlist search set sale themselves and are left as they are.
+    """
+    if _STATED_PURPOSE.search(message) or "listing_search_for_shortlist" in notes:
+        return route, []
+    filters = route.listing_filters
+    if filters is not None and filters.golden_visa:
+        return route, []
+    prior = _prior_listing_purpose(last)
+    if route.turn_kind is TurnKind.REFINE and prior is not None:
+        updated = route
+        changed = False
+        if filters is not None and filters.purpose is not prior:
+            updated = updated.model_copy(
+                update={"listing_filters": filters.model_copy(update={"purpose": prior})}
+            )
+            changed = True
+        if updated.purpose != prior.value:
+            updated = updated.model_copy(update={"purpose": prior.value})
+            changed = True
+        return updated, ["kept_prior_purpose"] if changed else []
+    updated = route
+    changed = False
+    if filters is not None and filters.purpose is not ListingPurpose.ANY:
+        updated = updated.model_copy(
+            update={"listing_filters": filters.model_copy(update={"purpose": ListingPurpose.ANY})}
+        )
+        changed = True
+    if updated.purpose is not None:
+        updated = updated.model_copy(update={"purpose": None})
+        changed = True
+    return updated, ["unstated_purpose"] if changed else []
+
+
+def _prior_listing_purpose(last: LastNeedDb | None) -> ListingPurpose | None:
+    raw = ((last.result_meta if last is not None else None) or {}).get("listing_filters") or {}
+    if not isinstance(raw, dict):
+        return None
+    try:
+        purpose = ListingPurpose(raw.get("purpose"))
+    except ValueError:
+        return None
+    if purpose is ListingPurpose.ANY:
+        return None
+    return purpose
 
 
 def _keep_project_shortlist(
