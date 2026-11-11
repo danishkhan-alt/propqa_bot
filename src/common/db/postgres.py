@@ -12,8 +12,20 @@ from config import ActiveConfig
 
 logger = get_logger("common.db")
 
+# Chat accounts, feedback, sessions, and checkpoints live in this schema.
+# Memory and the warehouse keep their own pools and are not pointed here.
+CHAT_SCHEMA = "ai_chatbot"
+
 _pools: dict[str, ConnectionPool] = {}
 _lock = threading.Lock()
+
+
+def chat_schema_connect_kwargs(**extra: Any) -> dict[str, Any]:
+    """Connection settings that resolve unqualified chat tables in `ai_chatbot`."""
+
+    kwargs: dict[str, Any] = {"options": f"-c search_path={CHAT_SCHEMA}"}
+    kwargs.update(extra)
+    return kwargs
 
 
 def build_conninfo(

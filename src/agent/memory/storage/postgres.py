@@ -23,10 +23,11 @@ from agent.memory.storage.in_memory_repository import new_memory_id, token_simil
 
 _transaction_connection: contextvars.ContextVar = contextvars.ContextVar("memory_pg_conn", default=None)
 
-DDL = """
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+# Installed only when missing. On RDS the chatbot role cannot create extensions;
+# an extension that is already there is left alone.
+_EXTENSIONS = ("vector", "pgcrypto")
 
+DDL = """
 DO $$ BEGIN
     CREATE TYPE memory_type AS ENUM ('profile','preference','semantic','episodic','goal','ephemeral');
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -120,12 +121,23 @@ ALTER TABLE memory_column_map ADD COLUMN IF NOT EXISTS exclusive bool NOT NULL D
 """
 
 
+def _ensure_extension(conn, name: str) -> None:
+    if name not in _EXTENSIONS:
+        raise ValueError(f"unexpected extension {name}")
+    row = conn.execute("SELECT 1 FROM pg_extension WHERE extname = %s", (name,)).fetchone()
+    if row:
+        return
+    conn.execute(f"CREATE EXTENSION IF NOT EXISTS {name}")
+
+
 class PostgresMemoryRepository:
     def __init__(self, pool) -> None:
         self._pool = pool
 
     def ensure_schema(self) -> None:
         with self._pool.connection() as conn:
+            for name in _EXTENSIONS:
+                _ensure_extension(conn, name)
             conn.execute(DDL)
             conn.execute(COLUMN_MAP_UPGRADE)
             with conn.cursor() as cur:

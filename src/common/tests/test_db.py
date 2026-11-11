@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from common.db import build_conninfo, chat_conninfo, get_pool
+from common.db import build_conninfo, chat_conninfo, chat_schema_connect_kwargs, get_pool
 from config import ActiveConfig
 
 
@@ -22,6 +22,13 @@ def test_conninfo_escapes_credentials():
     assert "user=propqa" in info
     assert "sslmode=disable" in info
     assert "password='p@ss word'" in info
+
+
+def test_chat_schema_connect_kwargs_set_the_search_path():
+    kwargs = chat_schema_connect_kwargs(row_factory="rows")
+
+    assert kwargs["options"] == "-c search_path=ai_chatbot"
+    assert kwargs["row_factory"] == "rows"
 
 
 def test_pool_name_is_required():

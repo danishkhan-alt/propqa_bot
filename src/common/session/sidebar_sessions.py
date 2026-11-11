@@ -1,11 +1,24 @@
-"""Sidebar list of chats, stored in the shared cache."""
+"""Sidebar list of chats.
+
+Outside tests the rows live in ai_chatbot.chat_sessions, and each chat also has a
+conversation_sessions row. Tests keep the shared cache so they do not open the database.
+"""
 
 from __future__ import annotations
+
+import os
 
 from common.cache import get_cache
 from common.schemas.session import SidebarSession
 from common.services.app_clock import AppClock
+from common.session.chat_store import (
+    list_chat_sessions,
+    record_chat_session,
+    remove_chat_session,
+    transfer_chat_session,
+)
 from common.session.id_validation import safe_thread_id, safe_user_id
+from config import ENVIRONMENT
 
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 _MAX_SIDEBAR_SESSIONS = 50
@@ -15,6 +28,9 @@ def record_session_activity(user_id: str, session_id: str, message: str) -> None
     """Remember a chat so the sidebar can list it."""
     owner = safe_user_id(user_id) or user_id
     if not owner or not session_id:
+        return
+    if not _use_memory_store():
+        record_chat_session(owner, session_id, message)
         return
     now = AppClock.utcnow().isoformat()
     title = " ".join(message.split())[:80] or "Chat"
@@ -43,6 +59,8 @@ def record_session_activity(user_id: str, session_id: str, message: str) -> None
 
 
 def list_user_sessions(user_id: str | None, limit: int = 30) -> list[SidebarSession]:
+    if not _use_memory_store():
+        return list_chat_sessions(user_id, limit)
     owner = safe_user_id(user_id)
     if owner is None:
         return []
@@ -51,6 +69,8 @@ def list_user_sessions(user_id: str | None, limit: int = 30) -> list[SidebarSess
 
 def remove_sidebar_session(session_id: str) -> str | None:
     """Drop the sidebar row. Returns the thread id when the id is usable."""
+    if not _use_memory_store():
+        return remove_chat_session(session_id)
     thread_id = safe_thread_id(session_id)
     if thread_id is None:
         return None
@@ -64,6 +84,8 @@ def remove_sidebar_session(session_id: str) -> str | None:
 
 def transfer_sidebar_session(session_id: str, from_owner: str, to_owner: str) -> bool:
     """Move a chat to another owner, only if ``from_owner`` owns it now."""
+    if not _use_memory_store():
+        return transfer_chat_session(session_id, from_owner, to_owner)
     thread_id = safe_thread_id(session_id)
     source = safe_user_id(from_owner)
     target = safe_user_id(to_owner)
@@ -102,6 +124,10 @@ def _save_sessions(user_id: str, rows: list[SidebarSession]) -> None:
 
 def _remember_owner(session_id: str, owner: str) -> None:
     get_cache().set(_owner_key(session_id), owner, ttl=SESSION_TTL_SECONDS)
+
+
+def _use_memory_store() -> bool:
+    return bool(os.environ.get("PYTEST_CURRENT_TEST")) or ENVIRONMENT.is_test
 
 
 def _sessions_key(user_id: str) -> str:

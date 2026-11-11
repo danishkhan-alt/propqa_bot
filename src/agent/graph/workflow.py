@@ -141,7 +141,10 @@ def get_chat_graph() -> CompiledStateGraph:
         store = None
         if not ENVIRONMENT.is_test:
             connect_memory_cache()
-            store = open_long_term_store()
+            try:
+                store = open_long_term_store()
+            except Exception:
+                logger.warning("long-term memory unavailable; this chat will run without it", exc_info=True)
         _graph = build_chat_graph(checkpointer, store=store)
         _graph_checkpointer = checkpointer
     return _graph

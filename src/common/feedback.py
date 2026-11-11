@@ -8,7 +8,7 @@ from typing import Protocol
 
 from psycopg.rows import dict_row
 
-from common.db import close_pool, get_pool
+from common.db import chat_schema_connect_kwargs, close_pool, get_pool
 from common.logger import get_logger
 from config import ActiveConfig
 
@@ -153,7 +153,7 @@ def get_feedback_store() -> PostgresFeedbackStore:
             POOL_NAME,
             min_size=ActiveConfig.CHAT_DB_POOL_MIN,
             max_size=ActiveConfig.CHAT_DB_POOL_MAX,
-            connect_kwargs={"row_factory": dict_row},
+            connect_kwargs=chat_schema_connect_kwargs(row_factory=dict_row),
         )
         store = PostgresFeedbackStore(pool)
         try:

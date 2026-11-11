@@ -7,7 +7,7 @@ import threading
 from psycopg.rows import dict_row
 
 from auth.storage import PostgresUserRepository, UserRepository
-from common.db import close_pool, get_pool
+from common.db import chat_schema_connect_kwargs, close_pool, get_pool
 from config import ActiveConfig
 
 POOL_NAME = "auth"
@@ -41,7 +41,7 @@ def _open_postgres_repository() -> PostgresUserRepository:
         POOL_NAME,
         min_size=ActiveConfig.CHAT_DB_POOL_MIN,
         max_size=ActiveConfig.CHAT_DB_POOL_MAX,
-        connect_kwargs={"row_factory": dict_row},
+        connect_kwargs=chat_schema_connect_kwargs(row_factory=dict_row),
     )
     repository = PostgresUserRepository(pool)
     try:

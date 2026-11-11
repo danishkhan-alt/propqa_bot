@@ -50,6 +50,7 @@ class PostgresUserRepository:
     def ensure_schema(self) -> None:
         with self._pool.connection() as conn:
             conn.execute(DDL)
+            copy_public_accounts(conn)
             conn.commit()
 
     def create_user(
@@ -129,6 +130,77 @@ class PostgresUserRepository:
             rows = conn.execute(sql, params).fetchall()
             conn.commit()
             return rows
+
+
+def copy_public_accounts(conn) -> None:
+    """Copy legacy public accounts into the chat schema. Existing rows stay put.
+
+    `public` stores `revoked` as a boolean and may include `is_verified`.
+    The chat schema stores `revoked_at` and does not keep `is_verified`.
+    A row is skipped when its id or email is already in the chat schema.
+    """
+
+    if _regclass(conn, "public.chatbot_users") is None:
+        return
+    conn.execute(
+        """
+        INSERT INTO chatbot_users (id, email, name, phone, password_hash, role, created_at, updated_at)
+        SELECT DISTINCT ON (lower(p.email))
+            p.id, p.email, p.name, p.phone, p.password_hash,
+            CASE WHEN p.role IN ('user', 'admin') THEN p.role ELSE 'user' END,
+            p.created_at, p.updated_at
+        FROM public.chatbot_users p
+        WHERE NOT EXISTS (SELECT 1 FROM chatbot_users a WHERE a.id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM chatbot_users a WHERE lower(a.email) = lower(p.email))
+        ORDER BY lower(p.email), p.created_at
+        """
+    )
+    if _regclass(conn, "public.chatbot_refresh_tokens") is None:
+        return
+    revoked_sql = _public_token_revoked_sql(conn)
+    if revoked_sql is None:
+        return
+    conn.execute(
+        f"""
+        INSERT INTO chatbot_refresh_tokens (id, user_id, token_hash, expires_at, revoked_at, created_at)
+        SELECT p.id, p.user_id, p.token_hash, p.expires_at, {revoked_sql}, p.created_at
+        FROM public.chatbot_refresh_tokens p
+        WHERE EXISTS (SELECT 1 FROM chatbot_users u WHERE u.id = p.user_id)
+          AND NOT EXISTS (
+              SELECT 1 FROM chatbot_refresh_tokens a
+              WHERE a.id = p.id OR a.token_hash = p.token_hash
+          )
+        """
+    )
+
+
+def _regclass(conn, name: str):
+    row = conn.execute("SELECT to_regclass(%s) AS reg", (name,)).fetchone()
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get("reg")
+    return row[0]
+
+
+def _public_token_revoked_sql(conn) -> str | None:
+    rows = conn.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'chatbot_refresh_tokens'
+          AND column_name IN ('revoked', 'revoked_at')
+        """
+    ).fetchall()
+    names = set()
+    for row in rows:
+        names.add(row["column_name"] if isinstance(row, dict) else row[0])
+    if "revoked_at" in names:
+        return "p.revoked_at"
+    if "revoked" in names:
+        return "CASE WHEN p.revoked THEN p.created_at ELSE NULL END"
+    return None
 
 
 def _insert_token(conn, user_id: str, token_hash: str, expires_at: datetime, now: datetime) -> None:
